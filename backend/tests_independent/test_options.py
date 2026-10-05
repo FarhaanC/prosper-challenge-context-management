@@ -241,7 +241,7 @@ def test_doctor_name_not_found(catalog, schedule):
 
 
 def test_knee_mri_returning_with_referral(catalog, schedule, directory):
-    james = directory.lookup("James Wilson").caller
+    james = directory.lookup("James Wilson", "1984-03-12").caller
     r = run(catalog, schedule, james, "appt_065")
     assert {(o.provider_id, o.location_id) for o in r.options} == {("prov_014", "loc_004"), ("prov_015", "loc_005")}
     assert len(r.options) == 3
@@ -253,14 +253,14 @@ def test_knee_mri_new_patient(catalog, schedule):
 
 
 def test_knee_mri_with_old_garcia_wish(catalog, schedule, directory):
-    james = directory.lookup("James Wilson").caller
+    james = directory.lookup("James Wilson", "1984-03-12").caller
     r = run(catalog, schedule, james, "appt_065", doctor_name_heard="Dr. Garcia")
     assert r.options and all(o.provider_id in ("prov_014", "prov_015") for o in r.options)
     assert any("Garcia" in n for n in r.notes)
 
 
 def test_knee_mri_near_downtown(catalog, schedule, directory):
-    james = directory.lookup("James Wilson").caller
+    james = directory.lookup("James Wilson", "1984-03-12").caller
     r = run(catalog, schedule, james, "appt_065", location_hint="near Downtown")
     assert r.options[0].location_id == "loc_004"
     assert {o.location_id for o in r.options} == {"loc_004", "loc_005"}  # near ranks, does not exclude
@@ -268,20 +268,20 @@ def test_knee_mri_near_downtown(catalog, schedule, directory):
 
 
 def test_knee_mri_closer_to_downtown_baseline_phrase(catalog, schedule, directory):
-    james = directory.lookup("James Wilson").caller
+    james = directory.lookup("James Wilson", "1984-03-12").caller
     r = run(catalog, schedule, james, "appt_065", location_hint="closer to downtown")
     assert r.options[0].location_id == "loc_004"
     assert not any("recognise" in n for n in r.notes), r.notes
 
 
 def test_knee_mri_the_midtown_one(catalog, schedule, directory):
-    james = directory.lookup("James Wilson").caller
+    james = directory.lookup("James Wilson", "1984-03-12").caller
     r = run(catalog, schedule, james, "appt_065", location_hint="the Midtown one")
     assert r.options and all((o.provider_id, o.location_id) == ("prov_015", "loc_005") for o in r.options)
 
 
 def test_knee_mri_the_sunset_one_not_possible(catalog, schedule, directory):
-    james = directory.lookup("James Wilson").caller
+    james = directory.lookup("James Wilson", "1984-03-12").caller
     r = run(catalog, schedule, james, "appt_065", location_hint="the Sunset one")
     assert r.options  # closest alternatives
     assert any("Sunset" in n for n in r.notes)
@@ -338,7 +338,7 @@ def test_limit(catalog, schedule):
 def test_options_disappear_after_booking(catalog, directory):
     from clinic import Schedule
     sch = Schedule(catalog)
-    james = directory.lookup("James Wilson").caller
+    james = directory.lookup("James Wilson", "1984-03-12").caller
     first = run(catalog, sch, james, "appt_065").options[0]
     sch.book(first.provider_id, first.start, 45)
     again = run(catalog, sch, james, "appt_065").options

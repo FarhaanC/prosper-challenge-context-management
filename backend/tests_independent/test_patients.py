@@ -9,6 +9,7 @@ from clinic import PatientDirectory
 from reference import DATA
 
 RECORDS = json.loads((DATA / "patients.json").read_text())["patients"]
+DOB = {r["id"]: r["date_of_birth"] for r in RECORDS}  # round 2: identity is name AND date of birth
 
 
 def test_six_patients():
@@ -17,7 +18,8 @@ def test_six_patients():
 
 @pytest.mark.parametrize("rec", RECORDS, ids=[r["name"] for r in RECORDS])
 def test_exact_name_found_with_referrals(directory, rec):
-    r = directory.lookup(rec["name"])
+    assert directory.lookup(rec["name"]).status == "need_date_of_birth"  # round 2, spec change 2
+    r = directory.lookup(rec["name"], rec["date_of_birth"])
     assert r.status == "found"
     assert r.caller.patient_id == rec["id"]
     assert r.caller.is_new_patient is False
@@ -30,7 +32,8 @@ def test_exact_name_found_with_referrals(directory, rec):
     ("Robert Tailor", "pat_005"), ("  James   Wilson  ", "pat_001"), ("James Wilson.", "pat_001"),
 ])
 def test_misheard_names_found(directory, heard, pid):
-    r = directory.lookup(heard)
+    assert directory.lookup(heard).status == "need_date_of_birth"  # round 2, spec change 2
+    r = directory.lookup(heard, DOB[pid])
     assert r.status == "found" and r.caller.patient_id == pid
 
 
@@ -61,7 +64,8 @@ def test_same_name_needs_date_of_birth():
         {"id": "b", "name": "John Smith", "date_of_birth": "1990-02-02", "referrals_on_file": []},
     ])
     r = d.lookup("John Smith")
-    assert r.status == "several" and r.caller is None and len(r.candidates) == 2
+    # round 2, spec change 2: name only -> ask for the date of birth; no candidate list (privacy)
+    assert r.status == "need_date_of_birth" and r.caller is None and not hasattr(r, "candidates")
     r = d.lookup("John Smith", "1990-02-02")
     assert r.status == "found" and r.caller.patient_id == "b" and r.caller.referrals_on_file == []
     r = d.lookup("Jon Smyth", "1980-01-01")
@@ -69,9 +73,9 @@ def test_same_name_needs_date_of_birth():
 
 
 def test_returned_caller_does_not_share_list_with_record(directory):
-    r = directory.lookup("James Wilson")
+    r = directory.lookup("James Wilson", "1984-03-12")
     r.caller.referrals_on_file.append("Cardiology")
-    again = directory.lookup("James Wilson")
+    again = directory.lookup("James Wilson", "1984-03-12")
     assert "Cardiology" not in again.caller.referrals_on_file
 
 

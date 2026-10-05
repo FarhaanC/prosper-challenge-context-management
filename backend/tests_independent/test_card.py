@@ -92,7 +92,7 @@ def test_unknown_change_does_not_clear_anything():
 
 # ---------------------------------------------------------------- change table, end to end
 def test_demo_skin_check_then_knee_mri(catalog, schedule, directory):
-    james = directory.lookup("James Wilson").caller
+    james = directory.lookup("James Wilson", "1984-03-12").caller
     c = BookingCard(caller=james, preferences=Preferences(visit_description="skin check", doctor_name_heard="Dr. Garcia"))
     c.choices.specialty, c.choices.visit_type_id = "Dermatology", "appt_027"
     opts = find_options(catalog, schedule, james, "appt_027", c.preferences, NOW).options
@@ -148,7 +148,7 @@ def test_doctor_change_new_doctor_not_at_old_location(catalog, schedule):
 
 
 def test_time_change_keeps_doctor_and_place_when_they_fit(catalog, schedule, directory):
-    james = directory.lookup("James Wilson").caller
+    james = directory.lookup("James Wilson", "1984-03-12").caller
     c = BookingCard(caller=james)
     c.choices = Choices(specialty="Radiology", visit_type_id="appt_065", provider_id="prov_014",
                         location_id="loc_004", slot=SLOT)
@@ -162,7 +162,7 @@ def test_time_change_keeps_doctor_and_place_when_they_fit(catalog, schedule, dir
 
 # ---------------------------------------------------------------- read-back
 def test_read_back_matches_card(catalog, schedule, directory):
-    james = directory.lookup("James Wilson").caller
+    james = directory.lookup("James Wilson", "1984-03-12").caller
     o = find_options(catalog, schedule, james, "appt_065", Preferences(), NOW).options[0]
     c = BookingCard(caller=james)
     c.choices = Choices(specialty="Radiology", visit_type_id="appt_065", provider_id=o.provider_id,

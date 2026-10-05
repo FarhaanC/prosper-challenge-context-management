@@ -183,7 +183,7 @@ def test_dead_end_for_new_patients(catalog, vt_id):
 
 
 def test_obgyn_bookable_for_returning_emily_brown(catalog, directory):
-    emily = directory.lookup("Emily Brown").caller
+    emily = directory.lookup("Emily Brown", "1988-01-19").caller
     for vt in ["appt_040", "appt_041", "appt_042", "appt_043", "appt_044"]:
         b = can_book_visit_type(catalog, emily, vt)
         assert b.bookable
@@ -209,13 +209,13 @@ def test_knee_mri_new_patient_refused_with_reasons(catalog):
 
 
 def test_knee_mri_returning_no_referral_refused(catalog, directory):
-    emily = directory.lookup("Emily Brown").caller
+    emily = directory.lookup("Emily Brown", "1988-01-19").caller
     b = can_book_visit_type(catalog, emily, "appt_065")
     assert not b.bookable
 
 
 def test_knee_mri_james_wilson_two_options(catalog, directory):
-    james = directory.lookup("James Wilson").caller
+    james = directory.lookup("James Wilson", "1984-03-12").caller
     b = can_book_visit_type(catalog, james, "appt_065")
     assert b.bookable
     assert {(p.id, l.id) for p, l in b.valid_pairs} == {("prov_014", "loc_004"), ("prov_015", "loc_005")}
