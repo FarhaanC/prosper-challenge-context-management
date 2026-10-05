@@ -1,0 +1,47 @@
+{
+  "_about": "FAKE returning-patient records. The challenge has no patient system, but the booking rules depend on new vs returning and on referrals, so we need something to check against. Anyone not found here is treated as a new patient with no referrals. Referrals are stored as the specialty they are for.",
+  "patients": [
+    {
+      "id": "pat_001",
+      "name": "James Wilson",
+      "date_of_birth": "1984-03-12",
+      "referrals_on_file": ["Radiology", "Orthopedics"],
+      "note": "Demo patient: has a Radiology referral, so the knee MRI path can succeed."
+    },
+    {
+      "id": "pat_002",
+      "name": "Sarah Johnson",
+      "date_of_birth": "1975-07-30",
+      "referrals_on_file": ["Cardiology"],
+      "note": "Can book cardiology tests that need a referral."
+    },
+    {
+      "id": "pat_003",
+      "name": "Ahmed Khan",
+      "date_of_birth": "1991-11-02",
+      "referrals_on_file": ["Dermatology"],
+      "note": "Can book dermatology visits that need a referral (e.g. Mole Removal)."
+    },
+    {
+      "id": "pat_004",
+      "name": "Emily Brown",
+      "date_of_birth": "1988-01-19",
+      "referrals_on_file": [],
+      "note": "Returning, no referrals: the knee MRI must be refused for her, but she can see OB/GYN."
+    },
+    {
+      "id": "pat_005",
+      "name": "Robert Taylor",
+      "date_of_birth": "1962-05-08",
+      "referrals_on_file": ["Gastroenterology"],
+      "note": "Can book GI consultations."
+    },
+    {
+      "id": "pat_006",
+      "name": "Mei Wong",
+      "date_of_birth": "1995-09-25",
+      "referrals_on_file": [],
+      "note": "Returning, no referrals."
+    }
+  ]
+}

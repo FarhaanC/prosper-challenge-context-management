@@ -1,0 +1,43 @@
+{
+  "_about": "FAKE map data, kept separate from the given catalog (which we don't edit). The catalog's addresses contradict the location names and give no coordinates, so it can't answer 'near Downtown'. We give each location a neighbourhood and approximate San Francisco coordinates, plus a list of well-known places a caller might mention. At scale this would come from geocoding real addresses and the caller's postcode.",
+  "locations": {
+    "loc_000": {"neighbourhood": "Mission Bay",      "also_called": [],                          "lat": 37.7706, "lon": -122.3910},
+    "loc_001": {"neighbourhood": "Mission District", "also_called": ["The Mission"],             "lat": 37.7599, "lon": -122.4148},
+    "loc_002": {"neighbourhood": "North Beach",      "also_called": [],                          "lat": 37.8061, "lon": -122.4103},
+    "loc_003": {"neighbourhood": "Marina",           "also_called": ["North Gate"],              "lat": 37.8015, "lon": -122.4370},
+    "loc_004": {"neighbourhood": "Downtown",         "also_called": ["Union Square"],            "lat": 37.7875, "lon": -122.4080},
+    "loc_005": {"neighbourhood": "Hayes Valley",     "also_called": ["Midtown", "Civic Center"], "lat": 37.7765, "lon": -122.4241},
+    "loc_006": {"neighbourhood": "Sunset",           "also_called": ["Outer Sunset"],            "lat": 37.7535, "lon": -122.4940},
+    "loc_007": {"neighbourhood": "Richmond",         "also_called": ["Inner Richmond"],          "lat": 37.7800, "lon": -122.4830}
+  },
+  "landmarks": {
+    "Downtown":          [37.7880, -122.4075],
+    "Union Square":      [37.7880, -122.4075],
+    "Financial District":[37.7946, -122.3999],
+    "SoMa":              [37.7785, -122.4056],
+    "Embarcadero":       [37.7955, -122.3937],
+    "Chinatown":         [37.7941, -122.4078],
+    "Nob Hill":          [37.7930, -122.4161],
+    "Tenderloin":        [37.7847, -122.4141],
+    "Civic Center":      [37.7793, -122.4193],
+    "Hayes Valley":      [37.7759, -122.4245],
+    "Midtown":           [37.7765, -122.4241],
+    "Western Addition":  [37.7810, -122.4330],
+    "Pacific Heights":   [37.7925, -122.4382],
+    "Marina":            [37.8037, -122.4368],
+    "Presidio":          [37.7989, -122.4662],
+    "North Beach":       [37.8061, -122.4103],
+    "Fisherman's Wharf": [37.8080, -122.4177],
+    "Mission Bay":       [37.7706, -122.3910],
+    "Mission District":  [37.7599, -122.4148],
+    "Dogpatch":          [37.7609, -122.3891],
+    "Potrero Hill":      [37.7605, -122.4009],
+    "Castro":            [37.7609, -122.4350],
+    "Noe Valley":        [37.7502, -122.4337],
+    "Haight-Ashbury":    [37.7692, -122.4481],
+    "Golden Gate Park":  [37.7694, -122.4862],
+    "Richmond":          [37.7800, -122.4830],
+    "Sunset":            [37.7535, -122.4940],
+    "Bayview":           [37.7290, -122.3925]
+  }
+}

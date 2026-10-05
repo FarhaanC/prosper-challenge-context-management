@@ -1,0 +1,2 @@
+# For running the code tests only (not needed by the voice agent).
+pytest>=8
