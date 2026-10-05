@@ -6,7 +6,7 @@ move, anything the caller said that matters later lives here.
 
 Sections:
 - caller       who is calling (new or returning, referrals on file)
-- preferences  what they ASKED for, in their words; kept across stage moves
+- preferences  what they ASKED for; kept across stage moves
 - choices      what the code has ACCEPTED; only filled when the rules pass
 - status       in_progress | booked | handed_off
 """
@@ -27,18 +27,38 @@ VISIT_TYPE = "visit_type"
 BOOKING = "booking"
 END = "end"
 
+CHANGEABLE = {
+    "visit_type": "visit_type", "visit": "visit_type", "reason": "visit_type", "service": "visit_type",
+    "appointment_type": "visit_type",
+    "doctor": "doctor", "provider": "doctor",
+    "location": "location", "place": "location", "clinic": "location",
+    "time": "time", "day": "time", "date": "time", "slot": "time",
+}
+CLEAR_WORDS = {"any", "anytime", "any time", "any day", "whenever", "no preference"}
+
 
 @dataclass
 class Preferences:
+    """What the caller asked for.
+
+    Each kind of wish has two forms, and at most one is set at a time:
+    - what the caller SAID (doctor_name_heard, location_hint), and
+    - a choice carried over from earlier in the call (preferred_provider_id,
+      preferred_location_id), kept when the caller changed something else.
+    find_options treats what the caller said as stronger than what was carried over,
+    and the most recent change (`latest`) as strongest of all.
+    """
+
     visit_description: str = ""        # "knee MRI", "skin check"
     doctor_name_heard: str = ""        # "Dr. Garsha"
-    preferred_provider_id: str = ""    # set when a doctor was chosen, then another part changed
-    location_hint: str = ""            # "near Downtown"
-    preferred_location_id: str = ""    # set when a location was chosen, then another part changed
-    days: list = field(default_factory=list)  # weekday names ("Tuesday") or dates ("2026-10-13")
-    time_of_day: str = ""              # "morning" | "afternoon" | ""
-    soonest: bool = False
+    preferred_provider_id: str = ""
+    location_hint: str = ""            # "near Downtown", "the Midtown one"
+    preferred_location_id: str = ""
+    days: list = field(default_factory=list)  # "Thursday", "today", "tomorrow" or "2026-10-13"
+    time_of_day: str = ""              # "morning" (before 12:00) | "afternoon" (12:00 or later) | ""
+    soonest: bool = False              # rank by earliest time even when a place was named
     language: str = ""                 # a language the doctor should speak
+    latest: str = ""                   # the last thing the caller changed: doctor | location | time | ""
 
 
 @dataclass
@@ -56,81 +76,80 @@ class BookingCard:
     preferences: Preferences = field(default_factory=Preferences)
     choices: Choices = field(default_factory=Choices)
     status: str = "in_progress"
-    offered_options: list = field(default_factory=list)  # last options offered (list of Option)
+    offered_options: list = field(default_factory=list)  # options currently on offer (list of Option)
+    next_option_number: int = 1  # option numbers keep counting up through the call
     booking_id: str = ""
+
+    # ---- options on offer --------------------------------------------------
+    def remember_offer(self, options: list) -> None:
+        """Record what was just offered. Older options are no longer on offer, and
+        their numbers are never reused, so a stale "option 2" can't book the wrong slot."""
+        self.offered_options = list(options)
+        if options:
+            self.next_option_number = max(int(o.option_id) for o in options) + 1
+
+    def offered(self, option_id) -> Optional[object]:
+        """The option with this number if it's currently on offer, else None."""
+        return next((o for o in self.offered_options if o.option_id == str(option_id).strip()), None)
 
     # ---- changing a choice -------------------------------------------------
     def change_choice(self, what: str, new_value: str = "", days: Optional[list] = None,
                       time_of_day: str = "") -> str:
         """The caller changed their mind about one part of the booking.
 
-        Clears that choice AND everything that depended on it, records the new
-        wish as a preference, and returns the stage to go to. (From Farhaan's
-        catch on the baseline call: switching from a skin check to a knee MRI
-        must not silently keep, or silently drop, Dr. Garcia.)
+        Clears that choice and everything that depended on it, records the new wish,
+        marks it as the latest change, and returns the stage to go to. (From
+        Farhaan's catch on the baseline call: switching from a skin check to a knee
+        MRI must not silently keep, or silently drop, Dr. Garcia.)
 
-        | change      | cleared                               | goes to  |
-        | visit type  | specialty, visit type, doctor, location, time | visit_type |
-        | doctor      | doctor, time (location kept as a wish) | booking |
-        | location    | location, time (doctor kept as a wish) | booking |
-        | time        | time (doctor + location kept as wishes) | booking |
+        | change     | cleared                                   | carried over as a weaker wish | goes to    |
+        | visit type | specialty, visit type, doctor, place, time | doctor, place                 | visit_type |
+        | doctor     | doctor, place, time                        | place                         | booking    |
+        | location   | doctor, place, time                        | doctor                        | booking    |
+        | time       | doctor, place, time                        | doctor, place                 | booking    |
 
-        The doctor/location "kept as a wish" are honoured by the next search if
-        they still fit, and reported if they don't.
+        Doctor, place and time are cleared together because one option is always the
+        three together. Without a chosen visit type, every change goes to visit_type.
         """
+        kind = CHANGEABLE.get(str(what).lower().strip().replace(" ", "_"))
+        if kind is None:
+            raise ValueError(f"Can't change {what!r}; choose visit type, doctor, location or time.")
         c, prefs = self.choices, self.preferences
-        what = what.lower().strip().replace(" ", "_")
         self.offered_options = []
 
-        if what in ("visit_type", "visit", "reason", "service", "appointment_type"):
+        # What was chosen becomes a weaker wish, unless it's the thing being changed.
+        if c.provider_id and kind != "doctor":
+            prefs.preferred_provider_id, prefs.doctor_name_heard = c.provider_id, ""
+        if c.location_id and kind != "location":
+            prefs.preferred_location_id, prefs.location_hint = c.location_id, ""
+
+        if kind == "visit_type":
             if new_value:
                 prefs.visit_description = new_value
-            # Doctor/location wishes tied to the old visit are dropped as choices but
-            # remembered as preferences, so the next search can say honestly whether they fit.
-            if c.provider_id:
-                prefs.preferred_provider_id = c.provider_id
-            if c.location_id:
-                prefs.preferred_location_id = c.location_id
+            prefs.latest = ""
             self.choices = Choices()
             return VISIT_TYPE
 
-        if what in ("doctor", "provider"):
-            if c.location_id:
-                prefs.preferred_location_id = c.location_id
-            prefs.doctor_name_heard = new_value
-            prefs.preferred_provider_id = ""
-            c.provider_id, c.location_id, c.slot = "", "", None
-            return BOOKING if c.visit_type_id else VISIT_TYPE
-
-        if what in ("location", "place", "clinic"):
-            if c.provider_id:
-                prefs.preferred_provider_id = c.provider_id
-            prefs.location_hint = new_value
-            prefs.preferred_location_id = ""
-            c.provider_id, c.location_id, c.slot = "", "", None
-            return BOOKING if c.visit_type_id else VISIT_TYPE
-
-        if what in ("time", "day", "date", "slot"):
-            if c.provider_id:
-                prefs.preferred_provider_id = c.provider_id
-            if c.location_id:
-                prefs.preferred_location_id = c.location_id
-            if days is not None:
-                prefs.days = list(days)
+        if kind == "doctor":
+            prefs.doctor_name_heard, prefs.preferred_provider_id = new_value, ""
+        elif kind == "location":
+            prefs.location_hint, prefs.preferred_location_id = new_value, ""
+        elif kind == "time":
+            wished = list(days) if days is not None else ([new_value] if new_value else [])
+            prefs.days = [] if any(str(d).lower().strip() in CLEAR_WORDS for d in wished) else wished
             if time_of_day:
-                prefs.time_of_day = time_of_day
+                prefs.time_of_day = "" if time_of_day.lower().strip() in CLEAR_WORDS else time_of_day
             prefs.soonest = False
-            c.provider_id, c.location_id, c.slot = "", "", None
-            return BOOKING if c.visit_type_id else VISIT_TYPE
-
-        raise ValueError(f"Unknown thing to change: {what!r}")
+        prefs.latest = kind
+        c.provider_id, c.location_id, c.slot = "", "", None
+        return BOOKING if c.visit_type_id else VISIT_TYPE
 
     # ---- views -------------------------------------------------------------
     def to_dict(self) -> dict:
         d = asdict(self)
         if self.choices.slot:
             d["choices"]["slot"] = self.choices.slot.isoformat()
-        d["offered_options"] = [o.to_dict() if hasattr(o, "to_dict") else o for o in self.offered_options]
+        d["offered_options"] = [o.to_dict() for o in self.offered_options]
         return d
 
     def summary(self, catalog: Catalog) -> str:
@@ -142,23 +161,34 @@ class BookingCard:
             lines.append(f"Caller: {self.caller.name} ({who}; referrals on file: {refs})")
         p = self.preferences
         wishes = []
-        if p.visit_description: wishes.append(f"visit: {p.visit_description}")
-        if p.doctor_name_heard: wishes.append(f"doctor: {p.doctor_name_heard}")
-        if p.preferred_provider_id: wishes.append(f"doctor: {catalog.providers[p.preferred_provider_id].name}")
-        if p.location_hint: wishes.append(f"place: {p.location_hint}")
-        if p.preferred_location_id: wishes.append(f"place: {catalog.locations[p.preferred_location_id].name}")
-        if p.days: wishes.append("days: " + ", ".join(p.days))
-        if p.time_of_day: wishes.append(f"time: {p.time_of_day}")
-        if p.soonest: wishes.append("as soon as possible")
-        if p.language: wishes.append(f"language: {p.language}")
+        if p.visit_description:
+            wishes.append(f"visit: {p.visit_description}")
+        doctor = catalog.providers[p.preferred_provider_id].name if p.preferred_provider_id else p.doctor_name_heard
+        if doctor:
+            wishes.append(f"doctor: {doctor}")
+        place = catalog.locations[p.preferred_location_id].name if p.preferred_location_id else p.location_hint
+        if place:
+            wishes.append(f"place: {place}")
+        if p.days:
+            wishes.append("days: " + ", ".join(p.days))
+        if p.time_of_day:
+            wishes.append(f"time: {p.time_of_day}")
+        if p.soonest:
+            wishes.append("as soon as possible")
+        if p.language:
+            wishes.append(f"language: {p.language}")
         if wishes:
             lines.append("Caller asked for: " + "; ".join(wishes))
         c = self.choices
         agreed = []
-        if c.visit_type_id: agreed.append(catalog.visit_types[c.visit_type_id].name)
-        if c.provider_id: agreed.append(catalog.providers[c.provider_id].name)
-        if c.location_id: agreed.append(catalog.locations[c.location_id].name)
-        if c.slot: agreed.append(spoken_time(c.slot))
+        if c.visit_type_id:
+            agreed.append(catalog.visit_types[c.visit_type_id].name)
+        if c.provider_id:
+            agreed.append(catalog.providers[c.provider_id].name)
+        if c.location_id:
+            agreed.append(catalog.locations[c.location_id].name)
+        if c.slot:
+            agreed.append(spoken_time(c.slot))
         if agreed:
             lines.append("Agreed so far: " + ", ".join(agreed))
         return "\n".join(lines) or "Nothing known yet."
@@ -167,6 +197,8 @@ class BookingCard:
         """The confirmation sentence, built from the card (never from the AI's memory),
         so what the caller hears always matches what gets saved."""
         c = self.choices
+        if not (c.visit_type_id and c.provider_id and c.location_id and c.slot):
+            raise ValueError("The booking card isn't complete yet: choose an option first.")
         vt = catalog.visit_types[c.visit_type_id]
         p = catalog.providers[c.provider_id]
         loc = catalog.locations[c.location_id]

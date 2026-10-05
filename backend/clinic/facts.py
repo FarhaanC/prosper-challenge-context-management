@@ -2,60 +2,68 @@
 
 Available in every stage, so the agent looks facts up instead of making them
 up (the baseline agent invented "our MRI clinic is near downtown"). Results
-are kept short: at most 3 matches, a few fields each.
+are kept short: a few fields each. Every doctor sharing a name is listed, with
+the count, so the agent can ask "which one?" rather than guess.
 """
 
 from __future__ import annotations
 
-from .catalog import Catalog
+from .catalog import Catalog, distance_miles
+
+VISIT_TYPE_RESULTS = 3  # visit-type lookups are by meaning, so only the best few are useful
 
 
-def answer_question(catalog: Catalog, about: str, name: str) -> dict:
-    about = (about or "").lower().strip()
+def _location_result(l) -> dict:
+    return {
+        "name": l.name, "address": f"{l.address}, {l.city}", "neighbourhood": l.neighbourhood,
+        "phone": l.phone, "hours": l.hours, "equipment": list(l.capabilities) or ["none"],
+    }
+
+
+def answer_question(catalog: Catalog, about, name) -> dict:
+    about = str(about or "").lower().strip()
+    name = str(name or "").strip()
+    if not name:
+        return {"found": False, "message": "Say which location, doctor or visit type you mean."}
 
     if about in ("location", "clinic", "place", "office"):
         place = catalog.resolve_place(name)
         if place.kind == "none":
             return {"found": False, "message": f"No location matches '{name}'."}
         if place.kind == "landmark":
-            ranked = sorted(
-                catalog.locations.values(),
-                key=lambda l: (l.lat - place.point[0]) ** 2 + (l.lon - place.point[1]) ** 2,
-            )
-            ids = [ranked[0].id]
-            message = f"Closest location to {place.label}."
-        else:
-            ids = place.location_ids[:3]
-            message = "Several locations match; ask which one." if place.kind == "ambiguous" else ""
-        results = []
-        for i in ids:
-            l = catalog.locations[i]
-            results.append({
-                "name": l.name, "address": f"{l.address}, {l.city}", "neighbourhood": l.neighbourhood,
-                "phone": l.phone, "hours": l.hours, "equipment": list(l.capabilities) or ["none"],
-            })
-        return {"found": True, "message": message, "results": results}
+            closest = min(catalog.locations.values(), key=lambda l: distance_miles(place.point, l.point))
+            miles = round(distance_miles(place.point, closest.point), 1)
+            return {"found": True, "message": f"Closest location to {place.label}, about {miles} miles away.",
+                    "results": [_location_result(closest)]}
+        message = "Several locations match; ask which one." if place.kind == "ambiguous" else ""
+        return {"found": True, "message": message,
+                "results": [_location_result(catalog.locations[i]) for i in place.location_ids]}
 
     if about in ("doctor", "provider"):
-        matches = catalog.find_providers_by_name(name)[:3]
+        matches = catalog.match_providers(name)
         if not matches:
             return {"found": False, "message": f"No doctor matches '{name}'."}
+        messages = []
+        if len(matches) > 1:
+            messages.append(f"{len(matches)} doctors match '{name}'; ask which one.")
+        if not all(m.is_exact for m in matches):
+            messages.append(f"No doctor is called exactly '{name}'; these are the closest ({matches[0].describe()}).")
         return {
             "found": True,
-            "message": "Several doctors share this name; ask which one." if len(matches) > 1 else "",
+            "message": " ".join(messages),
             "results": [
                 {
-                    "name": f"{p.name}, {p.title}", "specialty": p.specialty,
-                    "languages": list(p.languages),
-                    "locations": [catalog.locations[l].name for l in p.location_ids],
-                    "taking_new_patients": p.accepting_new_patients,
+                    "name": f"{m.provider.name}, {m.provider.title}", "specialty": m.provider.specialty,
+                    "languages": list(m.provider.languages),
+                    "locations": [catalog.locations[l].name for l in m.provider.location_ids],
+                    "taking_new_patients": m.provider.accepting_new_patients,
                 }
-                for p in matches
+                for m in matches
             ],
         }
 
     if about in ("visit_type", "visit", "appointment", "service", "appointment_type"):
-        matches = catalog.find_visit_types_by_name(name)
+        matches = catalog.find_visit_types_by_name(name, limit=VISIT_TYPE_RESULTS)
         if not matches:
             return {"found": False, "message": f"No visit type matches '{name}'."}
         return {

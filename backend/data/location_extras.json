@@ -1,8 +1,8 @@
 {
-  "_about": "FAKE map data, kept separate from the given catalog (which we don't edit). The catalog's addresses contradict the location names and give no coordinates, so it can't answer 'near Downtown'. We give each location a neighbourhood and approximate San Francisco coordinates, plus a list of well-known places a caller might mention. At scale this would come from geocoding real addresses and the caller's postcode.",
+  "_about": "FAKE map data, kept separate from the given catalog (which we don't edit). The catalog's addresses contradict the location names and give no coordinates, so it can't answer 'near Downtown'. Each location gets a neighbourhood, nicknames and approximate San Francisco coordinates, plus a list of well-known places a caller might mention. A nickname two locations could share is deliberately left out: 'the Mission' could be Mission District or Mission Bay, so the agent asks. At scale this would come from geocoding real addresses and the caller's postcode.",
   "locations": {
     "loc_000": {"neighbourhood": "Mission Bay",      "also_called": [],                          "lat": 37.7706, "lon": -122.3910},
-    "loc_001": {"neighbourhood": "Mission District", "also_called": ["The Mission"],             "lat": 37.7599, "lon": -122.4148},
+    "loc_001": {"neighbourhood": "Mission District", "also_called": [],                          "lat": 37.7599, "lon": -122.4148},
     "loc_002": {"neighbourhood": "North Beach",      "also_called": [],                          "lat": 37.8061, "lon": -122.4103},
     "loc_003": {"neighbourhood": "Marina",           "also_called": ["North Gate"],              "lat": 37.8015, "lon": -122.4370},
     "loc_004": {"neighbourhood": "Downtown",         "also_called": ["Union Square"],            "lat": 37.7875, "lon": -122.4080},
