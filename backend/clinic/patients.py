@@ -10,6 +10,8 @@ How a returning caller is identified (Farhaan's decisions, 6 Oct):
 3. If that fails too, it asks the caller to spell their last name, and tries again.
 4. If that fails, it offers a choice: register as a new patient, or speak to staff.
    A returning caller is never quietly treated as new: they're told and they choose.
+   Correct details are accepted at any step, and nobody is asked forever: after
+   three unusable answers in a row (say, a one-word name), the same choice is offered.
 
 Two patients with the same name are told apart by date of birth. If two share the
 name AND the birthday, the code doesn't guess: the call goes to staff.
@@ -44,6 +46,9 @@ SAY_SPELL = "Sorry, I still couldn't find you. Could you spell your last name fo
 SAY_OFFER = ("I'm sorry, I couldn't find your details. Would you like to register as a new patient, "
              "or shall I put you through to a member of staff?")
 SAY_STAFF = "Let me put you through to a member of staff who can find your details."
+# Answers we can't use at all (a one-word name, no date of birth) in a row before the
+# agent stops asking and offers the same choice: register as new, or staff.
+UNUSABLE_LIMIT = 3
 
 
 @dataclass
@@ -95,10 +100,12 @@ class PatientDirectory:
         `incomplete` (without looking anything up) if either is missing.
         """
         dob = str(date_of_birth or "").strip()
-        if len(name_tokens(name)) < 2 or not DATE_FORMAT.fullmatch(dob):
+        spelled = str(spelled_last_name or "").strip() or None
+        enough_name = len(name_tokens(name)) >= (1 if spelled else 2)  # a spelled surname + first name is enough
+        if not enough_name or not DATE_FORMAT.fullmatch(dob):
             return LookupResult("incomplete")
         matches = [r for r in self.records
-                   if r["date_of_birth"] == dob and self._same_person(name, r["name"], spelled_last_name)]
+                   if r["date_of_birth"] == dob and self._same_person(name, r["name"], spelled)]
         if not matches:
             return LookupResult("not_found")
         if len(matches) > 1:
@@ -127,10 +134,11 @@ class IdentityStep:
 
     status:
       found                 identified; `caller` is set
-      need_both             name or date of birth missing; ask again (doesn't count as a try)
+      need_both             name or date of birth missing or unusable; ask again
       try_again             not found on the first try; ask once more
       spell_last_name       not found twice; ask them to spell their last name
-      offer_new_or_staff    not found after spelling; offer to register as new, or staff
+      offer_new_or_staff    not found after spelling (or too many unusable answers):
+                            offer to register as a new patient, or staff
       hand_to_staff         two patients share this name and birthday; don't guess
     """
 
@@ -144,24 +152,42 @@ class IdentityStep:
 
 @dataclass
 class IdentityCheck:
-    """Counts the tries for one call, so the agent follows the steps in order."""
+    """Counts the tries for one call, so the agent follows the steps in order.
+
+    Every try is looked up, so correct details are accepted at any step. A miss
+    moves one step on: try again, then spell the last name, then the choice. Once
+    the choice is offered it stays offered. Unusable answers don't count as misses,
+    but after UNUSABLE_LIMIT in a row the agent offers the choice too.
+    """
 
     failed_tries: int = 0
+    unusable_in_a_row: int = 0
+    offered_choice: bool = False
 
     def attempt(self, directory: PatientDirectory, name, date_of_birth,
                 spelled_last_name: Optional[str] = None) -> IdentityStep:
-        if self.failed_tries >= 2 and not spelled_last_name:
-            return IdentityStep("spell_last_name", SAY_SPELL)
-        result = directory.lookup(name, date_of_birth, spelled_last_name)
+        spelled = str(spelled_last_name or "").strip() or None
+        result = directory.lookup(name, date_of_birth, spelled)
         if result.status == "found":
-            return IdentityStep("found", "", result.caller)
-        if result.status == "incomplete":
-            return IdentityStep("need_both", SAY_NEED_BOTH)
+            first = result.caller.name.split()[0]
+            return IdentityStep("found", f"Thank you, {first}. I've found your details.", result.caller)
         if result.status == "same_name_and_birthday":
             return IdentityStep("hand_to_staff", SAY_STAFF)
+        if result.status == "incomplete":
+            self.unusable_in_a_row += 1
+            if self.offered_choice or self.unusable_in_a_row >= UNUSABLE_LIMIT:
+                self.offered_choice = True
+                return IdentityStep("offer_new_or_staff", SAY_OFFER)
+            return IdentityStep("need_both", SAY_NEED_BOTH)
+        self.unusable_in_a_row = 0
+        if self.offered_choice:
+            return IdentityStep("offer_new_or_staff", SAY_OFFER)
+        if self.failed_tries >= 2 and not spelled:
+            return IdentityStep("spell_last_name", SAY_SPELL)  # the third try must be spelled
         self.failed_tries += 1
         if self.failed_tries == 1:
             return IdentityStep("try_again", SAY_TRY_AGAIN)
         if self.failed_tries == 2:
             return IdentityStep("spell_last_name", SAY_SPELL)
+        self.offered_choice = True
         return IdentityStep("offer_new_or_staff", SAY_OFFER)

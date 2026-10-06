@@ -37,8 +37,19 @@ CLOSE_SPELLING = 0.8
 SOUNDEX_MIN_LETTERS = 3
 
 # Words that are part of how a name is said but not part of the name itself.
-TITLE_WORDS = {"dr", "doctor", "doc", "mr", "mrs", "ms", "miss", "mx", "md", "do", "np", "pa",
+# (Degree letters like "MD" or "DO" are left out on purpose: "Do" is a common
+# Vietnamese surname, and the catalog keeps degrees in a separate field.)
+TITLE_WORDS = {"dr", "doctor", "doc", "mr", "mrs", "ms", "miss", "mx",
                "jr", "junior", "sr", "senior", "ii", "iii", "iv"}
+
+# Ways of saying "no preference", written with spaces and apostrophes removed
+# (compare with `squash(text)`). Shared by day, time, place and doctor wishes.
+NO_PREFERENCE = {
+    "any", "anything", "anytime", "anywhere", "anyone", "anybody", "anyday", "anydate",
+    "nopreference", "dontmind", "idontmind", "doesntmatter", "itdoesntmatter", "whatever",
+    "whenever", "wherever", "whoever", "either", "eitherisfine", "notfussed", "none", "no",
+    "anyisfine", "anyofthem", "anywhereisfine", "anywhereisok", "anytimeisfine", "anydayisfine",
+}
 
 
 @lru_cache(maxsize=50_000)  # the same catalog names are compared on every search
@@ -54,6 +65,15 @@ def _normalize(text: str) -> str:
 def normalize(text) -> str:
     """Lowercase, strip accents, a possessive "'s", and punctuation; collapse spaces."""
     return _normalize(str(text or ""))
+
+
+def squash(text) -> str:
+    """Lowercase letters and digits only: "I don't mind!" -> "idontmind"."""
+    return re.sub(r"[^a-z0-9]", "", str(text or "").lower())
+
+
+def means_no_preference(text) -> bool:
+    return squash(text) in NO_PREFERENCE
 
 
 def name_tokens(text) -> list:

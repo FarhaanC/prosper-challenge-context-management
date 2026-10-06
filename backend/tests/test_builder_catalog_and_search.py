@@ -33,6 +33,9 @@ def test_21_specialties_each_small(catalog):
     ("allergist", "Allergy/Immunology"), ("Allergy", "Allergy/Immunology"), ("physical therapist", "Physical Therapy"),
     ("dentist", "Dental"), ("orthopedist", "Orthopedics"),
     ("astrology", None), ("banana", None), ("", None), ("physician", None),  # R2-9: not Physical Therapy
+    # R3-2: other doctors' words must NOT land on a look-alike specialty
+    ("podiatrist", None), ("hematologist", None), ("nephrologist", None), ("audiologist", None),
+    ("generalist", None),
 ])
 def test_specialty_wording(catalog, said, expected):
     assert catalog.match_specialty(said) == expected
@@ -96,12 +99,14 @@ def test_landmarks(catalog, hint, landmark):
 @pytest.mark.parametrize("hint", ["Narnia", "", "   ", None, "the clinic",
                                   # round 2, R2-3: short or partial words must NOT pick a place
                                   "the main one", "Bay Area", "Glen Park", "Cole Valley", "Marina Boulevard",
-                                  "Valley", "Gate", "Square"])
+                                  "Valley", "Gate", "Square",
+                                  # round 3, R3-9
+                                  "Marin", "St Marys"])
 def test_unknown_places_are_not_guessed(catalog, hint):
     assert catalog.resolve_place(hint).kind == "none"
 
 
-@pytest.mark.parametrize("hint", ["anywhere", "no preference", "none", "don't mind"])
+@pytest.mark.parametrize("hint", ["anywhere", "no preference", "none", "don't mind", "I don't mind", "SF"])
 def test_no_preference_is_not_a_place(catalog, hint):
     assert catalog.resolve_place(hint).kind == "any"
 
@@ -109,6 +114,9 @@ def test_no_preference_is_not_a_place(catalog, hint):
 @pytest.mark.parametrize("hint,loc,near", [
     ("on the way to Downtown", DOWNTOWN, True), ("on Main", MISSION_BAY, False),
     ("Downtown SF", DOWNTOWN, False), ("mid town", MIDTOWN, False),
+    # round 3, R3-9: full addresses (the number settles shared streets), "in", "near <street>"
+    ("4874 Main St", MISSION_BAY, False), ("4455 Geary Blvd", DOWNTOWN, False),
+    ("the Midtown one in SF", MIDTOWN, False), ("downtown in San Francisco", DOWNTOWN, False),
 ])
 def test_round_2_place_phrasings(catalog, hint, loc, near):
     m = catalog.resolve_place(hint)
@@ -137,6 +145,18 @@ def test_missing_fields_and_repeated_ids_refused():  # R2-11
     with pytest.raises(CatalogError) as e:
         Catalog(raw, EXTRAS)
     assert "missing hours" in str(e.value) and "appears more than once" in str(e.value)
+
+
+def test_wrong_kinds_of_value_refused():  # R3-9
+    raw = copy.deepcopy(RAW)
+    raw["appointment_types"][0]["duration_min"] = "abc"
+    raw["providers"][0]["languages"] = None
+    raw["providers"][1]["location_ids"] = "loc_000"
+    with pytest.raises(CatalogError) as e:
+        Catalog(raw, EXTRAS)
+    msg = str(e.value)
+    assert "duration_min should be whole number" in msg and "languages should be list of text" in msg
+    assert "location_ids should be list of text" in msg
 
 
 def test_unknown_ids_refused():

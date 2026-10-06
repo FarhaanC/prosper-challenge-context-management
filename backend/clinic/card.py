@@ -13,11 +13,13 @@ Sections:
 
 from __future__ import annotations
 
+import re
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from typing import Optional
 
 from .catalog import Catalog
+from .fuzzy import means_no_preference, squash
 from .patients import Caller, IdentityCheck
 from .slots import spoken_time
 
@@ -38,32 +40,59 @@ CHANGEABLE = {
     "doctor": DOCTOR, "provider": DOCTOR,
     "location": LOCATION, "place": LOCATION, "clinic": LOCATION,
     "time": TIME, "day": TIME, "date": TIME, "slot": TIME,
+    "language": LANGUAGE,
 }
 TIMES_OF_DAY = ("morning", "afternoon")
-# Ways of saying "no preference" for the day, the time of day, or both.
-ANY_DAY = {"any day", "anyday", "any date"}
-ANY_TIME = {"any", "anytime", "any time", "whenever", "no preference", "dont mind", "don t mind"}
+ANY_DAY = {"anyday", "anydate", "anydayisfine"}  # clears the day only (squashed, see fuzzy.squash)
+# Ways of asking for a different doctor without naming one (squashed).
+SOMEONE_ELSE = {"", "someoneelse", "somebodyelse", "anotherdoctor", "adifferentdoctor", "differentdoctor",
+                "otherdoctor", "anotherone", "someonedifferent", "anyoneelse", "notthem", "notthatone"}
+# Words that carry no meaning in a spoken time wish.
+TIME_FILLER = {"please", "on", "the", "in", "at", "a", "an", "maybe", "preferably", "ideally", "would", "be", "good"}
 
 
-def split_time_words(text: str) -> tuple:
-    """Split a spoken time wish into (days, time_of_day); None means "not mentioned".
+@dataclass
+class TimeWish:
+    """A spoken time wish split into parts. None means "not mentioned"."""
 
-    "Thursday morning" -> (["Thursday"], "morning"); "afternoon" -> (None, "afternoon");
-    "any day" -> ([], None); "any time" -> ([], ""); "next Thursday" -> (["next Thursday"], None),
-    which find_options then refuses with a note saying how to put it.
+    days: Optional[list] = None
+    time_of_day: Optional[str] = None
+
+
+def parse_time_phrase(text) -> TimeWish:
+    """Read a spoken time wish.
+
+    "Thursday morning" -> days ["Thursday"], morning. "afternoon" -> afternoon only.
+    "this afternoon" -> days ["today"], afternoon. "Thursday or Friday" -> two days.
+    "Thursday, morning please" works too. "any day" clears the day; "any time" (or
+    "don't mind") clears day and time. Anything not understood is kept as a day entry
+    ("next Thursday"), which find_options then refuses with a note saying how to put it.
     """
-    t = " ".join(str(text or "").split())
-    low = t.lower()
+    t = str(text or "").strip()
     if not t:
-        return None, None
-    if low in ANY_TIME:
-        return [], ""
-    if low in ANY_DAY:
-        return [], None
-    words = t.split()
-    tods = [w.lower() for w in words if w.lower() in TIMES_OF_DAY]
-    rest = " ".join(w for w in words if w.lower() not in TIMES_OF_DAY)
-    return ([rest] if rest else None), (tods[0] if tods else None)
+        return TimeWish()
+    if squash(t) in ANY_DAY:
+        return TimeWish(days=[])
+    if means_no_preference(t) or squash(t) in {"anytimeisfine", "anytimeworks"}:
+        return TimeWish(days=[], time_of_day="")
+    days, current, tod = [], [], None
+    words = [w for w in re.split(r"[\s,;]+", t) if w]
+    for i, word in enumerate(words):
+        w = word.lower().strip(".!?")
+        if w in TIMES_OF_DAY:
+            tod = w
+        elif w == "this":
+            if i + 1 < len(words) and words[i + 1].lower().strip(".!?") in TIMES_OF_DAY:
+                days.append("today")  # "this afternoon"
+        elif w in ("or", "and"):
+            if current:
+                days.append(" ".join(current))
+                current = []
+        elif w not in TIME_FILLER:
+            current.append(word.strip(".!?"))
+    if current:
+        days.append(" ".join(current))
+    return TimeWish(days=days or None, time_of_day=tod)
 
 
 @dataclass
@@ -88,6 +117,7 @@ class Preferences:
     soonest: bool = False              # rank by earliest time even when a place was named
     language: str = ""                 # a language the doctor should speak
     not_provider_ids: list = field(default_factory=list)  # doctors the caller turned down ("someone else")
+    not_doctor_names: list = field(default_factory=list)  # doctors turned down by name ("not Dr. Chen")
     latest: str = ""                   # the last thing changed: DOCTOR | LOCATION | TIME | LANGUAGE | ""
 
 
@@ -142,16 +172,20 @@ class BookingCard:
         three together. Without a chosen visit type, every change goes to visit_type.
 
         Details:
-        - doctor with no name ("someone else"): the doctor just chosen is turned down
-          for the rest of the call, so they aren't offered again.
-        - time: a plain value is split into day and time of day ("Thursday morning").
-          Only what's mentioned changes, so "afternoon" keeps an earlier "Thursday".
-          "any day" clears the day; "any time" clears day and time of day.
+        - doctor, "someone else" (or no name): the doctor chosen, or carried over, or
+          every doctor in the options just offered, is turned down for the rest of the
+          call. "not Dr. Chen" turns that name down. Naming a doctor again later
+          brings them back (find_options lets a named doctor override a turn-down).
+        - time: a spoken value is read by parse_time_phrase ("Thursday morning",
+          "this afternoon"). Only what's mentioned changes, so "afternoon" keeps an
+          earlier "Thursday". "any day" clears the day; "any time" clears both.
+        - language: "" clears the language wish.
         """
         kind = CHANGEABLE.get(str(what).lower().strip().replace(" ", "_"))
         if kind is None:
-            raise ValueError(f"Can't change {what!r}; choose visit type, doctor, location or time.")
+            raise ValueError(f"Can't change {what!r}; choose visit type, doctor, location, time or language.")
         c, prefs = self.choices, self.preferences
+        offered_doctors = {getattr(o, "provider_id", "") for o in self.offered_options} - {""}
         self.offered_options = []
 
         # What was chosen becomes a weaker wish, unless it's the thing being changed.
@@ -163,28 +197,42 @@ class BookingCard:
         if kind == VISIT:
             if new_value:
                 prefs.visit_description = new_value
-            prefs.latest, prefs.not_provider_ids = "", []
+            prefs.latest, prefs.not_provider_ids, prefs.not_doctor_names = "", [], []
             self.choices = Choices()
             return VISIT_TYPE
 
         if kind == DOCTOR:
-            if not str(new_value or "").strip() and c.provider_id:
-                prefs.not_provider_ids = sorted(set(prefs.not_provider_ids) | {c.provider_id})
-            prefs.doctor_name_heard, prefs.preferred_provider_id = str(new_value or "").strip(), ""
+            said = " ".join(str(new_value or "").split())
+            if squash(said) in SOMEONE_ELSE:
+                current = {c.provider_id} if c.provider_id else (
+                    {prefs.preferred_provider_id} if prefs.preferred_provider_id else offered_doctors)
+                prefs.not_provider_ids = sorted(set(prefs.not_provider_ids) | (current - {""}))
+                prefs.doctor_name_heard = ""
+            elif said.lower().startswith("not "):
+                prefs.not_doctor_names = prefs.not_doctor_names + [said[4:].strip()]
+                prefs.doctor_name_heard = ""
+            else:
+                prefs.doctor_name_heard = said
+            prefs.preferred_provider_id = ""
         elif kind == LOCATION:
             prefs.location_hint, prefs.preferred_location_id = new_value, ""
+        elif kind == LANGUAGE:
+            prefs.language = "" if means_no_preference(new_value) else " ".join(str(new_value or "").split())
         elif kind == TIME:
-            said_days, said_tod = split_time_words(new_value)
+            wish = parse_time_phrase(new_value)
             if days is not None:
-                said_days = [d for d in days if str(d or "").strip()]
-                if any(str(d).lower().strip() in ANY_DAY | ANY_TIME for d in said_days):
-                    said_days = []
+                listed = [parse_time_phrase(d) for d in days if str(d or "").strip()]
+                if any(w.days == [] for w in listed):           # "any day" / "any time" in the list
+                    wish = TimeWish(days=[], time_of_day="" if any(w.time_of_day == "" for w in listed) else None)
+                else:
+                    wish = TimeWish(days=[d for w in listed for d in (w.days or [])] or [],
+                                    time_of_day=next((w.time_of_day for w in listed if w.time_of_day), None))
             if time_of_day:
-                said_tod = "" if time_of_day.lower().strip() in ANY_TIME else time_of_day
-            if said_days is not None:
-                prefs.days = said_days
-            if said_tod is not None:
-                prefs.time_of_day = said_tod
+                wish.time_of_day = "" if means_no_preference(time_of_day) else time_of_day
+            if wish.days is not None:
+                prefs.days = wish.days
+            if wish.time_of_day is not None:
+                prefs.time_of_day = wish.time_of_day
             prefs.soonest = False
         prefs.latest = kind
         c.provider_id, c.location_id, c.slot = "", "", None
@@ -223,6 +271,9 @@ class BookingCard:
             wishes.append("as soon as possible")
         if p.language:
             wishes.append(f"language: {p.language}")
+        turned_down = [catalog.providers[i].name for i in p.not_provider_ids if i in catalog.providers]
+        if turned_down or p.not_doctor_names:
+            wishes.append("not: " + ", ".join(turned_down + p.not_doctor_names))
         if wishes:
             lines.append("Caller asked for: " + "; ".join(wishes))
         c = self.choices

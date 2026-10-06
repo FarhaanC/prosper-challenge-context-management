@@ -82,3 +82,39 @@ def test_returned_caller_does_not_share_its_list_with_the_record(patients):
     a = patients.lookup(*JAMES_WILSON).caller
     a.referrals_on_file.append("Cardiology")
     assert "Cardiology" not in patients.lookup(*JAMES_WILSON).caller.referrals_on_file
+
+
+# ---- round 3 (triage.md, round 3 section)
+def test_r3_8_correct_details_are_accepted_at_any_step(patients):
+    check = IdentityCheck()
+    check.attempt(patients, "Emily Braun", EMILY_BROWN[1])
+    check.attempt(patients, "Emily Braun", EMILY_BROWN[1])
+    step = check.attempt(patients, *EMILY_BROWN)  # right details, not spelled
+    assert step.status == "found" and step.say == "Thank you, Emily. I've found your details."
+
+
+def test_r3_8_once_offered_the_choice_stays_offered(patients):
+    check = IdentityCheck()
+    check.attempt(patients, "Mei Wang", "2000-01-01")
+    check.attempt(patients, "Mei Wang", "2000-01-01")
+    check.attempt(patients, "Mei Wang", "2000-01-01", spelled_last_name="WANG")
+    assert check.attempt(patients, "Mei Wang", "2000-01-01").status == "offer_new_or_staff"
+
+
+def test_r3_8_nobody_is_asked_forever(patients):
+    check = IdentityCheck()
+    steps = [check.attempt(patients, "Cher", "1990-01-01").status for _ in range(3)]
+    assert steps == ["need_both", "need_both", "offer_new_or_staff"]
+
+
+def test_r3_8_blank_spelling_is_no_spelling_and_first_name_plus_spelling_works(patients):
+    check = IdentityCheck()
+    check.attempt(patients, "Emily Braun", EMILY_BROWN[1])
+    check.attempt(patients, "Emily Braun", EMILY_BROWN[1])
+    assert check.attempt(patients, "Emily Braun", EMILY_BROWN[1], spelled_last_name="   ").status == "spell_last_name"
+    assert check.attempt(patients, "Emily", EMILY_BROWN[1], spelled_last_name="BROWN").status == "found"
+
+
+def test_r3_7_do_is_a_surname_not_a_title():
+    d = PatientDirectory([{"id": "x", "name": "Anh Do", "date_of_birth": "1990-01-01"}])
+    assert d.lookup("Anh Do", "1990-01-01").status == "found"

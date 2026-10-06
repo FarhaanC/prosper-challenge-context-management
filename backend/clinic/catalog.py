@@ -20,43 +20,43 @@ from datetime import time
 from pathlib import Path
 from typing import Optional
 
-from .fuzzy import CLOSE, EXACT, NONE, QUALITY_NAMES, normalize, person_match, similarity, word_quality
+from .fuzzy import EXACT, NONE, QUALITY_NAMES, means_no_preference, normalize, person_match, similarity
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 
 DAY_ABBREVIATIONS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
-# A specialty name, or the word for its doctor, said slightly wrong ("nuerology",
-# "dermatoligist") still matches at this spelling similarity; "astrology" vs
-# "urology" (0.75) and "physician" vs "physical therapist" don't.
+# A specialty name said slightly wrong ("nuerology", "cardiolgy") still matches at
+# this spelling similarity; "astrology" vs "urology" (0.75) doesn't. The words for
+# the doctor ("dermatologist") must match exactly: close spelling there misfires
+# ("podiatrist" is very like "pediatrist", "hematologist" like "dermatologist").
 SPECIALTY_SPELLING = 0.85
 # For answer_question's visit-type lookup: at least half the caller's words must
 # appear in the name, or the whole phrase must be spelled 70% alike.
 VISIT_WORD_OVERLAP = 0.5
 VISIT_SPELLING = 0.7
 # Place words this short must match exactly: spelling closeness on short words
-# misfires ("main" is 80% like "marina", "none" like "noe").
-SHORT_PLACE_WORD = 4
+# misfires ("main" is 80% like "marina", "none" like "noe", "Marin", a county,
+# 91% like "Marina"). Longer words may be misspelled: "Richmund", "fishermans".
+SHORT_PLACE_WORD = 5
+PLACE_SPELLING = 0.8
 
 # Words in place phrases that don't help tell places apart.
 GENERIC_PLACE_WORDS = {
     "health", "center", "centre", "clinic", "medical", "group", "family", "specialty",
     "care", "community", "the", "one", "office", "location", "hospital", "place",
-    "site", "branch", "please", "a", "of", "sf", "san", "francisco", "city",
+    "site", "branch", "please", "a", "of", "in", "at", "to", "from", "and",
 }
-STREET_WORDS = {"street", "st", "avenue", "ave", "boulevard", "blvd", "road", "rd", "lane"}
-# "Anywhere is fine": no place wish at all.
-# (Written without spaces: compared with the caller's words squashed together.)
-ANY_PLACE = {"any", "anywhere", "anyplace", "nopreference", "none", "no", "wherever", "dontmind",
-             "doesntmatter", "notfussed", "anyofthem", "anywhereisfine", "anywhereisok"}
+CITY_WORDS = {"sf", "san", "francisco", "city"}
+STREET_WORDS = {"street", "avenue", "boulevard", "road", "lane"}
+STREET_ABBREVIATIONS = {"st", "ave", "blvd", "rd", "ln"}  # count only as the last word ("Mission St", not "St Mary's")
 # Phrases meaning "close to X": rank by distance from X rather than requiring X.
-NEAR_PHRASE = re.compile(
-    r"\b(near|nearby|close to|closer to|closest to|around|next to|not far from|by|on the way to)\b"
-)
+NEAR_WORDS = ("on the way to", "not far from", "closest to", "closer to", "close to", "next to",
+              "nearby", "near", "around", "by")
+NEAR_PHRASE = re.compile(r"\b(" + "|".join(NEAR_WORDS) + r")\b")
 FILLER_PREFIX = re.compile(
     r"^(?:(?:somewhere|anywhere|something|one|the one|a clinic|a place)\s+)?"
-    r"(?:(?:on the way to|near|nearby|close to|closer to|closest to|around|in|at|on|by|next to|"
-    r"not far from)\s+)?"
+    r"(?:(?:" + "|".join(NEAR_WORDS + ("in", "at", "on")) + r")\s+)?"
     r"(?:the\s+)?"
 )
 ON_A_STREET = re.compile(r"(^|\s)on\s")
@@ -87,8 +87,14 @@ class Location:
     @property
     def street(self) -> str:
         """'4455 Geary Blvd' -> 'geary'."""
-        words = [w for w in normalize(self.address).split() if not w.isdigit() and w not in STREET_WORDS]
+        words = [w for w in normalize(self.address).split()
+                 if not w.isdigit() and w not in STREET_WORDS | STREET_ABBREVIATIONS]
         return " ".join(words)
+
+    @property
+    def house_number(self) -> str:
+        """'4455 Geary Blvd' -> '4455'."""
+        return next((w for w in normalize(self.address).split() if w.isdigit()), "")
 
 
 @dataclass(frozen=True)
@@ -166,7 +172,7 @@ def distance_miles(a: tuple, b: tuple) -> float:
 
 def _distinct_words(text: str) -> list:
     """The words of a place name that tell it apart, in order: 'Mission Bay Health Center' -> ['mission', 'bay']."""
-    return [w for w in normalize(text).split() if w not in GENERIC_PLACE_WORDS]
+    return [w for w in normalize(text).split() if w not in GENERIC_PLACE_WORDS | CITY_WORDS]
 
 
 def _word_fits(heard: str, real: str) -> bool:
@@ -174,7 +180,7 @@ def _word_fits(heard: str, real: str) -> bool:
         return True
     if min(len(heard), len(real)) <= SHORT_PLACE_WORD:
         return False
-    return word_quality(heard, real, allow_sounds_like=False) >= CLOSE
+    return similarity(heard, real) >= PLACE_SPELLING
 
 
 def _name_fits(heard: set, name: str, said: str = "") -> bool:
@@ -197,42 +203,62 @@ def _name_fits(heard: set, name: str, said: str = "") -> bool:
     return said_lead or said_all
 
 
+_TEXT, _LIST, _YES_NO, _NUMBER = "text", "list of text", "true/false", "whole number"
 REQUIRED_FIELDS = {
-    "locations": ("id", "name", "address", "city", "phone", "hours"),
-    "providers": ("id", "name", "title", "specialty", "location_ids", "accepting_new_patients", "languages",
-                  "appointment_type_ids"),
-    "appointment_types": ("id", "name", "specialty", "duration_min", "requires_referral", "new_patients_allowed"),
+    "locations": {"id": _TEXT, "name": _TEXT, "address": _TEXT, "city": _TEXT, "phone": _TEXT, "hours": _TEXT},
+    "providers": {"id": _TEXT, "name": _TEXT, "title": _TEXT, "specialty": _TEXT, "location_ids": _LIST,
+                  "accepting_new_patients": _YES_NO, "languages": _LIST, "appointment_type_ids": _LIST},
+    "appointment_types": {"id": _TEXT, "name": _TEXT, "specialty": _TEXT, "duration_min": _NUMBER,
+                          "requires_referral": _YES_NO, "new_patients_allowed": _YES_NO},
 }
 
 
+def _right_type(value, kind: str) -> bool:
+    if kind == _TEXT:
+        return isinstance(value, str) and bool(value.strip())
+    if kind == _LIST:
+        return isinstance(value, list) and all(isinstance(v, str) for v in value)
+    if kind == _YES_NO:
+        return isinstance(value, bool)
+    return isinstance(value, int) and not isinstance(value, bool) and value > 0
+
+
 def _check_records(raw: dict) -> list:
-    """Missing sections or fields, and repeated ids, as plain sentences."""
+    """Missing sections or fields, wrong kinds of value, and repeated ids, as plain sentences."""
     problems = []
     for section, fields in REQUIRED_FIELDS.items():
-        records = raw.get(section)
+        records = raw.get(section) if isinstance(raw, dict) else None
         if not isinstance(records, list):
             problems.append(f"The catalog has no '{section}' list.")
             continue
         seen = set()
         for i, r in enumerate(records):
+            if not isinstance(r, dict):
+                problems.append(f"{section} entry #{i} isn't a record.")
+                continue
+            label = r.get("id", f"#{i}")
             missing = [f for f in fields if f not in r]
             if missing:
-                problems.append(f"{section} entry {r.get('id', f'#{i}')} is missing {', '.join(missing)}.")
+                problems.append(f"{section} entry {label} is missing {', '.join(missing)}.")
+            wrong = [f"{f} should be {kind}" for f, kind in fields.items() if f in r and not _right_type(r[f], kind)]
+            if wrong:
+                problems.append(f"{section} entry {label}: {'; '.join(wrong)}.")
             if r.get("id") in seen:
-                problems.append(f"{section} id {r.get('id')} appears more than once.")
+                problems.append(f"{section} id {label} appears more than once.")
             seen.add(r.get("id"))
     return problems
 
 
 def _doctor_words(specialty: str) -> list:
     """The usual word for a doctor in this specialty, from its name's ending:
-    dermatology -> dermatologist, pediatrics -> pediatrician / pediatrist,
-    allergy -> allergist, dental -> dentist, physicaltherapy -> physicaltherapist."""
-    if specialty.endswith("ology") or specialty.endswith("y"):
+    dermatology -> dermatologist, allergy -> allergist, pediatrics -> pediatrician,
+    dental -> dentist, physicaltherapy -> physicaltherapist. (Orthopedics gives
+    "orthopedician"; the common "orthopedist" is added as the one known exception.)"""
+    if specialty.endswith("y"):
         return [specialty[:-1] + "ist"]
     if specialty.endswith("ics"):
-        return [specialty[:-1] + "ian", specialty[:-3] + "ist"]
-    if specialty.endswith("al"):
+        return [specialty[:-1] + "ian"] + (["orthopedist"] if specialty == "orthopedics" else [])
+    if specialty.endswith("al") and specialty != "general":
         return [specialty[:-2] + "ist"]
     return []
 
@@ -322,11 +348,12 @@ class Catalog:
         best, best_score = None, 0.0
         for s in self.specialties():
             names = [normalize(s).replace(" ", "")] + [normalize(p).replace(" ", "") for p in s.split("/")]
-            names += [w for n in names for w in _doctor_words(n)]
-            for n in names:
-                score = 1.0 if said in (n, n + "s") else similarity(said, n)
-                if score > best_score:
-                    best, best_score = s, score
+            doctor_words = [w for n in names for w in _doctor_words(n)]
+            if said in names or said.rstrip("s") in doctor_words:
+                return s
+            score = max(similarity(said, n) for n in names)
+            if score > best_score:
+                best, best_score = s, score
         return best if best_score >= SPECIALTY_SPELLING else None
 
     def visit_types_in(self, specialty: str) -> list:
@@ -389,17 +416,20 @@ class Catalog:
         text = normalize(hint)
         if not text:
             return PlaceMatch(kind="none")
-        if text.replace(" ", "") in ANY_PLACE:
+        if means_no_preference(text):
             return PlaceMatch(kind="any")
         near = bool(NEAR_PHRASE.search(text))
         on_street = bool(ON_A_STREET.search(text))
         core = FILLER_SUFFIX.sub("", FILLER_PREFIX.sub("", text)).strip()
         words = set(_distinct_words(core))
         if not words:
-            return PlaceMatch(kind="none", label=str(hint))
+            # Only city words ("in SF") or generic ones: no particular place.
+            return PlaceMatch(kind="any") if set(core.split()) & CITY_WORDS else PlaceMatch(kind="none", label=str(hint))
 
-        if words & STREET_WORDS:
-            return self._match_street(words - STREET_WORDS, near) or PlaceMatch(kind="none", label=str(hint))
+        last = core.split()[-1]
+        if words & STREET_WORDS or last in STREET_ABBREVIATIONS:
+            street_words = words - STREET_WORDS - STREET_ABBREVIATIONS
+            return self._match_street(street_words, near) or PlaceMatch(kind="none", label=str(hint))
         if on_street:
             found = self._match_street(words, near)
             if found:
@@ -407,6 +437,10 @@ class Catalog:
         for attempt in (words, words - {"district"}):
             said = "".join(w for w in core.split() if w in attempt)
             found = self._match_locations(attempt, said, near) or self._match_landmarks(attempt, said)
+            if found:
+                return found
+        if near:  # "near Geary": a street, said without "street"
+            found = self._match_street(words, near)
             if found:
                 return found
         return PlaceMatch(kind="none", label=str(hint))
@@ -437,9 +471,14 @@ class Catalog:
         return None
 
     def _match_street(self, words: set, near: bool) -> Optional[PlaceMatch]:
-        if not words:
+        """Our locations on the street the caller named. A house number, if given, must
+        match too ("4455 Geary Blvd" picks one of the two clinics on Geary)."""
+        numbers = {w for w in words if w.isdigit()}
+        street = words - numbers
+        if not street:
             return None
-        hits = [l for l in self.locations.values() if _name_fits(words, l.street)]
+        hits = [l for l in self.locations.values() if _name_fits(street, l.street)
+                and (not numbers or l.house_number in numbers)]
         if len(hits) == 1:
             l = hits[0]
             return PlaceMatch(kind="location", label=f"{l.name} ({l.address})", location_ids=[l.id],
