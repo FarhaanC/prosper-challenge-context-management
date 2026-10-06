@@ -19,6 +19,13 @@ Round 3 updates (spec-changes-round-3.md):
 - s4: doctor wishes "any", "anyone", "no preference" mean no doctor wish.
 - s2: notes are records; their text is note.say.
 
+Round 4 updates (spec-changes-round-4.md, "Four deliberate behaviour changes"):
+- change 1: a wish that only a turned-down doctor can meet is set aside with a
+  wish_conflict note "... is only possible with Dr. X, whom you turned down."
+  (not wish_impossible); the turned-down doctor is still not offered.
+- change 4: a doctor the caller NAMES again (doctor_name_heard) is no longer
+  turned down; a carried-over doctor id does not override a turn-down.
+
 Only the exact forms below are interpreted (exact doctor names / surnames,
 exact location names or "the <neighbourhood> one"), so nothing here depends on
 the module's fuzzy matching.
@@ -99,6 +106,7 @@ def interpret(prefs):
     wishes.excluded = frozenset(getattr(prefs, "not_provider_ids", []) or [])
     if prefs.doctor_name_heard.strip() and prefs.doctor_name_heard.strip().lower() not in ANY_DOCTOR:
         ids = doctors_named(prefs.doctor_name_heard)
+        wishes.excluded = wishes.excluded - ids  # round 4, change 4: naming them again brings them back
         kw = PROV[next(iter(ids))]["name"].split()[-1]
         wishes.append(("doctor", False, lambda p, l, s, ids=ids: p in ids, kw))
     if prefs.location_hint.strip():
@@ -145,8 +153,12 @@ def universe(schedule, is_new, refs, vt_id):
     return out
 
 
-def expected(slots, wishes):
-    """Greedy, strongest first. Returns (applied, set_aside[(wish, 'wish_impossible'|'wish_conflict')])."""
+TURNED_DOWN = "turned_down"  # a wish_conflict whose only fit is a turned-down doctor (round 4, change 1)
+
+
+def expected(slots, wishes, with_turned_down=None):
+    """Greedy, strongest first. Returns (applied, set_aside[(wish, 'wish_impossible'|'wish_conflict'|TURNED_DOWN)]).
+    `with_turned_down`: the valid slots before turned-down doctors were removed."""
     current = list(slots)
     applied, aside = [], []
     for w in wishes:
@@ -154,9 +166,12 @@ def expected(slots, wishes):
         if narrowed:
             current = narrowed
             applied.append(w)
+        elif any(w[2](*x) for x in slots):
+            aside.append((w, "wish_conflict"))
+        elif with_turned_down and any(w[2](*x) for x in with_turned_down):
+            aside.append((w, TURNED_DOWN))
         else:
-            alone = any(w[2](*x) for x in slots)
-            aside.append((w, "wish_conflict" if alone else "wish_impossible"))
+            aside.append((w, "wish_impossible"))
     return applied, aside
 
 
@@ -170,6 +185,7 @@ def check(result, slots, wishes):
                             f"{len(result.options)} options, notes {[str(n) for n in result.notes]}")
         return problems
     excluded = getattr(wishes, "excluded", frozenset())
+    full = list(slots)
     if excluded:
         others = [x for x in slots if x[0] not in excluded]
         if others:
@@ -178,7 +194,7 @@ def check(result, slots, wishes):
                 problems.append("no_other_doctor note although other doctors exist")
         elif slots and not any(n.kind == "no_other_doctor" for n in result.notes):
             problems.append("missing no_other_doctor note")
-    applied, aside = expected(slots, wishes)
+    applied, aside = expected(slots, wishes, full)
     if slots and not result.options:
         problems.append("no options although valid times exist")
     for o in result.options:
@@ -189,11 +205,21 @@ def check(result, slots, wishes):
             if not w[2](*x):
                 problems.append(f"option {o.spoken} ignores applied {w[0]} wish (carried={w[1]})")
     wish_notes = [n for n in result.notes if n.kind in ("wish_impossible", "wish_conflict")]
-    exp_kinds = sorted(k for _, k in aside)
+    exp_kinds = sorted("wish_conflict" if k == TURNED_DOWN else k for _, k in aside)
     got_kinds = sorted(n.kind for n in wish_notes)
     if exp_kinds != got_kinds:
         problems.append(f"wish notes {got_kinds} != expected {exp_kinds}: {[str(n) for n in result.notes]}")
     for w, kind in aside:
+        if kind == TURNED_DOWN:
+            down = [n.say for n in wish_notes if n.kind == "wish_conflict" and n.say.endswith("whom you turned down.")
+                    and (not w[3] or w[3].lower() in n.say.lower())]
+            if not down:
+                problems.append(f"no 'whom you turned down' note for {w[0]} wish: {[str(n) for n in wish_notes]}")
+            for say in down:  # every doctor named must be turned down and able to meet the wish alone
+                for pid in {x[0] for x in full}:
+                    if PROV[pid]["name"] in say and not (pid in excluded and any(w[2](*x) for x in full if x[0] == pid)):
+                        problems.append(f"turned-down note names {PROV[pid]['name']}, who doesn't fit: {say}")
+            continue
         if w[3] and not any(w[3].lower() in n.say.lower() for n in wish_notes if n.kind == kind):
             problems.append(f"no {kind} note mentioning {w[3]!r}: {[str(n) for n in wish_notes]}")
     return problems

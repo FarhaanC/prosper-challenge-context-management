@@ -191,10 +191,17 @@ def test_steps_in_order_for_a_made_up_caller(directory):
 @pytest.mark.parametrize("name,dob", [(None, None), ("", FAKE_DOB), ("James", "1984-03-12"),
                                       ("James Wilson", None), ("James Wilson", "12/03/1984"), ("Mr. Wilson", "1984-03-12")])
 def test_need_both_does_not_count(directory, name, dob):
+    # Round 4, change 2: need_both still doesn't count as a miss, but "after 3 unusable answers
+    # in a row, IdentityCheck.attempt returns offer_new_or_staff". So two unusable answers, then
+    # a usable miss is still the FIRST miss ...
     c = IdentityCheck()
-    for _ in range(5):
+    for _ in range(2):
         assert c.attempt(directory, name, dob).status == "need_both"
     assert c.attempt(directory, FAKE, FAKE_DOB).status == "try_again"  # still the FIRST miss
+    # ... and "a usable answer resets that count": two more unusable answers are need_both again.
+    for _ in range(2):
+        assert c.attempt(directory, name, dob).status == "need_both"
+    assert c.attempt(directory, FAKE, FAKE_DOB).status == "spell_last_name"  # the SECOND miss
 
 
 def test_found_at_any_step(directory):

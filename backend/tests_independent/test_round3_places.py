@@ -68,7 +68,7 @@ def test_shared_streets_are_ambiguous(catalog, hint, ids):
 
 
 @pytest.mark.parametrize("hint", ["Marina Boulevard", "Sunset Boulevard", "Union Street", "Union St", "Van Ness Avenue",
-                                  "Geary", "Market", "Bryant", "near Market"])
+                                  "Geary", "Market", "Bryant"])  # "near Market": round 4 change 3, see test_round4_*
 def test_streets_not_ours_or_without_a_street_word_are_not_recognised(catalog, hint):
     m = catalog.resolve_place(hint)
     assert m.kind == "none" and not m.location_ids, (hint, m)
