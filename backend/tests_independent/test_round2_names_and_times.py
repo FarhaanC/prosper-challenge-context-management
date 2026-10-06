@@ -11,7 +11,8 @@ from reference import PROV, SPECIALTIES, VT, first_name, last_name, ref_bookable
 GARCIAS = {pid for pid, p in PROV.items() if last_name(p["name"]) == "Garcia"}
 CHENS = {pid for pid, p in PROV.items() if last_name(p["name"]) == "Chen"}
 NOTE_KINDS = {"not_bookable", "bad_input", "doctor_not_found", "doctor_name_guess", "doctors_same_name",
-              "place_unknown", "place_ambiguous", "wish_impossible", "wish_conflict", "no_times"}
+              "place_unknown", "place_ambiguous", "wish_impossible", "wish_conflict", "no_times",
+              "no_other_doctor"}  # round 3 s2 adds no_other_doctor
 
 
 def ids(matches):
@@ -99,7 +100,7 @@ def test_same_name_note_for_two_maria_garcias(catalog, schedule):
     # Annual Physical: both Maria Garcias offer it (catalog.json) and accept new patients
     r = find_options(catalog, schedule, new_caller(), "appt_002", Preferences(doctor_name_heard="Dr. Maria Garcia"), NOW)
     same = [n for n in r.notes if n.kind == "doctors_same_name"]
-    assert same and "Pediatrics" in same[0] and "Family Medicine" in same[0]
+    assert same and "Pediatrics" in same[0].say and "Family Medicine" in same[0].say
 
 
 # ---------------------------------------------------------------- day and time values
@@ -135,7 +136,7 @@ def test_accepted_times(catalog, schedule, tod):
 def test_rejected_times(catalog, schedule, tod):
     r = find_options(catalog, schedule, returning(list(SPECIALTIES)), "appt_002", Preferences(time_of_day=tod), NOW)
     assert r.options == [] and [n.kind for n in r.notes] == ["bad_input"]
-    assert "morning" in r.notes[0] and "afternoon" in r.notes[0]
+    assert "morning" in r.notes[0].say and "afternoon" in r.notes[0].say
 
 
 def test_one_bad_day_among_good_ones_is_still_bad_input(catalog, schedule):
@@ -149,10 +150,12 @@ def test_weekend_day_is_impossible_not_bad_input(catalog, schedule):
     assert [n.kind for n in r.notes] == ["wish_impossible"] and r.options
 
 
-def test_date_outside_window_is_impossible(catalog, schedule):
+def test_date_outside_window_is_bad_input(catalog, schedule):
+    # Round 3 s3: "A date (YYYY-MM-DD) before today or after today + 14 days gives no options
+    # and a bad_input note naming the window."
     far = (NOW + timedelta(days=15)).date().isoformat()
     r = find_options(catalog, schedule, returning(list(SPECIALTIES)), "appt_002", Preferences(days=[far]), NOW)
-    assert [n.kind for n in r.notes] == ["wish_impossible"] and r.options
+    assert [n.kind for n in r.notes] == ["bad_input"] and r.options == []
 
 
 def test_window_is_today_plus_14_days(catalog, schedule):
@@ -177,10 +180,12 @@ def test_notes_are_strings_with_kinds_everywhere(catalog, schedule):
                 r = find_options(catalog, schedule, kind_caller, vt, p, NOW)
                 d = r.to_dict()
                 assert set(d) >= {"bookable", "notes", "options"}
+                assert len(d["notes"]) == len(r.notes)
                 for n, nd in zip(r.notes, d["notes"]):
-                    assert isinstance(n, str) and n.kind in NOTE_KINDS
-                    assert nd == {"kind": n.kind, "say": str(n)}
-                    assert " ".join(r.notes)  # can be joined
+                    # round 3 s2: a Note record with .kind and .say, NOT a string; str(note) is the sentence
+                    assert isinstance(n, Note) and not isinstance(n, str) and n.kind in NOTE_KINDS
+                    assert nd == {"kind": n.kind, "say": n.say} == n.to_dict() and str(n) == n.say
+                    assert isinstance(n.say, str) and n.say.strip()
                 for o in d["options"]:
                     assert set(o) >= {"option_id", "provider_id", "location_id", "start", "spoken"}
 
@@ -204,4 +209,4 @@ def test_language_note_grammar(catalog, schedule):
     r = find_options(catalog, schedule, returning(list(SPECIALTIES)), "appt_027",
                      Preferences(doctor_name_heard="Dr. Kenji Kim", language="Arabic"), NOW)
     for n in r.notes:
-        assert "A Arabic" not in n, str(n)
+        assert "A Arabic" not in n.say and "a Arabic" not in n.say, str(n)

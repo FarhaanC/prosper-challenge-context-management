@@ -104,7 +104,7 @@ def test_demo_skin_check_then_knee_mri(catalog, schedule, directory):
     r = find_options(catalog, schedule, james, "appt_065", c.preferences, NOW)
     assert r.options and {(x.provider_id, x.location_id) for x in r.options} <= {("prov_014", "loc_004"), ("prov_015", "loc_005")}
     # the old doctor is not silently dropped: a note says they can't do it
-    assert any(PROV[o.provider_id]["name"] in n for n in r.notes), r.notes
+    assert any(PROV[o.provider_id]["name"] in n.say for n in r.notes), r.notes
 
 
 def test_location_change_to_place_old_doctor_does_not_work(catalog, schedule):

@@ -151,7 +151,7 @@ def test_spec_example_conflict_note_wording(catalog, schedule):
     r = find_options(catalog, schedule, caller, "appt_027", card.preferences, NOW)
     assert r.options and all(o.location_id == "loc_005" for o in r.options)
     conflicts = [n for n in r.notes if n.kind == "wish_conflict"]
-    assert conflicts and "Daniel Chen" in conflicts[0] and "Midtown Medical Group" in conflicts[0]
+    assert conflicts and "Daniel Chen" in conflicts[0].say and "Midtown Medical Group" in conflicts[0].say
 
 
 def test_language_impossible_note_is_literally_true(catalog, schedule):
@@ -161,9 +161,15 @@ def test_language_impossible_note_is_literally_true(catalog, schedule):
     hindi_offering = [p["name"] for p in PROV.values()
                       if "appt_027" in p["appointment_type_ids"] and "Hindi" in p["languages"]]
     assert hindi_offering  # from catalog.json: Dr. Wei Sato
+    # Round 3 s4: the note now reads "None of the doctors available to you for X speaks Y."
+    # (Only doctors this caller can actually book, with open times, count.) Dr. Wei Sato
+    # can't be booked by a new patient, so for a new caller the sentence is true.
+    available_hindi = {p for p, _, _ in universe(schedule, True, [], "appt_027") if "Hindi" in PROV[p]["languages"]}
+    assert not available_hindi
     r = find_options(catalog, schedule, new_caller(), "appt_027", Preferences(language="Hindi"), NOW)
-    false = [str(n) for n in r.notes if "none of the doctors who offer" in n.lower() and "hindi" in n.lower()]
-    assert not false, (false, "but these offer it and speak Hindi:", hindi_offering)
+    says = [n.say for n in r.notes if n.kind == "wish_impossible"]
+    assert says == ["None of the doctors available to you for Skin Cancer Screening speaks Hindi."], says
+    assert r.options
 
 
 def test_language_impossible_notes_true_whole_catalog(catalog, schedule):
@@ -176,12 +182,16 @@ def test_language_impossible_notes_true_whole_catalog(catalog, schedule):
                 continue
             for lang in LANGS:
                 r = find_options(catalog, schedule, caller_for(kind), vt, Preferences(language=lang), NOW)
-                for n in r.notes:
-                    if "none of the doctors who offer" in n.lower():
-                        speakers = [p["name"] for p in PROV.values() if vt in p["appointment_type_ids"]
-                                    and lang.lower() in [x.lower() for x in p["languages"]]]
-                        if speakers:
-                            false.append((kind, VT[vt]["name"], lang, speakers))
+                # Round 3 s4: truth = no doctor this caller can book, with open times, speaks it.
+                speakers = sorted({PROV[p]["name"] for p, _, _ in slots_for(schedule, kind, vt)
+                                   if lang.lower() in [x.lower() for x in PROV[p]["languages"]]})
+                impossible = [n.say for n in r.notes if n.kind == "wish_impossible"]
+                if speakers and impossible:
+                    false.append((kind, VT[vt]["name"], lang, speakers, impossible))
+                if not speakers and slots_for(schedule, kind, vt):
+                    want = f"None of the doctors available to you for {VT[vt]['name']} speaks {lang.capitalize()}."
+                    if impossible != [want]:
+                        false.append((kind, VT[vt]["name"], lang, "expected", want, impossible))
     assert not false, (len(false), false[:5])
 
 
@@ -198,7 +208,7 @@ def test_place_impossible_note_does_not_claim_closest_when_soonest(catalog, sche
         r = find_options(catalog, schedule, caller_for("returning-all"), vt,
                          Preferences(location_hint="Mission Bay Health Center", soonest=True), NOW)
         for n in r.notes:
-            if "closest alternatives" in n:
+            if "closest alternatives" in n.say:
                 bad.append((VT[vt]["name"], str(n), [o.start.isoformat() for o in r.options]))
     assert not bad, (len(bad), bad[:3])
 
@@ -223,7 +233,7 @@ def test_time_wish_with_said_doctor_latest_time(catalog, schedule):
         r = find_options(catalog, schedule, caller_for("returning-all"), vt, p, NOW)
         assert not check(r, slots, interpret(p)), (latest, [str(n) for n in r.notes])
         for n in r.notes:
-            if n.lower().startswith("nothing is open"):
+            if n.say.lower().startswith("nothing is open"):
                 assert not any(s[2].weekday() == 0 for s in slots), n
 
 
@@ -241,7 +251,7 @@ def test_location_change_beats_a_said_doctor(catalog, schedule):
     r = find_options(catalog, schedule, caller, "appt_027", card.preferences, NOW)
     assert r.options and all(o.location_id == "loc_005" for o in r.options), \
         ([(o.provider_name, o.location_name) for o in r.options], [str(n) for n in r.notes])
-    assert any(n.kind == "wish_conflict" and "Daniel Chen" in n for n in r.notes)
+    assert any(n.kind == "wish_conflict" and "Daniel Chen" in n.say for n in r.notes)
 
 
 def test_latest_location_set_directly_beats_said_doctor(catalog, schedule):

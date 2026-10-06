@@ -18,7 +18,8 @@ def test_six_patients():
 
 @pytest.mark.parametrize("rec", RECORDS, ids=[r["name"] for r in RECORDS])
 def test_exact_name_found_with_referrals(directory, rec):
-    assert directory.lookup(rec["name"]).status == "need_date_of_birth"  # round 2, spec change 2
+    # round 3 s1: date of birth is a required argument; missing -> "incomplete"
+    assert directory.lookup(rec["name"], None).status == "incomplete"
     r = directory.lookup(rec["name"], rec["date_of_birth"])
     assert r.status == "found"
     assert r.caller.patient_id == rec["id"]
@@ -32,25 +33,31 @@ def test_exact_name_found_with_referrals(directory, rec):
     ("Robert Tailor", "pat_005"), ("  James   Wilson  ", "pat_001"), ("James Wilson.", "pat_001"),
 ])
 def test_misheard_names_found(directory, heard, pid):
-    assert directory.lookup(heard).status == "need_date_of_birth"  # round 2, spec change 2
+    assert directory.lookup(heard, None).status == "incomplete"  # round 3 s1
     r = directory.lookup(heard, DOB[pid])
     assert r.status == "found" and r.caller.patient_id == pid
 
 
 @pytest.mark.parametrize("heard", ["Wilson", "James", "Khan", "Emily"])
 def test_single_word_does_not_identify(directory, heard):
-    assert directory.lookup(heard).status == "not_found"
+    # round 3 s1: fewer than two words -> "incomplete", nothing looked up, whatever the date
+    for dob in [None] + list(DOB.values()):
+        assert directory.lookup(heard, dob).status == "incomplete", (heard, dob)
 
 
 @pytest.mark.parametrize("heard", ["Mr. Wilson", "Mrs. Johnson", "Ms Brown", "Mr Khan", "Mr. Taylor"])
 def test_title_plus_surname_does_not_identify(directory, heard):
     """A title is not a first name: 'Mr. Wilson' is still a surname alone."""
-    assert directory.lookup(heard).status == "not_found"
+    for dob in [None] + list(DOB.values()):  # round 3 s1: titles don't count as words
+        assert directory.lookup(heard, dob).status == "incomplete", (heard, dob)
 
 
 @pytest.mark.parametrize("heard", ["Farhan Jida", "John Smith", "James Watson", "Sarah Jones", "", None])
 def test_unknown_is_not_found(directory, heard):
-    assert directory.lookup(heard).status == "not_found"
+    # round 3 s1: two-word unknown name + a real patient's date -> not_found; blank name -> incomplete
+    want = "not_found" if len(str(heard or "").split()) >= 2 else "incomplete"
+    for dob in DOB.values():
+        assert directory.lookup(heard, dob).status == want, (heard, dob)
 
 
 def test_date_of_birth_confirms_and_rejects(directory):
@@ -63,9 +70,9 @@ def test_same_name_needs_date_of_birth():
         {"id": "a", "name": "John Smith", "date_of_birth": "1980-01-01", "referrals_on_file": ["Radiology"]},
         {"id": "b", "name": "John Smith", "date_of_birth": "1990-02-02", "referrals_on_file": []},
     ])
-    r = d.lookup("John Smith")
-    # round 2, spec change 2: name only -> ask for the date of birth; no candidate list (privacy)
-    assert r.status == "need_date_of_birth" and r.caller is None and not hasattr(r, "candidates")
+    r = d.lookup("John Smith", None)
+    # round 3 s1: name only -> "incomplete"; no candidate list (privacy)
+    assert r.status == "incomplete" and r.caller is None and not hasattr(r, "candidates")
     r = d.lookup("John Smith", "1990-02-02")
     assert r.status == "found" and r.caller.patient_id == "b" and r.caller.referrals_on_file == []
     r = d.lookup("Jon Smyth", "1980-01-01")
@@ -83,4 +90,4 @@ def test_different_surname_not_matched_by_sound_alone(directory):
     """Judgement call: 'Kim' and 'Khan' are different surnames that only share a
     'sounds-alike' code. Identifying 'Ahmad Kim' as Ahmed Khan would hand a stranger
     Ahmed Khan's record and his Dermatology referral."""
-    assert directory.lookup("Ahmad Kim").status == "not_found"
+    assert directory.lookup("Ahmad Kim", DOB["pat_003"]).status == "not_found"  # round 3: with Khan's real DOB

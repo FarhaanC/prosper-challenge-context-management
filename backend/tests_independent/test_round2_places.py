@@ -139,7 +139,7 @@ def test_the_mission_gives_ambiguous_note(catalog, schedule):
     kinds = [n.kind for n in r.notes]
     assert "place_ambiguous" in kinds
     amb = next(n for n in r.notes if n.kind == "place_ambiguous")
-    assert "Mission Bay" in amb and "Mission District" in amb
+    assert "Mission Bay" in amb.say and "Mission District" in amb.say
 
 
 def test_unknown_place_note(catalog, schedule):

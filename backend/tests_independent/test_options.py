@@ -113,7 +113,7 @@ def test_day_wish_whole_catalog(catalog, schedule, day):
             if bad or not r.options:
                 problems.append((vt, "day wish not honoured", bad))
         else:
-            if not any("nothing is open" in n.lower() or day.lower() in n.lower() for n in r.notes):
+            if not any("nothing is open" in n.say.lower() or day.lower() in n.say.lower() for n in r.notes):
                 problems.append((vt, "no note for unmet day wish"))
     assert not problems, problems[:10]
 
@@ -148,7 +148,7 @@ def test_language_wish_whole_catalog(catalog, schedule, lang):
                                     for o in r.options):
                 problems.append((vt, "language not honoured"))
         elif slots:
-            if not any(lang.lower() in n.lower() for n in r.notes):
+            if not any(lang.lower() in n.say.lower() for n in r.notes):
                 problems.append((vt, "no note for unmet language"))
             if not r.options:
                 problems.append((vt, "language wish wiped out all options"))
@@ -183,7 +183,7 @@ def test_nothing_open_note_is_true_when_doctor_wish_also_set(catalog, schedule):
         for pid in {p for p, _, _ in slots}:
             for day in WEEKDAYS:
                 r = run(catalog, schedule, caller, vt, preferred_provider_id=pid, days=[day])
-                if any(n.lower().startswith("nothing is open") for n in r.notes):
+                if any(n.say.lower().startswith("nothing is open") for n in r.notes):
                     others = [x for x in slots if x[2].strftime("%A") == day]
                     if others:
                         false_claims.append((VT[vt]["name"], PROV[pid]["name"], day, r.notes))
@@ -191,19 +191,33 @@ def test_nothing_open_note_is_true_when_doctor_wish_also_set(catalog, schedule):
 
 
 def test_language_note_is_true_when_doctor_wish_also_set(catalog, schedule):
-    # Skin Cancer Screening; Dr. Daniel Chen speaks English + Arabic. Dr. Kenji Kim and
-    # Dr. Daniel Smith (both valid) speak Spanish.
+    # Skin Cancer Screening; Dr. Daniel Chen speaks English + Arabic. Other valid doctors with
+    # open times speak Spanish (checked from catalog.json below). The said doctor is stronger
+    # than the language (spec r2 s1), so the language is set aside as a CLASH, not "impossible".
+    # Round 3: rewritten to check behaviour instead of searching for an old sentence.
+    slots = ref_slots(schedule, True, "appt_027")
+    spanish = {p for p, _, _ in slots if "Spanish" in PROV[p]["languages"]}
+    assert spanish and "prov_001" not in spanish
     r = run(catalog, schedule, new_caller(), "appt_027", doctor_name_heard="Dr. Daniel Chen", language="Spanish")
-    for n in r.notes:
-        assert "none of the available doctors for this speaks spanish" not in n.lower(), r.notes
+    assert r.options and all(o.provider_id == "prov_001" for o in r.options)
+    kinds = [n.kind for n in r.notes]
+    assert "wish_impossible" not in kinds, [str(n) for n in r.notes]
+    clash = [n.say for n in r.notes if n.kind == "wish_conflict"]
+    assert clash == ["No Spanish-speaking doctor is available with Dr. Daniel Chen."], clash
 
 
 def test_named_place_note_is_true_when_doctor_wish_also_set(catalog, schedule):
-    # Dr. Daniel Chen (Downtown, Richmond) + "the Midtown one": Dr. Kenji Kim does skin screening at Midtown.
+    # Dr. Daniel Chen (Downtown, Richmond) + "the Midtown one": another valid doctor does skin
+    # screening at Midtown, so the place is set aside as a CLASH with the stronger said doctor.
+    # Round 3: rewritten to check behaviour instead of searching for an old sentence.
+    slots = ref_slots(schedule, True, "appt_027")
+    assert any(l == "loc_005" for _, l, _ in slots) and "loc_005" not in PROV["prov_001"]["location_ids"]
     r = run(catalog, schedule, new_caller(), "appt_027", doctor_name_heard="Dr. Daniel Chen",
             location_hint="the Midtown one")
-    for n in r.notes:
-        assert "has no doctor available" not in n.lower(), r.notes
+    assert r.options and all(o.provider_id == "prov_001" for o in r.options)
+    assert "wish_impossible" not in [n.kind for n in r.notes], [str(n) for n in r.notes]
+    clash = [n.say for n in r.notes if n.kind == "wish_conflict"]
+    assert clash == ["Midtown Medical Group isn't available with Dr. Daniel Chen."], clash
 
 
 # ---------------------------------------------------------------- baseline-call cases
@@ -212,7 +226,7 @@ def test_skin_check_with_dr_garcia(catalog, schedule):
     assert r.bookable and r.options
     assert all(PROV[o.provider_id]["specialty"] == "Dermatology" for o in r.options)
     assert not any("Garcia" in o.provider_name for o in r.options)
-    text = " ".join(r.notes)
+    text = " ".join(n.say for n in r.notes)
     assert "Garcia" in text
     # dermatologists open to a new patient
     for name in ["Daniel Chen", "Kenji Kim", "Daniel Smith"]:
@@ -223,13 +237,13 @@ def test_skin_check_with_dr_garcia(catalog, schedule):
 def test_skin_check_with_dr_garsha_misheard(catalog, schedule):
     r = run(catalog, schedule, new_caller(), "appt_028", doctor_name_heard="Dr. Garsha")
     assert r.options and all(PROV[o.provider_id]["specialty"] == "Dermatology" for o in r.options)
-    assert any("Garsha" in n or "Garcia" in n for n in r.notes)
+    assert any("Garsha" in n.say or "Garcia" in n.say for n in r.notes)
 
 
 def test_two_maria_garcias_note(catalog, schedule):
     # Annual Physical is offered by both Maria Garcias (Pediatrics at Mission Bay, Family Medicine at 3 sites)
     r = run(catalog, schedule, new_caller(), "appt_002", doctor_name_heard="Dr. Maria Garcia")
-    text = " ".join(r.notes)
+    text = " ".join(n.say for n in r.notes)
     assert "2" in text and "Pediatrics" in text and "Family Medicine" in text
     assert "Mission Bay Health Center" in text
     assert {o.provider_id for o in r.options} <= {"prov_002", "prov_003"}
@@ -237,7 +251,7 @@ def test_two_maria_garcias_note(catalog, schedule):
 
 def test_doctor_name_not_found(catalog, schedule):
     r = run(catalog, schedule, new_caller(), "appt_027", doctor_name_heard="Dr. Zhivago")
-    assert r.options and any("Zhivago" in n for n in r.notes)
+    assert r.options and any("Zhivago" in n.say for n in r.notes)
 
 
 def test_knee_mri_returning_with_referral(catalog, schedule, directory):
@@ -256,7 +270,7 @@ def test_knee_mri_with_old_garcia_wish(catalog, schedule, directory):
     james = directory.lookup("James Wilson", "1984-03-12").caller
     r = run(catalog, schedule, james, "appt_065", doctor_name_heard="Dr. Garcia")
     assert r.options and all(o.provider_id in ("prov_014", "prov_015") for o in r.options)
-    assert any("Garcia" in n for n in r.notes)
+    assert any("Garcia" in n.say for n in r.notes)
 
 
 def test_knee_mri_near_downtown(catalog, schedule, directory):
@@ -264,14 +278,14 @@ def test_knee_mri_near_downtown(catalog, schedule, directory):
     r = run(catalog, schedule, james, "appt_065", location_hint="near Downtown")
     assert r.options[0].location_id == "loc_004"
     assert {o.location_id for o in r.options} == {"loc_004", "loc_005"}  # near ranks, does not exclude
-    assert not any("recognise" in n for n in r.notes)
+    assert not any("recognise" in n.say for n in r.notes)
 
 
 def test_knee_mri_closer_to_downtown_baseline_phrase(catalog, schedule, directory):
     james = directory.lookup("James Wilson", "1984-03-12").caller
     r = run(catalog, schedule, james, "appt_065", location_hint="closer to downtown")
     assert r.options[0].location_id == "loc_004"
-    assert not any("recognise" in n for n in r.notes), r.notes
+    assert not any("recognise" in n.say for n in r.notes), r.notes
 
 
 def test_knee_mri_the_midtown_one(catalog, schedule, directory):
@@ -284,18 +298,18 @@ def test_knee_mri_the_sunset_one_not_possible(catalog, schedule, directory):
     james = directory.lookup("James Wilson", "1984-03-12").caller
     r = run(catalog, schedule, james, "appt_065", location_hint="the Sunset one")
     assert r.options  # closest alternatives
-    assert any("Sunset" in n for n in r.notes)
+    assert any("Sunset" in n.say for n in r.notes)
 
 
 def test_ambiguous_place_note(catalog, schedule):
     r = run(catalog, schedule, new_caller(), "appt_027", location_hint="the Mission one")
-    text = " ".join(r.notes)
+    text = " ".join(n.say for n in r.notes)
     assert "Mission Bay" in text and "Mission District" in text
 
 
 def test_unknown_place_note(catalog, schedule):
     r = run(catalog, schedule, new_caller(), "appt_027", location_hint="Narnia")
-    assert r.options and any("Narnia" in n for n in r.notes)
+    assert r.options and any("Narnia" in n.say for n in r.notes)
 
 
 def test_blank_place_hint_is_no_wish(catalog, schedule):
@@ -316,7 +330,7 @@ def test_near_landmark_ranks_by_distance(catalog, schedule):
 
 def test_unmet_language_keeps_options(catalog, schedule):
     r = run(catalog, schedule, new_caller(), "appt_027", language="Klingon")
-    assert r.options and any("Klingon" in n for n in r.notes)
+    assert r.options and any("Klingon" in n.say for n in r.notes)
 
 
 def test_saturday_wish_noted_and_alternatives(catalog, schedule):
@@ -355,7 +369,7 @@ def test_alternatives_list_does_not_repeat_a_name_unexplained(catalog, schedule)
     """'... who can: Dr. Maria Garcia, Dr. Maria Garcia, ...' read aloud is confusing.
     Duplicate names in a spoken list should be told apart (specialty or place) or merged."""
     r = run(catalog, schedule, new_caller(), "appt_002", doctor_name_heard="Dr. Linda Ramirez")
-    note = next(n for n in r.notes if "who can" in n)
+    note = next(n.say for n in r.notes if "who can" in n.say)
     listed = note.split("who can:")[1]
     names = [x.strip(" .") for x in listed.replace(" and ", ",").split(",") if x.strip().startswith("Dr.")]
     assert len(names) == len(set(names)), note

@@ -1,0 +1,22 @@
+from common import *
+skin = vt("Skin Cancer Screening")
+print("R2-1: named Chen then 'the Midtown one'")
+c = BookingCard(caller=NEW); c.choices.visit_type_id = skin; c.preferences.doctor_name_heard = "Dr. Daniel Chen"
+c.change_choice("location", "the Midtown one"); show(find_options(cat, sch, NEW, skin, c.preferences, NOW))
+print("R2-7: Hindi new patient skin")
+show(find_options(cat, sch, NEW, skin, Preferences(language="hindi"), NOW))
+print("R2-13: soonest + Sunset (no skin?)")
+show(find_options(cat, sch, NEW, skin, Preferences(location_hint="the Sunset one", soonest=True), NOW))
+print("R2-14: arabic + Kim")
+show(find_options(cat, sch, NEW, skin, Preferences(language="arabic", doctor_name_heard="Dr. Kenji Kim"), NOW))
+print("R2-16: latest=doctor carried")
+show(find_options(cat, sch, NEW, skin, Preferences(preferred_provider_id="prov_027", location_hint="the Midtown one", latest="doctor"), NOW))
+print([ (p.id,p.name) for p in cat.providers.values() if p.name in ("Dr. Kenji Kim","Dr. Daniel Chen")])
+print("R2-10 dates:")
+for d in ["2026-10-01","2026-12-25","20261013","2026-10-20","2026-10-21","today","tomorrow",None,""," ","next Thursday","Sat","2026-02-30"]:
+    r = find_options(cat, sch, NEW, skin, Preferences(days=[d]), NOW)
+    print("  ", repr(d), [ (n.kind, n.say) for n in r.notes][:1], len(r.options))
+print("R2-15:", check_booking(cat, sch, NEW, ["x"], {"a":1}, None, None, NOW))
+print("near Market Street:"); show(find_options(cat, sch, NEW, skin, Preferences(location_hint="near Market Street"), NOW))
+print("Saturday:"); show(find_options(cat, sch, NEW, skin, Preferences(days=["Saturday"]), NOW))
+print("today evening(after 15:00) :"); show(find_options(cat, sch, NEW, skin, Preferences(days=["today"]), datetime(2026,10,6,16,0)))

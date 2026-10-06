@@ -10,6 +10,15 @@ A wish is applied only if some bookable option survives it together with every
 stronger wish already applied; otherwise it is set aside with a note:
 wish_impossible if no valid option anywhere meets it, wish_conflict otherwise.
 
+Round 3 updates (spec-changes-round-3.md):
+- s4 "The newest wish wins, whatever it is": latest promotes that kind of wish to
+  strongest even when it is a carried-over choice.
+- s3: a YYYY-MM-DD day outside today..today+14 gives NO options and one bad_input note.
+- s4 "Someone else, please": doctors in not_provider_ids are left out unless nobody
+  else can do the visit (then a no_other_doctor note, and they stay).
+- s4: doctor wishes "any", "anyone", "no preference" mean no doctor wish.
+- s2: notes are records; their text is note.say.
+
 Only the exact forms below are interpreted (exact doctor names / surnames,
 exact location names or "the <neighbourhood> one"), so nothing here depends on
 the module's fuzzy matching.
@@ -63,10 +72,32 @@ def _day_test(d):
     return lambda s: s.weekday() == i
 
 
+ANY_DOCTOR = {"any", "anyone", "no preference"}
+
+
+class Wishes(list):
+    """A list of wishes plus what the model expects besides them."""
+    bad_input = False
+    excluded = frozenset()
+
+
+def out_of_window(days):
+    last = NOW.date() + timedelta(days=14)
+    for d in days or []:
+        d = str(d or "").strip()
+        if d[:1].isdigit():
+            t = date.fromisoformat(d)
+            if not NOW.date() <= t <= last:
+                return True
+    return False
+
+
 def interpret(prefs):
     """Wishes as (kind, carried, test(pid, lid, start), keyword-for-note)."""
-    wishes = []
-    if prefs.doctor_name_heard.strip():
+    wishes = Wishes()
+    wishes.bad_input = out_of_window(prefs.days)
+    wishes.excluded = frozenset(getattr(prefs, "not_provider_ids", []) or [])
+    if prefs.doctor_name_heard.strip() and prefs.doctor_name_heard.strip().lower() not in ANY_DOCTOR:
         ids = doctors_named(prefs.doctor_name_heard)
         kw = PROV[next(iter(ids))]["name"].split()[-1]
         wishes.append(("doctor", False, lambda p, l, s, ids=ids: p in ids, kw))
@@ -100,8 +131,9 @@ def interpret(prefs):
         lid = prefs.preferred_location_id
         wishes.append(("place", True, lambda p, l, s, lid=lid: l == lid, LOC[lid]["name"]))
     strength = {"doctor": 1, "place": 2, "time": 3, "language": 4}
-    # latest only promotes a SAID wish here (the carried + latest case is tested separately)
-    wishes.sort(key=lambda w: (w[1], not (w[0] == prefs.latest and not w[1]), strength[w[0]]))
+    latest = {"location": "place"}.get(prefs.latest, prefs.latest)
+    # Round 3 s4: latest promotes that kind of wish to strongest, even a carried-over one.
+    wishes.sort(key=lambda w: (w[0] != latest, w[1], strength[w[0]]))
     return wishes
 
 
@@ -131,6 +163,21 @@ def expected(slots, wishes):
 def check(result, slots, wishes):
     """List of problems (empty = the module agrees with the spec model)."""
     problems = []
+    if getattr(wishes, "bad_input", False):
+        kinds = [n.kind for n in result.notes]
+        if result.options or kinds != ["bad_input"]:
+            problems.append(f"out-of-window date: expected no options and one bad_input note, got "
+                            f"{len(result.options)} options, notes {[str(n) for n in result.notes]}")
+        return problems
+    excluded = getattr(wishes, "excluded", frozenset())
+    if excluded:
+        others = [x for x in slots if x[0] not in excluded]
+        if others:
+            slots = others
+            if any(n.kind == "no_other_doctor" for n in result.notes):
+                problems.append("no_other_doctor note although other doctors exist")
+        elif slots and not any(n.kind == "no_other_doctor" for n in result.notes):
+            problems.append("missing no_other_doctor note")
     applied, aside = expected(slots, wishes)
     if slots and not result.options:
         problems.append("no options although valid times exist")
@@ -147,6 +194,6 @@ def check(result, slots, wishes):
     if exp_kinds != got_kinds:
         problems.append(f"wish notes {got_kinds} != expected {exp_kinds}: {[str(n) for n in result.notes]}")
     for w, kind in aside:
-        if w[3] and not any(w[3].lower() in n.lower() for n in wish_notes if n.kind == kind):
+        if w[3] and not any(w[3].lower() in n.say.lower() for n in wish_notes if n.kind == kind):
             problems.append(f"no {kind} note mentioning {w[3]!r}: {[str(n) for n in wish_notes]}")
     return problems

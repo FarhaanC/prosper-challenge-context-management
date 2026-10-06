@@ -11,7 +11,13 @@ RECORDS = json.loads((DATA / "patients.json").read_text())["patients"]
 DOB = {r["name"]: r["date_of_birth"] for r in RECORDS}
 ID = {r["name"]: r["id"] for r in RECORDS}
 ALL_NAMES = [r["name"] for r in RECORDS]
-STATUSES = {"not_found", "need_date_of_birth", "invalid_date_of_birth", "dob_mismatch", "found", "several"}
+# round 3 s1: "There are no other statuses"
+STATUSES = {"incomplete", "not_found", "found", "same_name_and_birthday"}
+TITLES = {"mr", "mrs", "ms", "miss", "dr", "jr", "sr"}
+
+
+def words(name):
+    return [w for w in str(name or "").replace(".", " ").lower().split() if w not in TITLES]
 
 
 def leaks(result):
@@ -35,22 +41,24 @@ def test_found_with_name_and_dob(directory, name):
 def test_need_dob_gives_no_details(directory, name):
     for dob in (None, "", "   "):
         r = directory.lookup(name, dob)
-        assert r.status == "need_date_of_birth" and r.caller is None
+        assert r.status == "incomplete" and r.caller is None  # round 3 s1
         assert not leaks(r), leaks(r)
 
 
 @pytest.mark.parametrize("name", ALL_NAMES)
 def test_wrong_dob_is_mismatch_not_new_patient(directory, name):
     r = directory.lookup(name, "2000-01-01")
-    assert r.status == "dob_mismatch" and r.caller is None
+    # round 3 s1: "Same answer whether the name or the date was wrong."
+    assert r.status == "not_found" and r.caller is None
     assert not leaks(r), leaks(r)
+    assert r.to_dict() == directory.lookup("Nobody Madeup", "2000-01-01").to_dict()
 
 
 @pytest.mark.parametrize("dob", ["12/03/1984", "1984/03/12", "March 12 1984", "12 March 1984", "19840312",
                                  "1984-3-12", "84-03-12", "1984-03-12T00:00", "yesterday", "1984-03"])
 def test_invalid_dob_format(directory, dob):
     r = directory.lookup("James Wilson", dob)
-    assert r.status == "invalid_date_of_birth" and r.caller is None
+    assert r.status == "incomplete" and r.caller is None  # round 3 s1: "not written YYYY-MM-DD"
     assert not leaks(r), leaks(r)
 
 
@@ -60,19 +68,19 @@ def test_dob_with_spaces_around_is_fine(directory):
 
 def test_impossible_calendar_date_is_not_found_as_someone(directory):
     # well-formed but not a real date: must never be 'found'
-    assert directory.lookup("James Wilson", "1984-02-30").status in ("invalid_date_of_birth", "dob_mismatch")
+    assert directory.lookup("James Wilson", "1984-02-30").status in ("incomplete", "not_found")  # round 3
 
 
 def test_unknown_name_is_not_found_even_with_any_dob(directory):
-    for dob in (None, "1984-03-12", "rubbish"):
+    for dob, want in ((None, "incomplete"), ("1984-03-12", "not_found"), ("rubbish", "incomplete")):  # round 3
         r = directory.lookup("Farhan Jida", dob)
-        assert r.status == "not_found" and r.caller is None
+        assert r.status == want and r.caller is None
 
 
 def test_another_patients_dob_does_not_unlock(directory):
     # James Wilson's name with Sarah Johnson's date of birth
     r = directory.lookup("James Wilson", DOB["Sarah Johnson"])
-    assert r.status == "dob_mismatch" and r.caller is None
+    assert r.status == "not_found" and r.caller is None  # round 3 s1
 
 
 @pytest.mark.parametrize("heard,who", [
@@ -96,9 +104,12 @@ def test_close_misspellings_and_titles_match(directory, heard, who):
     "Robert", "Emily", "", None, "   ",
 ])
 def test_names_that_must_not_match(directory, heard):
+    # round 3 s1: never found; fewer than two (non-title) words -> incomplete whatever the date;
+    # otherwise a missing date -> incomplete and a real date -> not_found.
     for dob in (None, *DOB.values()):
         r = directory.lookup(heard, dob)
-        assert r.status == "not_found" and r.caller is None, (heard, dob, r.status)
+        want = "incomplete" if (len(words(heard)) < 2 or dob is None) else "not_found"
+        assert r.status == want and r.caller is None, (heard, dob, r.status)
 
 
 def test_statuses_are_from_the_spec_list(directory):
@@ -121,7 +132,7 @@ def test_same_name_same_dob_is_several_without_details():
         {"id": "b", "name": "John Smith", "date_of_birth": "1980-01-01", "referrals_on_file": []},
     ])
     r = d.lookup("John Smith", "1980-01-01")
-    assert r.status == "several" and r.caller is None
+    assert r.status == "same_name_and_birthday" and r.caller is None  # round 3 s1
 
 
 def test_same_name_different_dob_picks_the_right_one():
@@ -129,10 +140,10 @@ def test_same_name_different_dob_picks_the_right_one():
         {"id": "a", "name": "John Smith", "date_of_birth": "1980-01-01", "referrals_on_file": ["Radiology"]},
         {"id": "b", "name": "John Smith", "date_of_birth": "1990-02-02", "referrals_on_file": []},
     ])
-    assert d.lookup("John Smith").status == "need_date_of_birth"
+    assert d.lookup("John Smith", None).status == "incomplete"  # round 3 s1
     assert d.lookup("John Smith", "1990-02-02").caller.patient_id == "b"
     assert d.lookup("John Smith", "1980-01-01").caller.referrals_on_file == ["Radiology"]
-    assert d.lookup("John Smith", "1970-01-01").status == "dob_mismatch"
+    assert d.lookup("John Smith", "1970-01-01").status == "not_found"  # round 3 s1
 
 
 def test_returned_caller_does_not_share_referral_list(directory):
@@ -160,8 +171,7 @@ def test_referrals_missing_means_none():
 
 
 def test_mei_wang_is_close_enough_by_the_spec_rule(directory):
-    """'Wang' vs 'Wong' is exactly 75% alike, so by spec change 2 it counts as a close
-    misspelling. Consequence worth knowing: a NEW caller called Mei Wang gets
-    'dob_mismatch' (the agent asks again) rather than 'not_found'."""
+    """'Wang' vs 'Wong' is exactly 75% alike, so it counts as a close misspelling.
+    Round 3: a NEW caller called Mei Wang with her own birthday is simply not_found."""
     assert directory.lookup("Mei Wang", DOB["Mei Wong"]).status == "found"
-    assert directory.lookup("Mei Wang", "2001-04-04").status == "dob_mismatch"
+    assert directory.lookup("Mei Wang", "2001-04-04").status == "not_found"
