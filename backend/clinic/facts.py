@@ -28,7 +28,7 @@ def answer_question(catalog: Catalog, about, name) -> dict:
 
     if about in ("location", "clinic", "place", "office"):
         place = catalog.resolve_place(name)
-        if place.kind == "none":
+        if place.kind in ("none", "any"):
             return {"found": False, "message": f"No location matches '{name}'."}
         if place.kind == "landmark":
             closest = min(catalog.locations.values(), key=lambda l: distance_miles(place.point, l.point))

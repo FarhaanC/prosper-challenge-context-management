@@ -31,7 +31,8 @@ def test_21_specialties_each_small(catalog):
     # 17: the words people use for the doctor, not the department
     ("dermatologist", "Dermatology"), ("pediatrician", "Pediatrics"), ("cardiologists", "Cardiology"),
     ("allergist", "Allergy/Immunology"), ("Allergy", "Allergy/Immunology"), ("physical therapist", "Physical Therapy"),
-    ("astrology", None), ("banana", None), ("", None),
+    ("dentist", "Dental"), ("orthopedist", "Orthopedics"),
+    ("astrology", None), ("banana", None), ("", None), ("physician", None),  # R2-9: not Physical Therapy
 ])
 def test_specialty_wording(catalog, said, expected):
     assert catalog.match_specialty(said) == expected
@@ -92,9 +93,26 @@ def test_landmarks(catalog, hint, landmark):
     assert m.kind == "landmark" and m.label == landmark and m.near
 
 
-@pytest.mark.parametrize("hint", ["Narnia", "", "   ", None, "the clinic"])
+@pytest.mark.parametrize("hint", ["Narnia", "", "   ", None, "the clinic",
+                                  # round 2, R2-3: short or partial words must NOT pick a place
+                                  "the main one", "Bay Area", "Glen Park", "Cole Valley", "Marina Boulevard",
+                                  "Valley", "Gate", "Square"])
 def test_unknown_places_are_not_guessed(catalog, hint):
     assert catalog.resolve_place(hint).kind == "none"
+
+
+@pytest.mark.parametrize("hint", ["anywhere", "no preference", "none", "don't mind"])
+def test_no_preference_is_not_a_place(catalog, hint):
+    assert catalog.resolve_place(hint).kind == "any"
+
+
+@pytest.mark.parametrize("hint,loc,near", [
+    ("on the way to Downtown", DOWNTOWN, True), ("on Main", MISSION_BAY, False),
+    ("Downtown SF", DOWNTOWN, False), ("mid town", MIDTOWN, False),
+])
+def test_round_2_place_phrasings(catalog, hint, loc, near):
+    m = catalog.resolve_place(hint)
+    assert (m.kind, m.location_ids, m.near) == ("location", [loc], near)
 
 
 # ---- 7: bad data fails loudly at load instead of being papered over
@@ -110,6 +128,15 @@ def test_unreadable_opening_hours_refused():
     raw["locations"][0]["hours"] = "Monday-Friday 8am-5pm"
     with pytest.raises(CatalogError, match="opening hours"):
         Catalog(raw, EXTRAS)
+
+
+def test_missing_fields_and_repeated_ids_refused():  # R2-11
+    raw = copy.deepcopy(RAW)
+    del raw["locations"][0]["hours"]
+    raw["providers"].append(copy.deepcopy(raw["providers"][0]))
+    with pytest.raises(CatalogError) as e:
+        Catalog(raw, EXTRAS)
+    assert "missing hours" in str(e.value) and "appears more than once" in str(e.value)
 
 
 def test_unknown_ids_refused():

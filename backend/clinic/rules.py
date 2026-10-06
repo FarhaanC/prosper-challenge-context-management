@@ -85,8 +85,14 @@ class Bookability:
         return {"bookable": self.bookable, "reasons": list(self.reasons)}
 
 
+def _known(table: dict, key):
+    """The catalog entry for this id, or None for anything that isn't a known id
+    (including a list or other odd value the AI might pass)."""
+    return table.get(key) if isinstance(key, str) else None
+
+
 def can_book_visit_type(catalog: Catalog, caller: Caller, visit_type_id) -> Bookability:
-    vt = catalog.visit_types.get(visit_type_id) if isinstance(visit_type_id, str) else None
+    vt = _known(catalog.visit_types, visit_type_id)
     if vt is None:
         return Bookability(False, [f"'{visit_type_id}' isn't a visit type in the catalog."])
 
@@ -98,7 +104,10 @@ def can_book_visit_type(catalog: Catalog, caller: Caller, visit_type_id) -> Book
 
     pairs = valid_pairs(catalog, caller, vt)
     if offering and not pairs:
-        if caller.is_new_patient and not any(p.accepting_new_patients for p in offering):
+        # Say which rule blocks every doctor, using the same pair checks as everywhere else.
+        broken = [{x.rule for x in pair_problems(caller, vt, p, catalog.locations[lid])}
+                  for p in offering for lid in p.location_ids]
+        if all(5 in rules for rules in broken):
             reasons.append(f"No doctor who offers {vt.name} is taking new patients right now.")
         else:
             reasons.append(f"No location has both a doctor for {vt.name} and the equipment it needs.")
@@ -129,19 +138,19 @@ def check_booking(
     now: datetime,
 ) -> list:
     """The final full check before saving. Returns the problems as sentences (empty = OK)."""
-    if visit_type_id not in catalog.visit_types:
+    vt = _known(catalog.visit_types, visit_type_id)
+    p = _known(catalog.providers, provider_id)
+    loc = _known(catalog.locations, location_id)
+    if vt is None:
         return ["No valid visit type has been chosen."]
-    if provider_id not in catalog.providers:
+    if p is None:
         return ["No valid doctor has been chosen."]
-    if location_id not in catalog.locations:
+    if loc is None:
         return ["No location has been chosen."]  # rule 6
-    if not start:
+    if not isinstance(start, datetime):
         return ["No appointment time has been chosen."]
 
-    vt = catalog.visit_types[visit_type_id]
-    p = catalog.providers[provider_id]
-    loc = catalog.locations[location_id]
     problems = [x.reason for x in visit_type_problems(caller, vt) + pair_problems(caller, vt, p, loc)]
-    if not problems and not schedule.is_open(provider_id, location_id, vt.duration_min, start, now):
+    if not problems and not schedule.is_open(p.id, loc.id, vt.duration_min, start, now):
         problems.append("That time is no longer available.")
     return problems

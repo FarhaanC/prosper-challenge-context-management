@@ -22,6 +22,7 @@ from __future__ import annotations
 import re
 import unicodedata
 from difflib import SequenceMatcher
+from dataclasses import dataclass
 from functools import lru_cache
 
 # Match qualities, best first. Plain integers so they can be compared and ranked.
@@ -35,7 +36,9 @@ CLOSE_SPELLING = 0.8
 # Soundex codes are crude for very short words ("Li" and "Lee"), so only use them from 3 letters.
 SOUNDEX_MIN_LETTERS = 3
 
-TITLE_WORDS = {"dr", "doctor", "doc", "mr", "mrs", "ms", "miss", "mx", "md", "do", "np", "pa"}
+# Words that are part of how a name is said but not part of the name itself.
+TITLE_WORDS = {"dr", "doctor", "doc", "mr", "mrs", "ms", "miss", "mx", "md", "do", "np", "pa",
+               "jr", "junior", "sr", "senior", "ii", "iii", "iv"}
 
 
 @lru_cache(maxsize=50_000)  # the same catalog names are compared on every search
@@ -54,7 +57,7 @@ def normalize(text) -> str:
 
 
 def name_tokens(text) -> list:
-    """Words of a person's name, without titles like 'Dr.' or 'Mr.'."""
+    """Words of a person's name, without titles like 'Dr.' or 'Mr.' or endings like 'Jr'."""
     return [t for t in normalize(text).split() if t not in TITLE_WORDS]
 
 
@@ -103,40 +106,64 @@ def word_quality(heard: str, actual: str, allow_sounds_like: bool = True, close_
     return NONE
 
 
-def person_match(heard, full_name: str, allow_sounds_like: bool = True, close_at: float = CLOSE_SPELLING) -> tuple:
-    """Compare a heard person name with a real full name.
+@dataclass(frozen=True, order=True)
+class NameRank:
+    """How strongly a heard name matches a real one. Compared field by field, so a
+    bigger value in an earlier field always wins:
 
-    Returns (rank, quality, first_name_matched):
-    - rank: higher is better, 0 means no match. Matching the full heard name
-      always outranks matching only part of it.
-    - quality: the weakest word quality in the match (EXACT, CLOSE, SOUNDS_LIKE).
-    - first_name_matched: False when the caller gave a first name that matched
-      nobody, and we fell back to the surname alone ("Dr. John Garcia" -> the Garcias).
+    whole_name  1 if every word the caller said matched (0 = surname-only fallback)
+    quality     the weakest word quality in the match (EXACT, CLOSE, SOUNDS_LIKE, NONE)
+    by_surname  1 if the match is on the surname (preferred over a first name at equal quality)
+    """
 
-    One heard word may be a surname or a first name ("Dr. Chen", "Dr. Grace"); the
-    better match counts, so an exact first name beats a sounds-alike surname. At equal
-    quality the surname wins: "Garsha" sounds like both Garcia and Grace, and callers
-    name doctors by surname.
+    whole_name: int
+    quality: int
+    by_surname: int
+
+
+NO_MATCH = NameRank(0, NONE, 0)
+
+
+def person_match(heard, full_name: str, allow_sounds_like: bool = True, close_at: float = CLOSE_SPELLING) -> NameRank:
+    """Compare a heard person name with a real full name. NO_MATCH if they don't match.
+
+    - Two or more words heard: first and last word must both match ("Maria Garcia").
+      If only the surname matches, it's a weaker fallback ("Dr. John Garcia" finds the
+      Garcias with whole_name=0, so the agent can say there's no Dr. John Garcia).
+    - One word heard: it may be a surname or a first name ("Dr. Chen", "Dr. Grace").
+      The better match counts, so an exact first name beats a sounds-alike surname. At
+      equal quality the surname wins: "Garsha" sounds like both Garcia and Grace, and
+      callers name doctors by surname.
     """
     heard_t = name_tokens(heard)
     real_t = name_tokens(full_name)
     if not heard_t or not real_t:
-        return (0, NONE, False)
+        return NO_MATCH
     real_first, real_last = real_t[0], real_t[-1]
 
     if len(heard_t) == 1:
         as_last = word_quality(heard_t[0], real_last, allow_sounds_like, close_at)
         as_first = word_quality(heard_t[0], real_first, allow_sounds_like, close_at)
-        if as_last >= as_first and as_last:
-            return (as_last * 10 + 1, as_last, True)
-        return (as_first * 10, as_first, True) if as_first else (0, NONE, False)
+        if as_last and as_last >= as_first:
+            return NameRank(1, as_last, 1)
+        return NameRank(1, as_first, 0) if as_first else NO_MATCH
 
     first = word_quality(heard_t[0], real_first, allow_sounds_like, close_at)
     last = word_quality(heard_t[-1], real_last, allow_sounds_like, close_at)
     if first and last:
-        q = min(first, last)
-        return (q * 10, q, True)
+        return NameRank(1, min(first, last), 1)
     if last:
-        # Surname matches but the first name doesn't: a weak, clearly-labelled fallback.
-        return (last, last, False)
-    return (0, NONE, False)
+        return NameRank(0, last, 1)
+    return NO_MATCH
+
+
+def letters_apart(a: str, b: str) -> int:
+    """How many single-letter changes (add, remove or swap one letter) turn a into b.
+    Used for names the caller spelled out: 'BRAWN' is 1 letter from 'BROWN'."""
+    a, b = normalize(a).replace(" ", ""), normalize(b).replace(" ", "")
+    row = list(range(len(b) + 1))
+    for i, ca in enumerate(a, 1):
+        prev, row[0] = row[0], i
+        for j, cb in enumerate(b, 1):
+            prev, row[j] = row[j], min(row[j] + 1, row[j - 1] + 1, prev + (ca != cb))
+    return row[-1]

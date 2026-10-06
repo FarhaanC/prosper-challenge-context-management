@@ -20,41 +20,46 @@ from datetime import time
 from pathlib import Path
 from typing import Optional
 
-from .fuzzy import CLOSE, EXACT, QUALITY_NAMES, normalize, person_match, similarity, word_quality
+from .fuzzy import CLOSE, EXACT, NONE, QUALITY_NAMES, normalize, person_match, similarity, word_quality
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 
 DAY_ABBREVIATIONS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
-# A specialty name typed slightly wrong ("nuerology") still matches at this
-# spelling similarity; "astrology" vs "urology" (0.75) does not.
+# A specialty name, or the word for its doctor, said slightly wrong ("nuerology",
+# "dermatoligist") still matches at this spelling similarity; "astrology" vs
+# "urology" (0.75) and "physician" vs "physical therapist" don't.
 SPECIALTY_SPELLING = 0.85
-# "dermatologist" -> stem "dermatolog", which must begin a specialty name. Stems
-# shorter than this ("ent" from "dentist" would be 4) are too vague to trust.
-SPECIALTY_STEM_MIN = 4
 # For answer_question's visit-type lookup: at least half the caller's words must
 # appear in the name, or the whole phrase must be spelled 70% alike.
 VISIT_WORD_OVERLAP = 0.5
 VISIT_SPELLING = 0.7
-# A place phrase matches a landmark's name if spelled this alike as a whole.
-LANDMARK_SPELLING = 0.85
+# Place words this short must match exactly: spelling closeness on short words
+# misfires ("main" is 80% like "marina", "none" like "noe").
+SHORT_PLACE_WORD = 4
 
-# Words in location names that don't help tell locations apart.
+# Words in place phrases that don't help tell places apart.
 GENERIC_PLACE_WORDS = {
     "health", "center", "centre", "clinic", "medical", "group", "family", "specialty",
     "care", "community", "the", "one", "office", "location", "hospital", "place",
-    "site", "branch", "please", "a", "of",
+    "site", "branch", "please", "a", "of", "sf", "san", "francisco", "city",
 }
-STREET_WORDS = {"street", "st", "avenue", "ave", "boulevard", "blvd", "road", "rd", "way", "lane"}
+STREET_WORDS = {"street", "st", "avenue", "ave", "boulevard", "blvd", "road", "rd", "lane"}
+# "Anywhere is fine": no place wish at all.
+# (Written without spaces: compared with the caller's words squashed together.)
+ANY_PLACE = {"any", "anywhere", "anyplace", "nopreference", "none", "no", "wherever", "dontmind",
+             "doesntmatter", "notfussed", "anyofthem", "anywhereisfine", "anywhereisok"}
 # Phrases meaning "close to X": rank by distance from X rather than requiring X.
 NEAR_PHRASE = re.compile(
     r"\b(near|nearby|close to|closer to|closest to|around|next to|not far from|by|on the way to)\b"
 )
 FILLER_PREFIX = re.compile(
     r"^(?:(?:somewhere|anywhere|something|one|the one|a clinic|a place)\s+)?"
-    r"(?:(?:near|nearby|close to|closer to|closest to|around|in|at|on|by|next to|not far from)\s+)?"
+    r"(?:(?:on the way to|near|nearby|close to|closer to|closest to|around|in|at|on|by|next to|"
+    r"not far from)\s+)?"
     r"(?:the\s+)?"
 )
+ON_A_STREET = re.compile(r"(^|\s)on\s")
 FILLER_SUFFIX = re.compile(r"(?:\s+(?:area|side|neighbou?rhood|one|location|clinic|office|please))+$")
 
 
@@ -129,7 +134,7 @@ class ProviderMatch:
 class PlaceMatch:
     """What a caller's place words resolved to."""
 
-    kind: str  # "location" | "landmark" | "ambiguous" | "none"
+    kind: str  # "location" | "landmark" | "ambiguous" | "any" (no preference) | "none" (not recognised)
     label: str = ""
     location_ids: list = field(default_factory=list)  # one if kind=location, several if ambiguous
     point: Optional[tuple] = None  # (lat, lon) to measure distance from
@@ -159,19 +164,84 @@ def distance_miles(a: tuple, b: tuple) -> float:
     return 3958.8 * 2 * math.asin(math.sqrt(h))
 
 
-def _distinct_words(text: str, drop: set) -> set:
-    return set(normalize(text).split()) - drop
+def _distinct_words(text: str) -> list:
+    """The words of a place name that tell it apart, in order: 'Mission Bay Health Center' -> ['mission', 'bay']."""
+    return [w for w in normalize(text).split() if w not in GENERIC_PLACE_WORDS]
 
 
-def _words_fit(heard: set, name: set) -> bool:
-    """Every heard word matches some word of the name (exactly or by close spelling)."""
-    return bool(heard) and all(any(word_quality(h, n, allow_sounds_like=False) >= CLOSE for n in name)
-                               for h in heard)
+def _word_fits(heard: str, real: str) -> bool:
+    if heard == real:
+        return True
+    if min(len(heard), len(real)) <= SHORT_PLACE_WORD:
+        return False
+    return word_quality(heard, real, allow_sounds_like=False) >= CLOSE
+
+
+def _name_fits(heard: set, name: str, said: str = "") -> bool:
+    """Does what the caller said pick out this place name?
+
+    Every word they said must fit a word of the name, AND they must have said the
+    name's first distinctive word or all of its words. So "Mission" fits Mission Bay,
+    but "Bay", "Valley" or "Gate" on their own don't pick anything. `said` is the
+    caller's words run together, so "mid town" still fits "Midtown".
+    """
+    words = _distinct_words(name)
+    if not heard or not words:
+        return False
+    if said and said == "".join(words):
+        return True
+    if not all(any(_word_fits(h, w) for w in words) for h in heard):
+        return False
+    said_lead = any(_word_fits(h, words[0]) for h in heard)
+    said_all = all(any(_word_fits(h, w) for h in heard) for w in words)
+    return said_lead or said_all
+
+
+REQUIRED_FIELDS = {
+    "locations": ("id", "name", "address", "city", "phone", "hours"),
+    "providers": ("id", "name", "title", "specialty", "location_ids", "accepting_new_patients", "languages",
+                  "appointment_type_ids"),
+    "appointment_types": ("id", "name", "specialty", "duration_min", "requires_referral", "new_patients_allowed"),
+}
+
+
+def _check_records(raw: dict) -> list:
+    """Missing sections or fields, and repeated ids, as plain sentences."""
+    problems = []
+    for section, fields in REQUIRED_FIELDS.items():
+        records = raw.get(section)
+        if not isinstance(records, list):
+            problems.append(f"The catalog has no '{section}' list.")
+            continue
+        seen = set()
+        for i, r in enumerate(records):
+            missing = [f for f in fields if f not in r]
+            if missing:
+                problems.append(f"{section} entry {r.get('id', f'#{i}')} is missing {', '.join(missing)}.")
+            if r.get("id") in seen:
+                problems.append(f"{section} id {r.get('id')} appears more than once.")
+            seen.add(r.get("id"))
+    return problems
+
+
+def _doctor_words(specialty: str) -> list:
+    """The usual word for a doctor in this specialty, from its name's ending:
+    dermatology -> dermatologist, pediatrics -> pediatrician / pediatrist,
+    allergy -> allergist, dental -> dentist, physicaltherapy -> physicaltherapist."""
+    if specialty.endswith("ology") or specialty.endswith("y"):
+        return [specialty[:-1] + "ist"]
+    if specialty.endswith("ics"):
+        return [specialty[:-1] + "ian", specialty[:-3] + "ist"]
+    if specialty.endswith("al"):
+        return [specialty[:-2] + "ist"]
+    return []
 
 
 class Catalog:
     def __init__(self, raw: dict, extras: dict):
-        problems: list = []
+        problems = _check_records(raw)
+        if problems:
+            raise CatalogError("The catalog data has problems:\n- " + "\n- ".join(problems))
         extra_locs = extras.get("locations", {})
 
         self.locations: dict = {}
@@ -209,6 +279,8 @@ class Catalog:
             for vt in p["appointment_type_ids"]:
                 if vt not in self.visit_types:
                     problems.append(f"Doctor {p['id']} offers unknown visit type {vt}.")
+            if not p["location_ids"]:
+                problems.append(f"Doctor {p['id']} works at no location.")
             self.providers[p["id"]] = Provider(
                 id=p["id"], name=p["name"], title=p["title"], specialty=p["specialty"],
                 location_ids=tuple(p["location_ids"]), accepting_new_patients=bool(p["accepting_new_patients"]),
@@ -241,23 +313,20 @@ class Catalog:
         return sorted(self._types_by_specialty)
 
     def match_specialty(self, text) -> Optional[str]:
-        """Map the AI's wording to a catalog specialty: "OBGYN", "ob-gyn", "dermatologist",
-        "pediatrician", "Allergy" (one half of "Allergy/Immunology"). None if unsure."""
-        squashed = normalize(text).replace(" ", "")
-        if not squashed:
+        """Map the AI's wording to a catalog specialty: "OBGYN", "ob-gyn", "Allergy" (one
+        half of "Allergy/Immunology"), or the word for the doctor ("dermatologist",
+        "pediatrician", "dentist", "physical therapist"). None if unsure."""
+        said = normalize(text).replace(" ", "")
+        if not said:
             return None
-        stem = re.sub(r"(ists?|ians?)$", "", squashed)
         best, best_score = None, 0.0
         for s in self.specialties():
-            whole = normalize(s).replace(" ", "")
-            parts = [normalize(p).replace(" ", "") for p in s.split("/")]
-            if squashed == whole or squashed in parts:
-                return s
-            if stem != squashed and len(stem) >= SPECIALTY_STEM_MIN and any(p.startswith(stem) for p in parts):
-                return s
-            score = max(similarity(squashed, x) for x in [whole, *parts])
-            if score > best_score:
-                best, best_score = s, score
+            names = [normalize(s).replace(" ", "")] + [normalize(p).replace(" ", "") for p in s.split("/")]
+            names += [w for n in names for w in _doctor_words(n)]
+            for n in names:
+                score = 1.0 if said in (n, n + "s") else similarity(said, n)
+                if score > best_score:
+                    best, best_score = s, score
         return best if best_score >= SPECIALTY_SPELLING else None
 
     def visit_types_in(self, specialty: str) -> list:
@@ -290,9 +359,9 @@ class Catalog:
         """
         scored = []
         for p in self.providers.values():
-            rank, quality, first_ok = person_match(heard, p.name)
-            if rank:
-                scored.append((rank, ProviderMatch(p, quality, first_ok)))
+            rank = person_match(heard, p.name)
+            if rank.quality != NONE:
+                scored.append((rank, ProviderMatch(p, rank.quality, bool(rank.whole_name))))
         if not scored:
             return []
         top = max(r for r, _ in scored)
@@ -306,52 +375,48 @@ class Catalog:
         """Work out what place a caller means.
 
         In this order:
-        1. One of our locations by name, nickname or neighbourhood ("Mission Bay",
+        1. "Anywhere", "no preference" -> kind "any": no place wish.
+        2. If the caller named a street ("Mission Street", "Geary Blvd") or said
+           "on X" ("the one on Geary"): a street from our addresses. If they said a
+           street word and it isn't one of ours, stop: it's not recognised.
+        3. One of our locations by name, nickname or neighbourhood ("Mission Bay",
            "the Midtown one", "the Hayes Valley one") -> that location.
            A name several locations share ("Mission", "North") -> ambiguous: ask.
-        2. A known landmark or neighbourhood ("near Union Square", "Chinatown").
-        3. Steps 1-2 again without the word "district" ("the Marina District").
-        4. A street from our addresses ("the one on Geary", "near Mission Street").
-           When the caller says "street", "avenue" etc., streets are checked first.
+        4. A known landmark or neighbourhood ("near Union Square", "Chinatown").
+        5. Steps 3-4 again without the word "district" ("the Marina District").
         With "near", "closer to" and the like, near=True: rank by distance, don't restrict.
         """
         text = normalize(hint)
         if not text:
             return PlaceMatch(kind="none")
+        if text.replace(" ", "") in ANY_PLACE:
+            return PlaceMatch(kind="any")
         near = bool(NEAR_PHRASE.search(text))
+        on_street = bool(ON_A_STREET.search(text))
         core = FILLER_SUFFIX.sub("", FILLER_PREFIX.sub("", text)).strip()
-        words = _distinct_words(core, GENERIC_PLACE_WORDS)
+        words = set(_distinct_words(core))
         if not words:
             return PlaceMatch(kind="none", label=str(hint))
 
-        said_street = bool(words & STREET_WORDS)
-        steps = [
-            lambda: self._match_street(words - STREET_WORDS, near),
-            lambda: self._match_locations(words, near),
-            lambda: self._match_landmarks(core, words),
-            lambda: self._match_locations(words - {"district"}, near),
-            lambda: self._match_landmarks(core.replace("district", "").strip(), words - {"district"}),
-        ]
-        if not said_street:
-            steps = steps[1:] + steps[:1]
-        for step in steps:
-            found = step()
+        if words & STREET_WORDS:
+            return self._match_street(words - STREET_WORDS, near) or PlaceMatch(kind="none", label=str(hint))
+        if on_street:
+            found = self._match_street(words, near)
+            if found:
+                return found
+        for attempt in (words, words - {"district"}):
+            said = "".join(w for w in core.split() if w in attempt)
+            found = self._match_locations(attempt, said, near) or self._match_landmarks(attempt, said)
             if found:
                 return found
         return PlaceMatch(kind="none", label=str(hint))
 
-    def _match_locations(self, words: set, near: bool) -> Optional[PlaceMatch]:
-        if not words:
-            return None
-        hits = []
-        for loc in self.locations.values():
-            for n in (loc.name, loc.neighbourhood, *loc.also_called):
-                if n and _words_fit(words, _distinct_words(n, GENERIC_PLACE_WORDS)):
-                    hits.append(loc)
-                    break
+    def _match_locations(self, words: set, said: str, near: bool) -> Optional[PlaceMatch]:
+        hits = [loc for loc in self.locations.values()
+                if any(n and _name_fits(words, n, said) for n in (loc.name, loc.neighbourhood, *loc.also_called))]
         if len(hits) > 1:
-            # "Mission District" fits Mission District fully but Mission Bay only partly.
-            full = [l for l in hits if any(_distinct_words(n, GENERIC_PLACE_WORDS) == words
+            # "Mission District" names Mission District fully but Mission Bay only partly.
+            full = [l for l in hits if any(set(_distinct_words(n)) == words
                                            for n in (l.name, l.neighbourhood, *l.also_called) if n)]
             if len(full) == 1:
                 hits = full
@@ -363,24 +428,18 @@ class Catalog:
                               location_ids=[l.id for l in hits], near=near)
         return None
 
-    def _match_landmarks(self, core: str, words: set) -> Optional[PlaceMatch]:
-        if not words:
-            return None
-        best, best_score = None, 0.0
-        for name, point in self.landmarks.items():
-            score = similarity(core, name)
-            if _words_fit(words, _distinct_words(name, GENERIC_PLACE_WORDS)):
-                score = max(score, 1.0)
-            if score > best_score:
-                best, best_score = (name, point), score
-        if best and best_score >= LANDMARK_SPELLING:
-            return PlaceMatch(kind="landmark", label=best[0], point=best[1], near=True)
+    def _match_landmarks(self, words: set, said: str) -> Optional[PlaceMatch]:
+        hits = [(name, point) for name, point in self.landmarks.items() if _name_fits(words, name, said)]
+        exact = [h for h in hits if set(_distinct_words(h[0])) == words]
+        if exact or len(hits) == 1:
+            name, point = (exact or hits)[0]
+            return PlaceMatch(kind="landmark", label=name, point=point, near=True)
         return None
 
     def _match_street(self, words: set, near: bool) -> Optional[PlaceMatch]:
         if not words:
             return None
-        hits = [l for l in self.locations.values() if _words_fit(words, set(l.street.split()))]
+        hits = [l for l in self.locations.values() if _name_fits(words, l.street)]
         if len(hits) == 1:
             l = hits[0]
             return PlaceMatch(kind="location", label=f"{l.name} ({l.address})", location_ids=[l.id],
@@ -389,6 +448,3 @@ class Catalog:
             return PlaceMatch(kind="ambiguous", label=" or ".join(f"{l.name} ({l.address})" for l in hits),
                               location_ids=[l.id for l in hits], near=near)
         return None
-
-    def location_point(self, location_id: str) -> tuple:
-        return self.locations[location_id].point

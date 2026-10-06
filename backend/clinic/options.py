@@ -2,78 +2,79 @@
 
 Only options that already pass every rule are returned, so the AI can't pick an
 impossible one. The caller's wishes (a doctor, a place, a day or time, a
-language) narrow those options, one at a time, in this order of strength:
+language) narrow those options one at a time, strongest first:
 
 1. the thing the caller changed most recently (`Preferences.latest`);
-2. other things the caller said: doctor, place, day/time, language;
+2. other things the caller said: doctor, then place, then day/time, then language;
 3. choices carried over from earlier in the call (a doctor or place chosen
    before the caller changed something else).
 
 A wish is applied only if some option still survives it. A wish that can't be
-met is never silently dropped: it becomes a note for the agent to say, and
-every note is checked against ALL valid options before it's written, so it
-is always true:
+met is never silently dropped: it becomes a note for the agent to say, and the
+note is checked against ALL valid options before it's written, so it's true:
 
-- impossible for anyone: "None of the doctors who offer Skin Cancer Screening speaks Klingon."
-- impossible together with a stronger wish: "Dr. Daniel Chen isn't available at Midtown Medical Group."
+- nobody can meet it: "None of the doctors available to you for Skin Cancer Screening speaks Klingon."
+- it clashes with a stronger wish: "Dr. Daniel Chen isn't available at Midtown Medical Group."
+
+Doctors the caller turned down ("someone else, please") are left out entirely.
 
 How the options are picked: if the caller named a place, by distance from it
 (unless they asked for the soonest); otherwise soonest first. Different
-doctor/location pairs are offered before extra times with the same pair, so
-the caller gets a real choice.
-
-Each note is a sentence with a label (`Note.kind`), so the tool layer can
-react to the kind (e.g. ask "which one?") without searching the text.
+doctor/location pairs are offered before extra times with the same pair, so the
+caller gets a real choice.
 """
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
-from datetime import date, datetime, timedelta
-from typing import Callable, Iterator, Optional
+from datetime import date, datetime
+from typing import Callable, Optional
 
-from .card import CLEAR_WORDS, Preferences
+from .card import ANY_DAY, ANY_TIME, DOCTOR, LANGUAGE, LOCATION, TIME, TIMES_OF_DAY, Preferences
 from .catalog import Catalog, VisitType, distance_miles
+from .fuzzy import normalize
 from .patients import Caller
 from .rules import can_book_visit_type, pair_problems
-from .slots import DAYS_AHEAD, Schedule, spoken_time
+from .slots import DAYS_AHEAD, Schedule, booking_days, spoken_time
 
 WEEKDAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
-TIMES_OF_DAY = {"morning": lambda t: t.hour < 12, "afternoon": lambda t: t.hour >= 12}
+ISO_DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
+ANY_DOCTOR = {"any", "anyone", "any doctor", "anybody", "whoever", "no preference", "dont mind", "don t mind"}
 # Below this, saying "about 0.1 miles from X" adds nothing: it's effectively the same place.
 DISTANCE_WORTH_SAYING = 0.2
 # How many names to read out in "Doctors who can: ..." before saying "and N more".
 NAMES_TO_READ = 3
+# Order among the things the caller said (lower = stronger), after the latest change.
+STRENGTH = {DOCTOR: 1, LOCATION: 2, TIME: 3, LANGUAGE: 4}
 
 # Note kinds
-NOT_BOOKABLE = "not_bookable"          # this caller can't book this visit type at all
-BAD_INPUT = "bad_input"                # a day/time value the code can't use: rephrase and retry
-DOCTOR_NOT_FOUND = "doctor_not_found"  # no doctor by that name
+NOT_BOOKABLE = "not_bookable"            # this caller can't book this visit type at all
+BAD_INPUT = "bad_input"                  # a day/time value the code can't use: rephrase and retry
+DOCTOR_NOT_FOUND = "doctor_not_found"    # no doctor by that name
 DOCTOR_NAME_GUESS = "doctor_name_guess"  # only approximate name matches: check with the caller
-SAME_NAME = "doctors_same_name"        # several doctors share the name: ask which one
-PLACE_UNKNOWN = "place_unknown"        # place words not recognised
-PLACE_AMBIGUOUS = "place_ambiguous"    # place words fit several locations: ask which one
-WISH_IMPOSSIBLE = "wish_impossible"    # a wish nobody can meet
-WISH_CONFLICT = "wish_conflict"        # a wish that can't be met together with a stronger one
-NO_TIMES = "no_times"                  # nothing open at all in the booking window
+SAME_NAME = "doctors_same_name"          # several doctors share the name: ask which one
+NO_OTHER_DOCTOR = "no_other_doctor"      # the caller turned a doctor down, but nobody else can do it
+PLACE_UNKNOWN = "place_unknown"          # place words not recognised
+PLACE_AMBIGUOUS = "place_ambiguous"      # place words fit several locations: ask which one
+WISH_IMPOSSIBLE = "wish_impossible"      # a wish nobody can meet
+WISH_CONFLICT = "wish_conflict"          # a wish that can't be met together with a stronger one
+NO_TIMES = "no_times"                    # nothing open at all in the booking window
 
 
-class Note(str):
-    """A sentence for the agent to say, labelled with what kind of note it is.
-
-    It behaves exactly like a string (so it can be read, joined and searched),
-    plus a `kind` attribute; `to_dict()` gives {"kind": ..., "say": ...}.
-    """
+@dataclass(frozen=True)
+class Note:
+    """Something the agent should tell the caller: a short label for what kind of
+    note it is (so the tool layer can react, e.g. ask "which one?"), and the sentence."""
 
     kind: str
+    say: str
 
-    def __new__(cls, kind: str, say: str):
-        note = super().__new__(cls, say)
-        note.kind = kind
-        return note
+    def __str__(self) -> str:
+        return self.say
 
     def to_dict(self) -> dict:
-        return {"kind": self.kind, "say": str(self)}
+        return {"kind": self.kind, "say": self.say}
 
 
 @dataclass
@@ -107,108 +108,162 @@ class OptionsResult:
                 "options": [o.to_dict() for o in self.options]}
 
 
-# ---------------------------------------------------------------- input checks
+# ---------------------------------------------------------------- small helpers
+def _join(items, word: str = "and") -> str:
+    items = list(items)
+    return items[0] if len(items) == 1 else ", ".join(items[:-1]) + f" {word} " + items[-1]
+
+
+def _a(word: str) -> str:
+    """'a Spanish-speaking', 'an Arabic-speaking'."""
+    return ("an " if word[:1].lower() in "aeiou" else "a ") + word
+
+
+def _both(a: Optional[Callable], b: Optional[Callable]) -> Optional[Callable]:
+    """Combine two optional tests into one that needs both."""
+    if a and b:
+        return lambda x: a(x) and b(x)
+    return a or b
+
+
+# ---------------------------------------------------------------- day and time wishes
 def check_time_wishes(days, time_of_day, now: datetime) -> tuple:
-    """Turn day and time wishes into filters, or explain what can't be used.
+    """Turn day and time wishes into tests, or explain what can't be used.
 
     Accepted days: a weekday name ("Thursday", "thu", "thurs"), "today", "tomorrow",
-    or a date as YYYY-MM-DD. Accepted times: "morning" (before 12:00) or
-    "afternoon" (12:00 or later). Blank values or "any" mean no wish.
-    Returns (day_tests, label, time_test, problems).
+    or a date written YYYY-MM-DD inside the booking window. Accepted times: "morning"
+    (before 12:00) or "afternoon" (12:00 or later). Blank values and "any" mean no wish.
+    Returns (day_ok, phrase, time_ok, problems): day_ok tests a date, time_ok tests a
+    start time, phrase says the wish ("on Thursday in the morning").
     """
+    window = booking_days(now)
     day_tests, labels, problems = [], [], []
     for raw in days or []:
-        d = str(raw).strip().lower()
-        if not d or d in CLEAR_WORDS:
+        d = " ".join(str(raw or "").split()).lower()
+        if not d or d in ANY_DAY | ANY_TIME:
             continue
         if d in ("today", "tomorrow"):
-            target = now.date() + timedelta(days=0 if d == "today" else 1)
-            day_tests.append(lambda s, t=target: s.date() == t)
+            target = window[0] if d == "today" else window[1]
+            day_tests.append(lambda day, t=target: day == t)
             labels.append(d)
             continue
-        weekday = next((i for i, w in enumerate(WEEKDAYS) if len(d.rstrip("s")) >= 3 and w.startswith(d.rstrip("s"))), None)
+        stem = d.rstrip("s")
+        weekday = next((i for i, w in enumerate(WEEKDAYS) if len(stem) >= 3 and w.startswith(stem)), None)
         if weekday is not None:
-            day_tests.append(lambda s, i=weekday: s.weekday() == i)
-            labels.append(WEEKDAYS[weekday].capitalize())
+            day_tests.append(lambda day, i=weekday: day.weekday() == i)
+            labels.append("on " + WEEKDAYS[weekday].capitalize())
             continue
-        try:
-            target = date.fromisoformat(d)
-        except ValueError:
+        target = date.fromisoformat(d) if ISO_DATE.fullmatch(d) and _is_date(d) else None
+        if target is None:
             problems.append(f"I couldn't use the day '{raw}'. Pass a weekday name, 'today', 'tomorrow' "
-                            f"or a date like {now.date() + timedelta(days=7):%Y-%m-%d}.")
-            continue
-        day_tests.append(lambda s, t=target: s.date() == t)
-        labels.append(f"{target:%A} {target.day} {target:%B}")
+                            f"or a date like {window[7]:%Y-%m-%d}.")
+        elif not window[0] <= target <= window[-1]:
+            problems.append(f"{target:%A} {target.day} {target:%B} is outside the booking window "
+                            f"({window[0].day} {window[0]:%B} to {window[-1].day} {window[-1]:%B}).")
+        else:
+            day_tests.append(lambda day, t=target: day == t)
+            labels.append(f"on {target:%A} {target.day} {target:%B}")
 
-    tod = str(time_of_day or "").strip().lower()
-    time_test = None
-    if tod and tod not in CLEAR_WORDS:
-        if tod in TIMES_OF_DAY:
-            time_test = TIMES_OF_DAY[tod]
+    tod = " ".join(str(time_of_day or "").split()).lower()
+    time_ok = None
+    if tod and tod not in ANY_TIME:
+        if tod == TIMES_OF_DAY[0]:
+            time_ok = lambda t: t.hour < 12  # noqa: E731
+        elif tod == TIMES_OF_DAY[1]:
+            time_ok = lambda t: t.hour >= 12  # noqa: E731
         else:
             problems.append(f"I couldn't use the time '{time_of_day}'. Pass 'morning' or 'afternoon', or leave it empty.")
-            tod = ""
-    else:
-        tod = ""
-
-    day_label = " or ".join(labels)
-    label = f"{day_label} {tod}".strip() if day_label else (f"the {tod}" if tod else "")
-    return day_tests, label, time_test, problems
+    day_ok = (lambda day: any(test(day) for test in day_tests)) if day_tests else None
+    phrase = " ".join(filter(None, [_join(labels, "or") if labels else "", f"in the {tod}" if time_ok else ""]))
+    return day_ok, phrase, time_ok, problems
 
 
-# ---------------------------------------------------------------- open times, lazily
+def _is_date(text: str) -> bool:
+    try:
+        date.fromisoformat(text)
+        return True
+    except ValueError:
+        return False
+
+
+# ---------------------------------------------------------------- open times, per search
 class _Times:
-    """Open times per doctor/location pair, worked out only as far as needed and
-    shared by every check within one search."""
+    """Open times for each doctor/location pair, worked out one day at a time and
+    only as far as a check needs. One is made per search and thrown away after."""
 
     def __init__(self, schedule: Schedule, vt: VisitType, now: datetime):
         self.schedule, self.vt, self.now = schedule, vt, now
-        self._seen: dict = {}   # pair key -> times found so far
-        self._more: dict = {}   # pair key -> iterator for the rest
+        self.days = booking_days(now)
+        self._by_day: dict = {}  # (provider, location, date) -> open start times
 
-    def _iter(self, key) -> Iterator[datetime]:
-        seen = self._seen.setdefault(key, [])
-        if key not in self._more:
-            self._more[key] = self.schedule.iter_open_slots(key[0], key[1], self.vt.duration_min, self.now)
-        yield from seen
-        for t in self._more[key]:
-            seen.append(t)
-            yield t
-
-    def take(self, pair, ok: Optional[Callable], n: int) -> list:
+    def take(self, pair, day_ok: Optional[Callable], time_ok: Optional[Callable], n: int) -> list:
+        p, loc = pair
         out = []
-        for t in self._iter((pair[0].id, pair[1].id)):
-            if ok is None or ok(t):
-                out.append(t)
-                if len(out) >= n:
-                    break
+        for day in self.days:
+            if day_ok and not day_ok(day):
+                continue  # skipped without working out its times
+            key = (p.id, loc.id, day)
+            if key not in self._by_day:
+                self._by_day[key] = self.schedule.open_slots_on(p.id, loc.id, self.vt.duration_min, day, self.now)
+            for t in self._by_day[key]:
+                if time_ok is None or time_ok(t):
+                    out.append(t)
+                    if len(out) >= n:
+                        return out
         return out
 
-    def any_open(self, pairs, ok: Optional[Callable]) -> bool:
-        return any(self.take(p, ok, 1) for p in pairs)
+    def any_open(self, pairs, day_ok: Optional[Callable], time_ok: Optional[Callable]) -> bool:
+        return any(self.take(pr, day_ok, time_ok, 1) for pr in pairs)
 
 
 # ---------------------------------------------------------------- wishes
 @dataclass
 class _Wish:
-    kind: str        # doctor | place | time | language
-    label: str       # how to say it: "Dr. Daniel Chen", "Midtown Medical Group", "Thursday morning"
-    context: str     # once applied: "with Dr. Daniel Chen", "at Midtown Medical Group", "on Thursday morning"
-    carried: bool    # carried over from an earlier choice (weaker than what the caller said)
-    pair_ok: Optional[Callable] = None
+    """One thing the caller wants, as plain data. Which options fit it is decided by
+    the fields that are set: doctors, locations, a language, or day/time tests."""
+
+    kind: str                                    # DOCTOR | LOCATION | TIME | LANGUAGE
+    label: str                                   # "Dr. Daniel Chen", "Midtown Medical Group", "on Wednesday"
+    context: str                                 # once applied: "with Dr. Daniel Chen", "at Midtown Medical Group"
+    carried: bool = False                        # carried over from an earlier choice (weaker)
+    provider_ids: Optional[frozenset] = None
+    location_ids: Optional[frozenset] = None
+    language: str = ""
+    day_ok: Optional[Callable] = None
     time_ok: Optional[Callable] = None
-    impossible: Optional[Callable] = None  # () -> Note, when nobody can meet it
+    doctors: tuple = ()                          # for explaining a doctor wish nobody can meet
+    heard: str = ""                              # the caller's words for a doctor wish
+
+    def fits(self, pair) -> bool:
+        p, loc = pair
+        if self.provider_ids is not None and p.id not in self.provider_ids:
+            return False
+        if self.location_ids is not None and loc.id not in self.location_ids:
+            return False
+        return not self.language or self.language.lower() in {l.lower() for l in p.languages}
 
 
-def _join(items: list) -> str:
-    items = list(items)
-    return items[0] if len(items) == 1 else ", ".join(items[:-1]) + " and " + items[-1]
+# Why one doctor can't do a visit for this caller: (one doctor, several doctors).
+_REASONS = {
+    "offer": ("doesn't offer {vt}", "don't offer {vt}"),
+    "new": ("isn't taking new patients", "aren't taking new patients"),
+    "equipment": ("doesn't work at a location with the {cap} equipment",
+                  "don't work at a location with the {cap} equipment"),
+    "times": ("has no open times for {vt} in the next {days} days",
+              "have no open times for {vt} in the next {days} days"),
+}
 
 
-def _both(a: Optional[Callable], b: Optional[Callable]) -> Optional[Callable]:
-    if a and b:
-        return lambda t: a(t) and b(t)
-    return a or b
+def _why_doctor_cant(catalog: Catalog, caller: Caller, vt: VisitType, p, valid: list) -> str:
+    """Which _REASONS entry applies to this doctor, from the same rule checks as everywhere else."""
+    if any(q.id == p.id for q, _ in valid):
+        return "times"
+    broken = {x.rule for lid in p.location_ids for x in pair_problems(caller, vt, p, catalog.locations[lid])}
+    if 2 in broken:
+        return "offer"
+    if 5 in broken:
+        return "new"
+    return "equipment"
 
 
 def _who_can(pairs: list) -> str:
@@ -222,33 +277,6 @@ def _who_can(pairs: list) -> str:
     shown = labels[:NAMES_TO_READ]
     more = len(labels) - len(shown)
     return ", ".join(shown) + (f" and {more} more" if more else "")
-
-
-def _doctor_impossible(catalog: Catalog, caller: Caller, vt: VisitType, label: str, doctors: list,
-                       valid: list) -> Note:
-    """Why none of these doctors can do this visit for this caller, plus who can."""
-    reasons: dict = {}
-    for p in doctors:
-        if any(q.id == p.id for q, _ in valid):
-            reason = f"have no open times for {vt.name} in the next {DAYS_AHEAD} days"
-        else:
-            broken = {x.rule for lid in p.location_ids
-                      for x in pair_problems(caller, vt, p, catalog.locations[lid])}
-            if 2 in broken:
-                reason = f"don't offer {vt.name}"
-            elif 5 in broken:
-                reason = "aren't taking new patients"
-            else:
-                reason = f"don't work at a location with the {vt.required_capability} equipment"
-        who = f"{p.name} ({p.specialty})" if reason.startswith("don't offer") else p.name
-        reasons.setdefault(reason, []).append(who)
-    parts = []
-    for reason, names in reasons.items():
-        if len(names) == 1:
-            reason = reason.replace("don't", "doesn't").replace("aren't", "isn't").replace("have no", "has no")
-        parts.append(f"{_join(names)} {reason}")
-    return Note(WISH_IMPOSSIBLE, f"No doctor matching '{label}' can do this: {'; '.join(parts)}. "
-                                 f"Doctors who can: {_who_can(valid)}.")
 
 
 def find_options(
@@ -266,121 +294,61 @@ def find_options(
         return OptionsResult(bookable=False, notes=[Note(NOT_BOOKABLE, r) for r in b.reasons])
     vt = catalog.visit_types[visit_type_id]
 
-    day_tests, time_label, time_test, problems = check_time_wishes(prefs.days, prefs.time_of_day, now)
+    day_ok, time_phrase, time_ok, problems = check_time_wishes(prefs.days, prefs.time_of_day, now)
     if problems:
         return OptionsResult(notes=[Note(BAD_INPUT, p) for p in problems])
 
-    valid = list(b.valid_pairs)
     times = _Times(schedule, vt, now)
     notes: list = []
-    wishes: list = []
-    point, point_label = None, ""
+    valid = [pr for pr in b.valid_pairs if times.any_open([pr], None, None)]  # valid AND has open times
 
-    # ---- doctor wishes -----------------------------------------------------
-    heard = (prefs.doctor_name_heard or "").strip()
-    same_name_ids: set = set()
-    if heard:
-        matches = catalog.match_providers(heard)
-        if not matches:
-            notes.append(Note(DOCTOR_NOT_FOUND, f"I couldn't find a doctor called {heard} here."))
+    # Doctors the caller turned down are left out, unless nobody else can do it.
+    turned_down = set(prefs.not_provider_ids or [])
+    if turned_down:
+        others = [pr for pr in valid if pr[0].id not in turned_down]
+        if others:
+            valid = others
         else:
-            notes += _name_guess_notes(heard, matches)
-            doctors = [m.provider for m in matches]
-            ids = {p.id for p in doctors}
-            names = sorted({p.name for p in doctors})
-            label = names[0] if len(names) == 1 else heard
-            same_name_ids = ids
-            wishes.append(_Wish(
-                "doctor", label, f"with {label}", carried=False,
-                pair_ok=lambda pr, ids=ids: pr[0].id in ids,
-                impossible=lambda d=doctors, l=heard: _doctor_impossible(catalog, caller, vt, l, d, valid),
-            ))
-    if prefs.preferred_provider_id in catalog.providers:
-        p = catalog.providers[prefs.preferred_provider_id]
-        wishes.append(_Wish(
-            "doctor", p.name, f"with {p.name}", carried=True,
-            pair_ok=lambda pr, pid=p.id: pr[0].id == pid,
-            impossible=lambda p=p: _doctor_impossible(catalog, caller, vt, p.name, [p], valid),
-        ))
+            names = sorted({catalog.providers[i].name for i in turned_down if i in catalog.providers})
+            notes.append(Note(NO_OTHER_DOCTOR, f"No other doctor can do {vt.name} for you; "
+                                               f"{_join(names)} {'is' if len(names) == 1 else 'are'} the only option."))
 
-    # ---- place wishes ------------------------------------------------------
-    hint = (prefs.location_hint or "").strip()
-    if hint:
-        place = catalog.resolve_place(hint)
-        if place.kind == "none":
-            notes.append(Note(PLACE_UNKNOWN, f"I don't recognise the place '{hint}'. "
-                                             "Ask for a neighbourhood, a street or one of our location names."))
-        elif place.kind == "ambiguous":
-            names = [catalog.locations[i].name for i in place.location_ids]
-            notes.append(Note(PLACE_AMBIGUOUS, f"'{hint}' could mean {' or '.join(names)}. Ask the caller which one."))
-            either = " or ".join(names)
-            wishes.append(_Wish(
-                "place", either, f"at {either}", carried=False,
-                pair_ok=lambda pr, ids=set(place.location_ids): pr[1].id in ids,
-                impossible=lambda e=either: Note(WISH_IMPOSSIBLE, f"{e} has nothing available for {vt.name} "
-                                                                  f"in the next {DAYS_AHEAD} days."),
-            ))
-        else:
-            point, point_label = place.point, place.label
-            if place.kind == "location" and not place.near:
-                loc = catalog.locations[place.location_ids[0]]
-                wishes.append(_place_wish(loc, vt, carried=False))
-    if prefs.preferred_location_id in catalog.locations:
-        loc = catalog.locations[prefs.preferred_location_id]
-        point, point_label = point or loc.point, point_label or loc.name
-        wishes.append(_place_wish(loc, vt, carried=True))
-
-    # ---- time and language wishes -----------------------------------------
-    if day_tests or time_test:
-        day_ok = (lambda t: any(test(t) for test in day_tests)) if day_tests else None
-        wishes.append(_Wish(
-            "time", time_label, f"on {time_label}" if day_tests else f"in {time_label}", carried=False,
-            time_ok=_both(day_ok, time_test),
-            impossible=lambda: Note(WISH_IMPOSSIBLE, f"Nothing is open on {time_label} for {vt.name} in the next "
-                                                     f"{DAYS_AHEAD} days; these are the nearest other times."),
-        ))
-    language = (prefs.language or "").strip()
+    wishes, point, point_label, place_notes = _place_wishes(catalog, prefs)
+    notes += place_notes
+    doctor_wishes, doctor_notes = _doctor_wishes(catalog, prefs)
+    wishes += doctor_wishes
+    notes += doctor_notes
+    if day_ok or time_ok:
+        wishes.append(_Wish(TIME, time_phrase, time_phrase, day_ok=day_ok, time_ok=time_ok))
+    language = " ".join(str(prefs.language or "").split()).capitalize()
     if language:
-        lang = language.lower()
-        wishes.append(_Wish(
-            "language", f"A {language.capitalize()}-speaking doctor", f"with a {language.capitalize()}-speaking doctor",
-            carried=False,
-            pair_ok=lambda pr: lang in {l.lower() for l in pr[0].languages},
-            impossible=lambda: Note(WISH_IMPOSSIBLE, f"None of the doctors who offer {vt.name} speaks "
-                                                     f"{language.capitalize()}."),
-        ))
+        wishes.append(_Wish(LANGUAGE, language, f"with {_a(language + '-speaking')} doctor", language=language))
+
+    by_distance = point is not None and not prefs.soonest
 
     # ---- apply wishes, strongest first -------------------------------------
-    strength = {"doctor": 1, "place": 2, "time": 3, "language": 4}
-    wishes.sort(key=lambda w: (w.carried, w.kind != prefs.latest, strength[w.kind]))
-    pairs, time_ok, applied = valid, None, []
+    wishes.sort(key=lambda w: (w.kind != prefs.latest, w.carried, STRENGTH[w.kind]))
+    pairs, applied = valid, []
     for w in wishes:
-        narrowed = [pr for pr in pairs if w.pair_ok is None or w.pair_ok(pr)]
-        narrowed_time = _both(time_ok, w.time_ok)
-        if times.any_open(narrowed, narrowed_time):
-            pairs, time_ok = narrowed, narrowed_time
+        narrowed = [pr for pr in pairs if w.fits(pr)]
+        narrowed_day, narrowed_time = _both(day_ok_of(applied), w.day_ok), _both(time_ok_of(applied), w.time_ok)
+        if times.any_open(narrowed, narrowed_day, narrowed_time):
+            pairs = narrowed
             applied.append(w)
             continue
-        alone = [pr for pr in valid if w.pair_ok is None or w.pair_ok(pr)]
-        if not times.any_open(alone, w.time_ok):
-            notes.append(w.impossible())
+        alone = [pr for pr in valid if w.fits(pr)]
+        if times.any_open(alone, w.day_ok, w.time_ok):
+            notes.append(_conflict_note(w, applied))
         else:
-            context = " ".join(a.context for a in applied)
-            notes.append(Note(WISH_CONFLICT, f"{w.label} isn't available {context}."))
+            notes.append(_impossible_note(catalog, caller, vt, w, b.valid_pairs, valid, by_distance))
 
-    if len(same_name_ids) > 1:
-        offering = sorted({pr[0].id for pr in pairs if pr[0].id in same_name_ids})
-        if len(offering) > 1:
-            desc = []
-            for pid in offering:
-                p = catalog.providers[pid]
-                places = sorted({loc.name for q, loc in pairs if q.id == pid})
-                desc.append(f"{p.name}, {p.title} ({p.specialty}) at {' / '.join(places)}")
-            notes.append(Note(SAME_NAME, f"There are {len(offering)} doctors matching '{heard}' who offer "
-                                         f"{vt.name}: " + "; ".join(desc) + ". Ask the caller which one they mean."))
+    for w in applied:
+        if w.kind == DOCTOR and w.heard and len(w.provider_ids or ()) > 1:
+            notes += _same_name_note(catalog, vt, w, pairs)
 
     # ---- rank and pick -----------------------------------------------------
-    firsts = {(p.id, l.id): times.take((p, l), time_ok, 1) for p, l in pairs}
+    final_day, final_time = day_ok_of(applied), time_ok_of(applied)
+    firsts = {(p.id, l.id): times.take((p, l), final_day, final_time, 1) for p, l in pairs}
     ranked = [(p, l) for p, l in pairs if firsts[(p.id, l.id)]]
     if not ranked:
         notes.append(Note(NO_TIMES, f"There are no open times for {vt.name} in the next {DAYS_AHEAD} days."))
@@ -389,13 +357,12 @@ def find_options(
     def dist(loc) -> Optional[float]:
         return round(distance_miles(point, loc.point), 1) if point else None
 
-    by_distance = point is not None and not prefs.soonest
     if by_distance:
         ranked.sort(key=lambda pr: (dist(pr[1]), firsts[(pr[0].id, pr[1].id)][0]))
     else:
         ranked.sort(key=lambda pr: firsts[(pr[0].id, pr[1].id)][0])
 
-    candidates = {(p.id, l.id): times.take((p, l), time_ok, limit) for p, l in ranked}
+    candidates = {(p.id, l.id): times.take((p, l), final_day, final_time, limit) for p, l in ranked}
     picked = []
     for round_no in range(limit):
         for p, l in ranked:
@@ -415,6 +382,116 @@ def find_options(
     return OptionsResult(options=options, notes=notes)
 
 
+def day_ok_of(wishes: list) -> Optional[Callable]:
+    tests = [w.day_ok for w in wishes if w.day_ok]
+    return tests[0] if tests else None  # at most one time wish exists
+
+
+def time_ok_of(wishes: list) -> Optional[Callable]:
+    tests = [w.time_ok for w in wishes if w.time_ok]
+    return tests[0] if tests else None
+
+
+# ---------------------------------------------------------------- building wishes
+def _doctor_wishes(catalog: Catalog, prefs: Preferences) -> tuple:
+    wishes, notes = [], []
+    heard = " ".join(str(prefs.doctor_name_heard or "").split())
+    if heard and normalize(heard) not in ANY_DOCTOR:
+        matches = catalog.match_providers(heard)
+        if not matches:
+            notes.append(Note(DOCTOR_NOT_FOUND, f"I couldn't find a doctor called {heard} here."))
+        else:
+            notes += _name_guess_notes(heard, matches)
+            doctors = tuple(m.provider for m in matches)
+            names = sorted({p.name for p in doctors})
+            label = names[0] if len(names) == 1 else heard
+            wishes.append(_Wish(DOCTOR, label, f"with {label}", provider_ids=frozenset(p.id for p in doctors),
+                                doctors=doctors, heard=heard))
+    p = catalog.providers.get(prefs.preferred_provider_id) if isinstance(prefs.preferred_provider_id, str) else None
+    if p:
+        wishes.append(_Wish(DOCTOR, p.name, f"with {p.name}", carried=True, provider_ids=frozenset([p.id]),
+                            doctors=(p,)))
+    return wishes, notes
+
+
+def _place_wishes(catalog: Catalog, prefs: Preferences) -> tuple:
+    """Returns (wishes, point to rank by distance from, its name, notes)."""
+    wishes, notes, point, point_label = [], [], None, ""
+    hint = " ".join(str(prefs.location_hint or "").split())
+    if hint:
+        place = catalog.resolve_place(hint)
+        if place.kind == "none":
+            notes.append(Note(PLACE_UNKNOWN, f"I don't recognise the place '{hint}'. "
+                                             "Ask for a neighbourhood, a street or one of our location names."))
+        elif place.kind == "ambiguous":
+            names = [catalog.locations[i].name for i in place.location_ids]
+            notes.append(Note(PLACE_AMBIGUOUS, f"'{hint}' could mean {_join(names, 'or')}. Ask the caller which one."))
+            if not place.near:  # "the Mission one" narrows to those; "near the Mission" doesn't narrow
+                either = _join(names, "or")
+                wishes.append(_Wish(LOCATION, either, f"at {either}", location_ids=frozenset(place.location_ids)))
+        elif place.kind in ("location", "landmark"):
+            point, point_label = place.point, place.label
+            if place.kind == "location" and not place.near:
+                loc = catalog.locations[place.location_ids[0]]
+                wishes.append(_Wish(LOCATION, loc.name, f"at {loc.name}", location_ids=frozenset([loc.id])))
+    loc = catalog.locations.get(prefs.preferred_location_id) if isinstance(prefs.preferred_location_id, str) else None
+    if loc:
+        point, point_label = point or loc.point, point_label or loc.name
+        wishes.append(_Wish(LOCATION, loc.name, f"at {loc.name}", carried=True, location_ids=frozenset([loc.id])))
+    return wishes, point, point_label, notes
+
+
+# ---------------------------------------------------------------- notes
+def _conflict_note(w: _Wish, applied: list) -> Note:
+    """The wish could be met on its own, but not together with the stronger ones."""
+    context = " ".join(a.context for a in applied)
+    if w.kind == LANGUAGE:
+        return Note(WISH_CONFLICT, f"No {w.language}-speaking doctor is available {context}.")
+    if w.kind == TIME:
+        return Note(WISH_CONFLICT, f"There's nothing {w.label} {context}.")
+    return Note(WISH_CONFLICT, f"{w.label} isn't available {context}.")
+
+
+def _impossible_note(catalog: Catalog, caller: Caller, vt: VisitType, w: _Wish, rule_ok: list, valid: list,
+                     by_distance: bool) -> Note:
+    """Nobody can meet this wish. `rule_ok`: pairs passing the rules; `valid`: those with open times."""
+    days = DAYS_AHEAD
+    if w.kind == LANGUAGE:
+        return Note(WISH_IMPOSSIBLE, f"None of the doctors available to you for {vt.name} speaks {w.language}.")
+    if w.kind == TIME:
+        return Note(WISH_IMPOSSIBLE, f"Nothing is open {w.label} for {vt.name} in the next {days} days; "
+                                     "here are other options.")
+    if w.kind == LOCATION:
+        tail = "; these are the closest alternatives." if by_distance else "; here are other options."
+        return Note(WISH_IMPOSSIBLE, f"{w.label} has nothing available for {vt.name} in the next {days} days{tail}")
+    # DOCTOR: say why each matching doctor can't, and who can.
+    groups: dict = {}
+    for p in w.doctors:
+        code = _why_doctor_cant(catalog, caller, vt, p, rule_ok)
+        groups.setdefault(code, []).append(f"{p.name} ({p.specialty})" if code == "offer" else p.name)
+    parts = []
+    for code, names in groups.items():
+        one, many = _REASONS[code]
+        reason = (one if len(names) == 1 else many).format(vt=vt.name, cap=vt.required_capability, days=days)
+        parts.append(f"{_join(names)} {reason}")
+    said = w.heard or w.label
+    return Note(WISH_IMPOSSIBLE, f"No doctor matching '{said}' can do this: {'; '.join(parts)}. "
+                                 f"Doctors who can: {_who_can(valid)}.")
+
+
+def _same_name_note(catalog: Catalog, vt: VisitType, w: _Wish, pairs: list) -> list:
+    offering = sorted({p.id for p, _ in pairs if p.id in w.provider_ids})
+    if len(offering) < 2:
+        return []
+    desc = []
+    for pid in offering:
+        p = catalog.providers[pid]
+        places = sorted({loc.name for q, loc in pairs if q.id == pid})
+        desc.append(f"{p.name}, {p.title} ({p.specialty}) at {' / '.join(places)}")
+    return [Note(SAME_NAME, f"There are {len(offering)} doctors matching '{w.heard}' who offer {vt.name}: "
+                            + "; ".join(desc) + ". Ask the caller which one they mean.")]
+
+
 def _name_guess_notes(heard: str, matches: list) -> list:
     """Say so when the name matched only approximately, so the agent checks with the caller."""
     if all(m.is_exact for m in matches):
@@ -426,12 +503,3 @@ def _name_guess_notes(heard: str, matches: list) -> list:
     return [Note(DOCTOR_NAME_GUESS, f"No doctor is called exactly '{heard}'. Closest "
                                     f"{'match' if len(matches) == 1 else 'matches'} ({matches[0].describe()}): "
                                     f"{listed}. Check with the caller.")]
-
-
-def _place_wish(loc, vt: VisitType, carried: bool) -> _Wish:
-    return _Wish(
-        "place", loc.name, f"at {loc.name}", carried=carried,
-        pair_ok=lambda pr, lid=loc.id: pr[1].id == lid,
-        impossible=lambda: Note(WISH_IMPOSSIBLE, f"{loc.name} has nothing available for {vt.name} in the next "
-                                                 f"{DAYS_AHEAD} days; these are the closest alternatives."),
-    )

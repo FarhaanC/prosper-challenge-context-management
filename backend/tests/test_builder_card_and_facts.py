@@ -58,7 +58,7 @@ def test_skin_check_with_garcia_then_knee_mri(catalog, schedule, james):
     assert card.change_choice("visit type", "knee MRI") == VISIT_TYPE
     card.choices.visit_type_id = KNEE_MRI
     r = find_options(catalog, schedule, james, KNEE_MRI, card.preferences, NOW)
-    assert any("Garcia" in n and "MRI - Knee" in n for n in r.notes)
+    assert any("Garcia" in n.say and "MRI - Knee" in n.say for n in r.notes)
     assert {catalog.providers[o.provider_id].specialty for o in r.options} == {"Radiology"}
 
 

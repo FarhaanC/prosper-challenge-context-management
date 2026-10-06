@@ -3,7 +3,7 @@
 from datetime import datetime
 
 from catalog_ids import (
-    ANNUAL_PHYSICAL, DANIEL_CHEN_DERM, DANIEL_SMITH_DERM, DOWNTOWN, ECHOCARDIOGRAM, KENJI_KIM_DERM, KNEE_MRI,
+    ANNUAL_PHYSICAL, DANIEL_CHEN_DERM, DANIEL_SMITH_DERM, DOWNTOWN, KENJI_KIM_DERM, KNEE_MRI,
     MIDTOWN, MISSION_BAY, MISSION_DISTRICT, NOW, RICHMOND, SKIN_CANCER_SCREENING,
 )
 from clinic import BookingCard, Caller, Choices, Preferences, Schedule, check_booking, find_options
@@ -27,7 +27,7 @@ def test_garcia_skin_check(catalog, schedule, new_caller):
                      Preferences(doctor_name_heard="Dr. Garcia"), NOW)
     assert r.options and all(catalog.providers[o.provider_id].specialty == "Dermatology" for o in r.options)
     assert _kinds(r) == [WISH_IMPOSSIBLE]
-    assert "don't offer Skin Cancer Screening" in r.notes[0] and "Doctors who can:" in r.notes[0]
+    assert "don't offer Skin Cancer Screening" in r.notes[0].say and "Doctors who can:" in r.notes[0].say
     _all_valid(catalog, schedule, new_caller, SKIN_CANCER_SCREENING, r)
 
 
@@ -72,7 +72,7 @@ def test_location_change_beats_the_old_doctor(catalog, schedule, new_caller):
     r = find_options(catalog, schedule, new_caller, SKIN_CANCER_SCREENING, card.preferences, NOW)
     assert r.options and all((o.provider_id, o.location_id) == (KENJI_KIM_DERM, MIDTOWN) for o in r.options)
     assert _kinds(r) == [WISH_CONFLICT]
-    assert r.notes[0] == "Dr. Daniel Chen isn't available at Midtown Medical Group."
+    assert r.notes[0].say == "Dr. Daniel Chen isn't available at Midtown Medical Group."
 
 
 def test_time_change_never_claims_nothing_is_open_when_something_is(catalog, schedule, new_caller):
@@ -83,16 +83,24 @@ def test_time_change_never_claims_nothing_is_open_when_something_is(catalog, sch
     assert WISH_IMPOSSIBLE not in _kinds(r)
 
 
-def test_nothing_open_note_only_when_true_across_the_catalog(catalog, schedule):
+def test_nothing_open_note_appears_when_true_and_only_then(catalog, schedule, new_caller):
+    """Replaces a round-1 test that could never fail (round-2 review, T1)."""
+    # Clinics are closed at weekends: the note must appear...
+    r = find_options(catalog, schedule, new_caller, SKIN_CANCER_SCREENING, Preferences(days=["Saturday"]), NOW)
+    assert [n.kind for n in r.notes] == [WISH_IMPOSSIBLE] and r.notes[0].say.startswith("Nothing is open on Saturday")
+    # ...and across the catalog, whenever it appears, nobody really has that day free.
     caller = Caller("X", "pat_x", False, catalog.specialties())
-    for day in ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]:
-        r = find_options(catalog, schedule, caller, ECHOCARDIOGRAM,
-                         Preferences(preferred_provider_id="prov_000", days=[day]), NOW)
-        if any(n.kind == WISH_IMPOSSIBLE and n.startswith("Nothing is open") for n in r.notes):
-            pairs = [(p.id, l.id) for p in catalog.providers_offering(ECHOCARDIOGRAM) for l in [catalog.locations[i]
-                     for i in p.location_ids] if "imaging" in l.capabilities]
-            assert not any(s.strftime("%A") == day for pid, lid in pairs
-                           for s in schedule.open_slots(pid, lid, 45, NOW)), day
+    claims = 0
+    for vt in catalog.visit_types:
+        for day in ["Monday", "Wednesday", "Saturday"]:
+            r = find_options(catalog, schedule, caller, vt, Preferences(days=[day]), NOW)
+            if any(n.kind == WISH_IMPOSSIBLE and n.say.startswith("Nothing is open") for n in r.notes):
+                claims += 1
+                for p in catalog.providers_offering(vt):
+                    for lid in p.location_ids:
+                        assert not any(s.strftime("%A") == day for s in schedule.open_slots(
+                            p.id, lid, catalog.visit_types[vt].duration_min, NOW)), (vt, day, p.id)
+    assert claims > 0
 
 
 def test_language_conflict_is_described_truthfully(catalog, schedule, new_caller):
@@ -100,12 +108,13 @@ def test_language_conflict_is_described_truthfully(catalog, schedule, new_caller
                      Preferences(doctor_name_heard="Dr. Daniel Chen", language="Spanish", latest="language"), NOW)
     # language was the latest change, so it wins: Spanish speakers, and a note about Dr. Chen
     assert r.options and all(o.provider_id in (KENJI_KIM_DERM, DANIEL_SMITH_DERM) for o in r.options)
-    assert r.notes == ["Dr. Daniel Chen isn't available with a Spanish-speaking doctor."]
+    assert [n.say for n in r.notes] == ["Dr. Daniel Chen isn't available with a Spanish-speaking doctor."]
 
 
 def test_unmet_language_keeps_options(catalog, schedule, new_caller):
     r = find_options(catalog, schedule, new_caller, SKIN_CANCER_SCREENING, Preferences(language="Klingon"), NOW)
-    assert r.options and r.notes == ["None of the doctors who offer Skin Cancer Screening speaks Klingon."]
+    assert r.options and [n.say for n in r.notes] == [
+        "None of the doctors available to you for Skin Cancer Screening speaks Klingon."]
 
 
 def test_ambiguous_place_asks(catalog, schedule, new_caller):
@@ -155,3 +164,80 @@ def test_same_answer_every_run(catalog, new_caller):
     a = find_options(catalog, Schedule(catalog), new_caller, SKIN_CANCER_SCREENING, prefs, NOW)
     b = find_options(catalog, Schedule(catalog), new_caller, SKIN_CANCER_SCREENING, prefs, NOW)
     assert [o.to_dict() for o in a.options] == [o.to_dict() for o in b.options]
+
+
+# ---- round 2 (docs/reviews/2026-10-06-rules-module/triage.md, round 2 section)
+def test_r2_1_location_change_beats_a_doctor_the_caller_only_named(catalog, schedule, new_caller):
+    """The realistic order: "skin check with Dr. Chen", then "the Midtown one" before
+    picking anything. Goes through change_choice, as a real call does."""
+    card = BookingCard(caller=new_caller, preferences=Preferences(doctor_name_heard="Dr. Daniel Chen"))
+    card.choices = Choices(specialty="Dermatology", visit_type_id=SKIN_CANCER_SCREENING)
+    card.change_choice("location", "the Midtown one")
+    r = find_options(catalog, schedule, new_caller, SKIN_CANCER_SCREENING, card.preferences, NOW)
+    assert r.options and all(o.location_id == MIDTOWN for o in r.options)
+    assert [n.say for n in r.notes] == ["Dr. Daniel Chen isn't available at Midtown Medical Group."]
+
+
+def test_r2_2_time_of_day_change_keeps_the_day(catalog, schedule, new_caller):
+    card = _card_with(new_caller, DANIEL_CHEN_DERM, RICHMOND)
+    card.change_choice("time", "Thursday")
+    card.change_choice("time", "afternoon")
+    assert (card.preferences.days, card.preferences.time_of_day) == (["Thursday"], "afternoon")
+    r = find_options(catalog, schedule, new_caller, SKIN_CANCER_SCREENING, card.preferences, NOW)
+    assert r.options and all(o.start.strftime("%A") == "Thursday" and o.start.hour >= 12 for o in r.options)
+    card.change_choice("time", "any time")
+    assert (card.preferences.days, card.preferences.time_of_day) == ([], "")
+
+
+def test_r2_2_thursday_morning_in_one_go(new_caller):
+    card = _card_with(new_caller, DANIEL_CHEN_DERM, RICHMOND)
+    card.change_choice("time", "Thursday morning")
+    assert (card.preferences.days, card.preferences.time_of_day) == (["Thursday"], "morning")
+
+
+def test_r2_7_language_note_only_counts_doctors_available_to_this_caller(catalog, schedule, new_caller):
+    # Dr. Wei Sato offers skin screening and speaks Hindi, but isn't taking new patients.
+    r = find_options(catalog, schedule, new_caller, SKIN_CANCER_SCREENING, Preferences(language="hindi"), NOW)
+    assert [n.say for n in r.notes] == ["None of the doctors available to you for Skin Cancer Screening speaks Hindi."]
+
+
+def test_r2_8_someone_else_is_not_the_same_doctor_again(catalog, schedule, new_caller):
+    card = _card_with(new_caller, DANIEL_CHEN_DERM, RICHMOND)
+    card.change_choice("doctor", "")
+    r = find_options(catalog, schedule, new_caller, SKIN_CANCER_SCREENING, card.preferences, NOW)
+    assert r.options and DANIEL_CHEN_DERM not in {o.provider_id for o in r.options}
+
+
+def test_r2_10_dates_outside_the_booking_window_are_refused(catalog, schedule, new_caller):
+    for day in ["2026-10-01", "2026-12-25", "20261013"]:
+        r = find_options(catalog, schedule, new_caller, SKIN_CANCER_SCREENING, Preferences(days=[day]), NOW)
+        assert not r.options and _kinds(r) == [BAD_INPUT], day
+
+
+def test_r2_3_near_an_ambiguous_place_asks_but_does_not_narrow(catalog, schedule, new_caller):
+    r = find_options(catalog, schedule, new_caller, SKIN_CANCER_SCREENING,
+                     Preferences(location_hint="near Market Street"), NOW)
+    assert _kinds(r) == [PLACE_AMBIGUOUS]
+    assert len({o.location_id for o in r.options}) > 1
+
+
+def test_r2_3_anywhere_is_no_wish(catalog, schedule, new_caller):
+    for hint in ["anywhere", "no preference", "don't mind"]:
+        r = find_options(catalog, schedule, new_caller, SKIN_CANCER_SCREENING, Preferences(location_hint=hint), NOW)
+        assert r.options and not r.notes, hint
+
+
+def test_r2_9_an_arabic_speaking_doctor(catalog, schedule, new_caller):
+    r = find_options(catalog, schedule, new_caller, SKIN_CANCER_SCREENING,
+                     Preferences(doctor_name_heard="Dr. Kenji Kim", language="Arabic", latest="language"), NOW)
+    assert any("an Arabic-speaking doctor" in n.say for n in r.notes)
+
+
+def test_r2_6_notes_are_plain_records(catalog, schedule, new_caller):
+    import copy
+    import json
+    import pickle
+    r = find_options(catalog, schedule, new_caller, SKIN_CANCER_SCREENING, Preferences(location_hint="Mission"), NOW)
+    note = r.notes[0]
+    assert copy.deepcopy(note) == note and pickle.loads(pickle.dumps(note)) == note
+    assert json.loads(json.dumps(r.to_dict()))["notes"][0]["kind"] == PLACE_AMBIGUOUS

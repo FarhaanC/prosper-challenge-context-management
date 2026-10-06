@@ -18,7 +18,7 @@ from datetime import datetime
 from typing import Optional
 
 from .catalog import Catalog
-from .patients import Caller
+from .patients import Caller, IdentityCheck
 from .slots import spoken_time
 
 # Stage names (the agent graph uses the same names).
@@ -27,14 +27,43 @@ VISIT_TYPE = "visit_type"
 BOOKING = "booking"
 END = "end"
 
+# The kinds of wish a caller can have. card.py and options.py both use these names,
+# so "the latest change" always means the same thing in both. (Round 2 found a bug
+# where one file said "location" and the other "place".)
+DOCTOR, LOCATION, TIME, LANGUAGE = "doctor", "location", "time", "language"
+VISIT = "visit_type"
+
 CHANGEABLE = {
-    "visit_type": "visit_type", "visit": "visit_type", "reason": "visit_type", "service": "visit_type",
-    "appointment_type": "visit_type",
-    "doctor": "doctor", "provider": "doctor",
-    "location": "location", "place": "location", "clinic": "location",
-    "time": "time", "day": "time", "date": "time", "slot": "time",
+    "visit_type": VISIT, "visit": VISIT, "reason": VISIT, "service": VISIT, "appointment_type": VISIT,
+    "doctor": DOCTOR, "provider": DOCTOR,
+    "location": LOCATION, "place": LOCATION, "clinic": LOCATION,
+    "time": TIME, "day": TIME, "date": TIME, "slot": TIME,
 }
-CLEAR_WORDS = {"any", "anytime", "any time", "any day", "whenever", "no preference"}
+TIMES_OF_DAY = ("morning", "afternoon")
+# Ways of saying "no preference" for the day, the time of day, or both.
+ANY_DAY = {"any day", "anyday", "any date"}
+ANY_TIME = {"any", "anytime", "any time", "whenever", "no preference", "dont mind", "don t mind"}
+
+
+def split_time_words(text: str) -> tuple:
+    """Split a spoken time wish into (days, time_of_day); None means "not mentioned".
+
+    "Thursday morning" -> (["Thursday"], "morning"); "afternoon" -> (None, "afternoon");
+    "any day" -> ([], None); "any time" -> ([], ""); "next Thursday" -> (["next Thursday"], None),
+    which find_options then refuses with a note saying how to put it.
+    """
+    t = " ".join(str(text or "").split())
+    low = t.lower()
+    if not t:
+        return None, None
+    if low in ANY_TIME:
+        return [], ""
+    if low in ANY_DAY:
+        return [], None
+    words = t.split()
+    tods = [w.lower() for w in words if w.lower() in TIMES_OF_DAY]
+    rest = " ".join(w for w in words if w.lower() not in TIMES_OF_DAY)
+    return ([rest] if rest else None), (tods[0] if tods else None)
 
 
 @dataclass
@@ -58,7 +87,8 @@ class Preferences:
     time_of_day: str = ""              # "morning" (before 12:00) | "afternoon" (12:00 or later) | ""
     soonest: bool = False              # rank by earliest time even when a place was named
     language: str = ""                 # a language the doctor should speak
-    latest: str = ""                   # the last thing the caller changed: doctor | location | time | ""
+    not_provider_ids: list = field(default_factory=list)  # doctors the caller turned down ("someone else")
+    latest: str = ""                   # the last thing changed: DOCTOR | LOCATION | TIME | LANGUAGE | ""
 
 
 @dataclass
@@ -78,7 +108,7 @@ class BookingCard:
     status: str = "in_progress"
     offered_options: list = field(default_factory=list)  # options currently on offer (list of Option)
     next_option_number: int = 1  # option numbers keep counting up through the call
-    booking_id: str = ""
+    identity: IdentityCheck = field(default_factory=IdentityCheck)  # tries so far at finding the caller
 
     # ---- options on offer --------------------------------------------------
     def remember_offer(self, options: list) -> None:
@@ -110,6 +140,13 @@ class BookingCard:
 
         Doctor, place and time are cleared together because one option is always the
         three together. Without a chosen visit type, every change goes to visit_type.
+
+        Details:
+        - doctor with no name ("someone else"): the doctor just chosen is turned down
+          for the rest of the call, so they aren't offered again.
+        - time: a plain value is split into day and time of day ("Thursday morning").
+          Only what's mentioned changes, so "afternoon" keeps an earlier "Thursday".
+          "any day" clears the day; "any time" clears day and time of day.
         """
         kind = CHANGEABLE.get(str(what).lower().strip().replace(" ", "_"))
         if kind is None:
@@ -118,27 +155,36 @@ class BookingCard:
         self.offered_options = []
 
         # What was chosen becomes a weaker wish, unless it's the thing being changed.
-        if c.provider_id and kind != "doctor":
+        if c.provider_id and kind != DOCTOR:
             prefs.preferred_provider_id, prefs.doctor_name_heard = c.provider_id, ""
-        if c.location_id and kind != "location":
+        if c.location_id and kind != LOCATION:
             prefs.preferred_location_id, prefs.location_hint = c.location_id, ""
 
-        if kind == "visit_type":
+        if kind == VISIT:
             if new_value:
                 prefs.visit_description = new_value
-            prefs.latest = ""
+            prefs.latest, prefs.not_provider_ids = "", []
             self.choices = Choices()
             return VISIT_TYPE
 
-        if kind == "doctor":
-            prefs.doctor_name_heard, prefs.preferred_provider_id = new_value, ""
-        elif kind == "location":
+        if kind == DOCTOR:
+            if not str(new_value or "").strip() and c.provider_id:
+                prefs.not_provider_ids = sorted(set(prefs.not_provider_ids) | {c.provider_id})
+            prefs.doctor_name_heard, prefs.preferred_provider_id = str(new_value or "").strip(), ""
+        elif kind == LOCATION:
             prefs.location_hint, prefs.preferred_location_id = new_value, ""
-        elif kind == "time":
-            wished = list(days) if days is not None else ([new_value] if new_value else [])
-            prefs.days = [] if any(str(d).lower().strip() in CLEAR_WORDS for d in wished) else wished
+        elif kind == TIME:
+            said_days, said_tod = split_time_words(new_value)
+            if days is not None:
+                said_days = [d for d in days if str(d or "").strip()]
+                if any(str(d).lower().strip() in ANY_DAY | ANY_TIME for d in said_days):
+                    said_days = []
             if time_of_day:
-                prefs.time_of_day = "" if time_of_day.lower().strip() in CLEAR_WORDS else time_of_day
+                said_tod = "" if time_of_day.lower().strip() in ANY_TIME else time_of_day
+            if said_days is not None:
+                prefs.days = said_days
+            if said_tod is not None:
+                prefs.time_of_day = said_tod
             prefs.soonest = False
         prefs.latest = kind
         c.provider_id, c.location_id, c.slot = "", "", None
