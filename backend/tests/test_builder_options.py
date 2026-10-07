@@ -6,7 +6,7 @@ import pytest
 
 from catalog_ids import (
     ANNUAL_PHYSICAL, DANIEL_CHEN_DERM, DANIEL_SMITH_DERM, DOWNTOWN, KENJI_KIM_DERM, KNEE_MRI,
-    MIDTOWN, MISSION_BAY, MISSION_DISTRICT, MOLE_REMOVAL, NOW, RICHMOND, SKIN_CANCER_SCREENING, WELL_WOMAN_EXAM,
+    MIDTOWN, MISSION_BAY, MISSION_DISTRICT, MOLE_REMOVAL, NEW_PATIENT_CONSULTATION, NOW, RICHMOND, SKIN_CANCER_SCREENING, WELL_WOMAN_EXAM,
 )
 from clinic import BookingCard, Caller, Choices, Preferences, Schedule, check_booking, find_options
 from clinic.options import (
@@ -46,7 +46,7 @@ def test_two_maria_garcias_are_both_offered(catalog, schedule, new_caller):
 
 
 def test_knee_mri_near_downtown(catalog, schedule, james):
-    r = find_options(catalog, schedule, james, KNEE_MRI, Preferences(location_hint="closer to downtown"), NOW)
+    r = find_options(catalog, schedule, james, KNEE_MRI, Preferences(location_hint="Downtown", near=True), NOW)
     assert r.options[0].location_id == DOWNTOWN                     # closest first
     assert {o.location_id for o in r.options} == {DOWNTOWN, MIDTOWN}  # near ranks, doesn't exclude
     assert not r.notes
@@ -54,7 +54,7 @@ def test_knee_mri_near_downtown(catalog, schedule, james):
 
 
 def test_soonest_beats_distance(catalog, schedule, new_caller):  # 13
-    prefs = Preferences(location_hint="near Downtown", soonest=True)
+    prefs = Preferences(location_hint="Downtown", near=True, soonest=True)
     r = find_options(catalog, schedule, new_caller, SKIN_CANCER_SCREENING, prefs, NOW)
     starts = [o.start for o in r.options]
     assert starts == sorted(starts)
@@ -70,7 +70,7 @@ def _card_with(caller, provider, location, vt=SKIN_CANCER_SCREENING):
 
 def test_location_change_beats_the_old_doctor(catalog, schedule, new_caller):
     card = _card_with(new_caller, DANIEL_CHEN_DERM, RICHMOND)
-    card.change_choice("location", "the Midtown one")
+    card.change_choice("location", "Midtown")
     r = find_options(catalog, schedule, new_caller, SKIN_CANCER_SCREENING, card.preferences, NOW)
     assert r.options and all((o.provider_id, o.location_id) == (KENJI_KIM_DERM, MIDTOWN) for o in r.options)
     assert _kinds(r) == [WISH_CONFLICT]
@@ -165,7 +165,7 @@ def test_option_numbers_keep_counting_up(catalog, schedule, new_caller):
 
 
 def test_same_answer_every_run(catalog, new_caller):
-    prefs = Preferences(location_hint="near Union Square")
+    prefs = Preferences(location_hint="Union Square", near=True)
     a = find_options(catalog, Schedule(catalog), new_caller, SKIN_CANCER_SCREENING, prefs, NOW)
     b = find_options(catalog, Schedule(catalog), new_caller, SKIN_CANCER_SCREENING, prefs, NOW)
     assert [o.to_dict() for o in a.options] == [o.to_dict() for o in b.options]
@@ -177,7 +177,7 @@ def test_r2_1_location_change_beats_a_doctor_the_caller_only_named(catalog, sche
     picking anything. Goes through change_choice, as a real call does."""
     card = BookingCard(caller=new_caller, preferences=Preferences(doctor_name_heard="Dr. Daniel Chen"))
     card.choices = Choices(specialty="Dermatology", visit_type_id=SKIN_CANCER_SCREENING)
-    card.change_choice("location", "the Midtown one")
+    card.change_choice("location", "Midtown")
     r = find_options(catalog, schedule, new_caller, SKIN_CANCER_SCREENING, card.preferences, NOW)
     assert r.options and all(o.location_id == MIDTOWN for o in r.options)
     assert [n.say for n in r.notes] == ["Dr. Daniel Chen isn't available at Midtown Medical Group."]
@@ -221,7 +221,7 @@ def test_r2_10_dates_outside_the_booking_window_are_refused(catalog, schedule, n
 
 def test_r2_3_near_an_ambiguous_place_asks_but_does_not_narrow(catalog, schedule, new_caller):
     r = find_options(catalog, schedule, new_caller, SKIN_CANCER_SCREENING,
-                     Preferences(location_hint="near Market Street"), NOW)
+                     Preferences(location_hint="Market Street", near=True), NOW)
     assert _kinds(r) == [PLACE_AMBIGUOUS]
     assert len({o.location_id for o in r.options}) > 1
 
@@ -294,7 +294,7 @@ def test_r3_1_naming_a_turned_down_doctor_brings_them_back_truthfully(catalog, s
 def test_r3_1_a_place_only_a_turned_down_doctor_serves_says_so(catalog, schedule, new_caller):
     card = _card_with(new_caller, KENJI_KIM_DERM, MIDTOWN)
     card.turn_down_doctors(catalog, current=True)
-    card.change_choice("location", "the Midtown one")
+    card.change_choice("location", "Midtown")
     r = _offer(catalog, schedule, card)
     assert [n.say for n in r.notes] == [
         "Midtown Medical Group is only possible with Dr. Kenji Kim, whom you turned down."]
@@ -538,7 +538,7 @@ def test_r5_choose_option_refuses_an_option_not_on_offer(catalog, schedule, new_
 
 def test_r5_long_no_other_doctor_list_is_cut_short(catalog, schedule, new_caller):
     # Round 5 check, should-fix 5: say three names and "and N more", like "Doctors who can".
-    vt = "appt_001" if "appt_001" in catalog.visit_types else ANNUAL_PHYSICAL
+    vt = NEW_PATIENT_CONSULTATION
     everyone = [p.id for p in catalog.providers_offering(vt)]
     r = find_options(catalog, schedule, new_caller, vt, Preferences(not_provider_ids=everyone), NOW)
     note = next(n.say for n in r.notes if n.kind == "no_other_doctor")
@@ -571,3 +571,91 @@ def test_r5_turn_down_accepts_one_id_on_its_own(catalog, new_caller):
     card = _dermatology_card(new_caller)
     card.turn_down_doctors(catalog, provider_ids=DANIEL_CHEN_DERM)
     assert card.preferences.not_provider_ids == [DANIEL_CHEN_DERM]
+
+
+# ---- round 6 (triage.md, round 6 section)
+@pytest.mark.parametrize("said", ["Spanish French", "Spanish only", "only Spanish", "Cantonese Mandarin",
+                                  "Spanish Klingon"])
+def test_r6_a_language_mixed_with_other_words_is_refused_not_guessed(catalog, schedule, new_caller, said):
+    r = find_options(catalog, schedule, new_caller, ANNUAL_PHYSICAL, Preferences(language=said), NOW)
+    assert not r.options and [n.kind for n in r.notes] == [BAD_INPUT]
+
+
+@pytest.mark.parametrize("said, kept", [("Mandarin Chinese", "Mandarin"), ("spanish", "Spanish"),
+                                        ("Haitian Creole", "Haitian Creole")])
+def test_r6_one_language_name_is_fine(catalog, schedule, new_caller, said, kept):
+    r = find_options(catalog, schedule, new_caller, ANNUAL_PHYSICAL, Preferences(language=said), NOW)
+    assert r.options and not [n for n in r.notes if n.kind == BAD_INPUT]
+    assert all(kept in n.say for n in r.notes)
+
+
+def _catalog_with_extra_doctors(copies: int):
+    """The real catalog plus `copies` more Dr. Daniel Chens in Dermatology, each at one other clinic."""
+    import copy as copying
+
+    from clinic import Catalog
+    from clinic.catalog import DATA_DIR
+    import json
+    raw = json.loads((DATA_DIR / "catalog.json").read_text(encoding="utf-8"))
+    extras = json.loads((DATA_DIR / "location_extras.json").read_text(encoding="utf-8"))
+    chen = next(p for p in raw["providers"] if p["id"] == DANIEL_CHEN_DERM)
+    for k, loc in zip(range(copies), [MIDTOWN, MISSION_BAY, MISSION_DISTRICT, "loc_002", "loc_003"]):
+        twin = copying.deepcopy(chen)
+        twin.update(id=f"prov_twin_{k}", location_ids=[loc])
+        raw["providers"].append(twin)
+    return Catalog(raw, extras)
+
+
+def test_r6_same_name_same_specialty_doctors_can_be_told_apart():
+    from clinic.options import _who_can
+    big = _catalog_with_extra_doctors(1)
+    chens = [(big.providers[pid], big.locations[lid]) for pid in (DANIEL_CHEN_DERM, "prov_twin_0")
+             for lid in big.providers[pid].location_ids]
+    assert _who_can(chens) == ("Dr. Daniel Chen (Dermatology, Downtown Health Center / Richmond Care Center) and "
+                               "Dr. Daniel Chen (Dermatology, Midtown Medical Group)")   # both, not just the first
+
+
+def test_r6_the_same_name_note_reads_three_and_says_how_many_more(new_caller):
+    big = _catalog_with_extra_doctors(4)
+    r = find_options(big, Schedule(big), new_caller, SKIN_CANCER_SCREENING,
+                     Preferences(doctor_name_heard="Dr. Daniel Chen"), NOW)
+    note = next(n.say for n in r.notes if n.kind == SAME_NAME)
+    assert note.startswith("There are 5 doctors matching 'Dr. Daniel Chen'") and "; and 2 more." in note
+
+
+def test_r6_near_is_a_plain_yes_no(catalog, schedule, new_caller):
+    card = _dermatology_card(new_caller)
+    card.change_choice("location", "Downtown", near=True)
+    assert (card.preferences.location_hint, card.preferences.near) == ("Downtown", True)
+    assert "place: near Downtown" in card.summary(catalog)
+    r = _offer(catalog, schedule, card)
+    assert len({o.location_id for o in r.options}) > 1   # near ranks by distance; it doesn't restrict
+    card.change_choice("location", "Downtown")           # near left out: that place only
+    assert {o.location_id for o in _offer(catalog, schedule, card).options} == {DOWNTOWN}
+    with pytest.raises(ValueError, match="near goes with a location"):
+        card.change_choice("doctor", "Dr. Kenji Kim", near=True)
+
+
+@pytest.mark.parametrize("what, said", [("doctor", "I don't mind"), ("location", "anywhere"), ("language", "whatever")])
+def test_r6_no_preference_words_are_stored_as_empty(catalog, new_caller, what, said):
+    card = _dermatology_card(new_caller)
+    card.change_choice(what, said)
+    p = card.preferences
+    assert (p.doctor_name_heard, p.location_hint, p.language) == ("", "", "")
+    assert said not in card.summary(catalog)
+
+
+@pytest.mark.parametrize("day, ok", [("Thursdays", True), ("tues", True), ("thu", True), ("SUN", True),
+                                     ("thus", False), ("frid", False), ("wednes", False)])
+def test_r6_only_real_weekday_words(catalog, schedule, new_caller, day, ok):
+    r = find_options(catalog, schedule, new_caller, SKIN_CANCER_SCREENING, Preferences(days=[day]), NOW)
+    assert (BAD_INPUT not in [n.kind for n in r.notes]) == ok
+
+
+@pytest.mark.parametrize("what", ["provider", "place", "slot", "reason"])
+def test_r6_only_the_five_change_names(new_caller, what):
+    card = _dermatology_card(new_caller)
+    before = card.to_dict()
+    with pytest.raises(ValueError, match="visit_type, doctor, location, time or language"):
+        card.change_choice(what, "x")
+    assert card.to_dict() == before

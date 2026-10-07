@@ -9,6 +9,7 @@ the count, so the agent can ask "which one?" rather than guess.
 from __future__ import annotations
 
 from .catalog import Catalog, distance_miles
+from .fuzzy import looks_like_a_sentence
 
 VISIT_TYPE_RESULTS = 3  # visit-type lookups are by meaning, so only the best few are useful
 
@@ -25,8 +26,12 @@ def answer_question(catalog: Catalog, about, name) -> dict:
     name = str(name or "").strip()
     if not name:
         return {"found": False, "message": "Say which location, doctor or visit type you mean."}
+    if about in ("location", "doctor") and looks_like_a_sentence(name):
+        # The same guard as the search: "not Dr. Chen" or "another doctor" isn't a name,
+        # and matching it by spelling would answer about the wrong doctor.
+        return {"found": False, "message": f"'{name}' isn't a {about} name. Pass just the name."}
 
-    if about in ("location", "clinic", "place", "office"):
+    if about == "location":
         place = catalog.resolve_place(name)
         if place.kind in ("none", "any"):
             return {"found": False, "message": f"No location matches '{name}'."}
@@ -39,7 +44,7 @@ def answer_question(catalog: Catalog, about, name) -> dict:
         return {"found": True, "message": message,
                 "results": [_location_result(catalog.locations[i]) for i in place.location_ids]}
 
-    if about in ("doctor", "provider"):
+    if about == "doctor":
         matches = catalog.match_providers(name)
         if not matches:
             return {"found": False, "message": f"No doctor matches '{name}'."}
@@ -62,7 +67,7 @@ def answer_question(catalog: Catalog, about, name) -> dict:
             ],
         }
 
-    if about in ("visit_type", "visit", "appointment", "service", "appointment_type"):
+    if about == "visit_type":
         matches = catalog.find_visit_types_by_name(name, limit=VISIT_TYPE_RESULTS)
         if not matches:
             return {"found": False, "message": f"No visit type matches '{name}'."}
@@ -80,4 +85,4 @@ def answer_question(catalog: Catalog, about, name) -> dict:
             ],
         }
 
-    return {"found": False, "message": "I can answer about a location, a doctor or a visit type."}
+    return {"found": False, "message": "Pass about as location, doctor or visit_type."}

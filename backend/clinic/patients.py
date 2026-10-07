@@ -97,13 +97,14 @@ class PatientDirectory:
         """Checks every record first and lists every problem at once, like the catalog."""
         if not isinstance(records, list):
             raise CatalogError("The patient data should be a list of patient records.")
-        problems, seen = [], set()
+        problems, seen, repeated = [], set(), set()
         for i, r in enumerate(records):
             if not isinstance(r, dict):
                 problems.append(f"Patient entry #{i} isn't a record.")
                 continue
-            label = r.get("id") if isinstance(r.get("id"), str) and r.get("id").strip() else f"#{i}"
-            if label in seen:
+            label = r.get("id").strip() if isinstance(r.get("id"), str) and r.get("id").strip() else f"#{i}"
+            if label in seen and label not in repeated:  # said once, however many copies
+                repeated.add(label)
                 problems.append(f"Patient id {label} appears more than once.")
             seen.add(label)
             missing = [k for k in ("id", "name", "date_of_birth") if not r.get(k)]

@@ -181,3 +181,41 @@ Findings from [`round-5-check.md`](round-5-check.md), a check by one fresh agent
 - **Speed:** unchanged. On the large fake catalog (500 locations, 2,000 doctors), searches take 230–370 ms on the builder's container.
 - **Code checker:** pyflakes finds nothing in `clinic/` or the builder tests.
 - **The builder did not edit any independent test.** The changes are written up in [`round-6-spec-changes.md`](round-6-spec-changes.md) for a fresh checker.
+
+---
+
+# Round 6 (version `18af256`)
+
+Findings from [`round-6-check.md`](round-6-check.md), a check by one fresh agent acting as tester and reviewer (**R6**, numbered as in its Part B).
+
+**Status:** all fixed in the "round-6 fixes" commit, except two judgement items left on purpose (see R6-14). One design decision by Farhaan (Wed 7 Oct, evening): see R6-1.
+
+| # | Problem (plain words) | Found by | Decision | Outcome |
+| --- | --- | --- | --- | --- |
+| R6-1 | **"No part of the code reads the caller's sentences" wasn't true:** place values were still read as phrases ("near…", "closer to…", "the X one", "on Geary", "…area"). | R6 must-fix 1 | **Farhaan decided: "near" becomes a plain yes/no** | **Fixed.** `change_choice("location", "Downtown", near=True)` and `Preferences.near`. The AI passes a place **name** and decides `near` from what the caller said. Names are still matched forgivingly against our own list of locations, neighbourhoods, landmarks and streets, the same way doctor names are, because the AI doesn't know our clinics. Nothing else is read: the near-word list, the filler stripping ("the X one", "…area"), the "on X" street rule and the linking words ("in", "at", "one", "please") are gone. A street needs its street word ("Geary Street"); a bare "main" isn't taken as Main Street. `near` with any other kind of change is refused. **Now the claim is exactly true:** names (doctors, places, languages) are matched against our records; everything else is a plain instruction. |
+| R6-2 | **Two-word language values were guessed:** "Spanish French", "Spanish only", "Cantonese Mandarin" quietly became one language. | R6 must-fix 2 | Fix (the reviewer's suggestion) | **Fixed.** Accepted: a language in our records, one listed other name (`LANGUAGE_ALSO_CALLED`: "Mandarin Chinese"), or a name we have no record of with no known language in it ("Haitian Creole", "Klingon"). Anything else is refused with a how-to note. Nothing is guessed. |
+| R6-3 | **Same-name, same-specialty doctors:** only the first got its locations, because the label was counted while being changed. | R6 should-fix 3 | Fix | **Fixed.** Labels are counted first (`Counter`), then both get their places. A builder test adds a second Dr. Daniel Chen to check it. |
+| R6-4 | **Three more doctor lists had no length limit** (57 names in the same-name note at scale). | R6 should-fix 4 | Fix | **Fixed.** One helper (`_a_few`) reads three, then "and N more", used by every list: "Doctors who can", "no other doctor", the same-name note, the "whom you turned down" notes and the "can't do this" reasons. Checked: all 1,753 "whom you turned down" notes across the catalog (539 of them cut short) name only doctors who really can, and the count adds up. |
+| R6-5 | **`answer_question` had no sentence guard:** "another doctor" gave Dr. Andre Patel. | R6 should-fix 5 | Fix | **Fixed.** The same guard as the search, for doctor and location questions. |
+| R6-6 | **"No preference" words were stored as wishes:** the summary read "doctor: I don't mind". | R6 should-fix 6 | Fix | **Fixed.** `change_choice` stores "" for them. "any day" as the day still clears the day. |
+| R6-7 | **"not far from" contradicted decision 24.** | R6 should-fix 7 (spec gap) | **Covered by R6-1** | Decision 24's near-phrases are replaced by the `near` yes/no; the leftover near-word code is gone. Recorded in the spec note. |
+| R6-8 | Stale comments (the Klingon example, the `bad_input` comment). | R6 NIT 8 | Fix | **Fixed.** |
+| R6-9 | Repeated ids listed once per copy; "p1" and "p1 " counted as different. | R6 NIT 9 | Fix | **Fixed.** Each repeated id is reported once, and ids are compared without surrounding spaces, in the catalog and patient checks. |
+| R6-10 | Weekday words looser than documented ("thus", "frid"). | R6 NIT 10 | Fix | **Fixed.** An explicit table: full names, plurals and the usual short forms (mon, tue, tues, wed, thu, thur, thurs, fri, sat, sun). Nothing else. |
+| R6-11 | `CHANGEABLE` accepted 13 names for 5 things. | R6 NIT 11 (judgement) | Fix | **Fixed.** Exactly five: visit_type, doctor, location, time, language (case and spaces ignored). `answer_question` likewise takes location, doctor or visit_type. |
+| R6-12 | A builder test had a branch that never ran. | R6 NIT 12 | Fix | **Fixed.** |
+| R6-13 | "and" inside a list joined by "and" was hard to follow by ear. | R6 NIT 13 (judgement) | Fix | **Fixed.** Places inside a label are joined with " / ". |
+| R6-14 | Two same-name doctors collapse into one name in the "only doctors matching" note; doctor names are matched twice per search. | R6 NIT 14, R5-14 (judgement) | **Leave** (accepted, not dismissed: the reviewer called both harmless) | Naming her back asks "which one?"; the double match costs microseconds. |
+| R6-extra | **Found by the builder while fixing:** storing "no preference" words as "" broke "any day" as a time change (it stopped clearing the day). Caught by a builder test. | builder | Fix | **Fixed** before committing. |
+
+## Results after the round-6 fixes
+
+- **Builder tests:** 256 of 256 pass (32 new).
+- **Independent tests:** 1,758 of 1,962 pass. **All 4 round-6 failures are fixed.**
+- **The 204 that now fail come from agreed changes**, checked as before with a scratch adapter (never committed) that plays the AI's part for places only: it turns the testers' place phrases into a name plus `near`, as the old code read them ("on Geary" → "Geary Street"), and maps the old synonym names ("provider", "clinic") to the exact ones. With it, 1,944 of 1,962 pass. The 18 left are:
+  - **the "whom you turned down" notes now read three names, then "and N more"** (15 tests; a separate check confirmed all 1,753 such notes across the catalog are true);
+  - **places inside a same-name label are joined with " / "**, not "and" (2 tests);
+  - **one adapter slip**: it stripped "anywhere" from "anywhere is fine", which the real code reads as no preference (checked directly).
+- **Speed:** unchanged: 220–390 ms per search on the large fake catalog (500 locations, 2,000 doctors).
+- **Code checker:** pyflakes finds nothing in `clinic/` or the builder tests.
+- **The builder did not edit any independent test.** The changes are written up in [`round-7-spec-changes.md`](round-7-spec-changes.md) for a fresh checker.

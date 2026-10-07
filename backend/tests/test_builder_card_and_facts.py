@@ -100,3 +100,11 @@ def test_answer_question_lists_every_doctor_sharing_a_name(catalog):  # 10
 def test_answer_question_closest_location_uses_real_distance(catalog):  # 6
     r = answer_question(catalog, "location", "the Castro")
     assert r["results"][0]["name"] == "Mission District Family Clinic"
+
+
+# ---- round 6: the fact tool has the same guard as the search
+@pytest.mark.parametrize("about, said", [("doctor", "not Dr. Chen"), ("doctor", "another doctor"),
+                                         ("location", "anywhere but Downtown")])
+def test_r6_answer_question_refuses_a_sentence(catalog, about, said):
+    out = answer_question(catalog, about, said)
+    assert out["found"] is False and "isn't a" in out["message"]

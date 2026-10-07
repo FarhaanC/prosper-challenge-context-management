@@ -13,7 +13,7 @@ A wish is applied only if some option still survives it. A wish that can't be
 met is never silently dropped: it becomes a note for the agent to say, and the
 note is checked against ALL valid options before it's written, so it's true:
 
-- nobody can meet it: "None of the doctors available to you for Skin Cancer Screening speaks Klingon."
+- nobody can meet it: "None of the doctors available to you for Skin Cancer Screening speaks Hindi."
 - it clashes with a stronger wish: "Dr. Daniel Chen isn't available at Midtown Medical Group."
 
 Doctors the caller turned down (BookingCard.turn_down_doctors) are left out,
@@ -29,6 +29,7 @@ caller gets a real choice.
 from __future__ import annotations
 
 import re
+from collections import Counter
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from typing import Callable, Optional
@@ -41,6 +42,10 @@ from .rules import can_book_visit_type, pair_problems
 from .slots import DAYS_AHEAD, Schedule, booking_days, spoken_time
 
 WEEKDAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
+# The day words accepted, each meaning one weekday: full names, plurals ("thursdays")
+# and the usual short forms. Nothing else, so "thus" or "frid" is refused, not guessed.
+SHORT_DAYS = {"mon": 0, "tue": 1, "tues": 1, "wed": 2, "thu": 3, "thur": 3, "thurs": 3, "fri": 4, "sat": 5, "sun": 6}
+WEEKDAY_WORDS = {**{w: i for i, w in enumerate(WEEKDAYS)}, **{w + "s": i for i, w in enumerate(WEEKDAYS)}, **SHORT_DAYS}
 ISO_DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
 # Below this, saying "about 0.1 miles from X" adds nothing: it's effectively the same place.
 DISTANCE_WORTH_SAYING = 0.2
@@ -51,7 +56,7 @@ STRENGTH = {DOCTOR: 1, LOCATION: 2, TIME: 3, LANGUAGE: 4}
 
 # Note kinds
 NOT_BOOKABLE = "not_bookable"            # this caller can't book this visit type at all
-BAD_INPUT = "bad_input"                  # a day/time value the code can't use: rephrase and retry
+BAD_INPUT = "bad_input"                  # a value the code can't use (day, time, doctor, place, language): resend it
 DOCTOR_NOT_FOUND = "doctor_not_found"    # no doctor by that name
 DOCTOR_NAME_GUESS = "doctor_name_guess"  # only approximate name matches: check with the caller
 SAME_NAME = "doctors_same_name"          # several doctors share the name: ask which one
@@ -145,7 +150,7 @@ def check_time_wishes(days, time_of_day, now: datetime) -> TimeTests:
     """Turn the day and time-of-day values into tests, or say what can't be used.
 
     These are plain values the AI fills in, never phrases. Each day entry is one of:
-    a weekday name ("Thursday", or short: "thu", "thurs"), "today", "tomorrow", or a
+    a weekday name ("Thursday", "Thursdays", or short: see SHORT_DAYS), "today", "tomorrow", or a
     date written YYYY-MM-DD inside the booking window. The time of day is "morning"
     (before 12:00) or "afternoon" (12:00 or later). Empty and "no preference" values
     mean no wish. Anything else ("Thursday morning", "next Thursday", "evening",
@@ -163,8 +168,7 @@ def check_time_wishes(days, time_of_day, now: datetime) -> TimeTests:
             day_tests.append(lambda day, t=target: day == t)
             labels.append(d)
             continue
-        stem = d.rstrip("s")
-        weekday = next((i for i, w in enumerate(WEEKDAYS) if len(stem) >= 3 and w.startswith(stem)), None)
+        weekday = WEEKDAY_WORDS.get(d)
         if weekday is not None:
             day_tests.append(lambda day, i=weekday: day.weekday() == i)
             labels.append("on " + WEEKDAYS[weekday].capitalize())
@@ -286,17 +290,25 @@ def _why_doctor_cant(catalog: Catalog, caller: Caller, vt: VisitType, p, valid: 
     return "equipment"
 
 
+def _a_few(items: list, sep: str = ", ") -> str:
+    """Read out at most NAMES_TO_READ items: 'A, B and C', or 'A, B, C and 4 more'.
+    Items that contain commas use sep='; ': 'A; B; C; and 4 more'."""
+    shown, more = items[:NAMES_TO_READ], len(items) - NAMES_TO_READ
+    if sep != ", ":
+        return sep.join(shown + ([f"and {more} more"] if more > 0 else []))
+    return ", ".join(shown) + f" and {more} more" if more > 0 else _join(shown)
+
+
 def _who_can(pairs: list) -> str:
     """'Dr. Daniel Chen (Dermatology), Dr. Kenji Kim (Dermatology) and 4 more', with no
     name read out twice unexplained (two Maria Garcias get their locations added)."""
     doctors = list({p.id: p for p, _ in pairs}.values())
     labels = [f"{p.name} ({p.specialty})" for p in doctors]
+    repeated = {label for label, n in Counter(labels).items() if n > 1}  # counted before any label changes
     for i, p in enumerate(doctors):
-        if labels.count(labels[i]) > 1:
-            labels[i] = f"{p.name} ({p.specialty}, {_join(sorted({l.name for q, l in pairs if q.id == p.id}))})"
-    shown = labels[:NAMES_TO_READ]
-    more = len(labels) - len(shown)
-    return ", ".join(shown) + f" and {more} more" if more else _join(shown)
+        if labels[i] in repeated:
+            labels[i] = f"{p.name} ({p.specialty}, {' / '.join(sorted({l.name for q, l in pairs if q.id == p.id}))})"
+    return _a_few(labels)
 
 
 def find_options(
@@ -422,25 +434,36 @@ def time_ok_of(wishes: list) -> Optional[Callable]:
 NOT_A_LANGUAGE = NOT_NAME_WORDS | {"no", "language", "languages", "speaker", "speakers", "speaking"}
 
 
+# Other names for a language in our records. Kept to the obvious; nothing is guessed
+# ("Chinese" on its own isn't here: it could mean Mandarin or Cantonese).
+LANGUAGE_ALSO_CALLED = {"mandarin chinese": "Mandarin", "chinese mandarin": "Mandarin"}
+
+
 def _known_language(catalog: Catalog, said) -> tuple:
     """Returns (language, problem).
 
-    'mandarin chinese' -> 'Mandarin' (a language some doctor speaks). A name no doctor
-    is listed as speaking is kept as said ('Klingon', 'ASL'), and find_options says so
-    truthfully. "No preference" words mean no language wish. Anything that isn't one
-    language name (more than two words, other characters, a sentence, or two languages)
-    is refused with a problem saying how to pass it."""
+    The value must be one language name: a language in our records ("spanish" ->
+    'Spanish'), one of its other names ("Mandarin Chinese" -> 'Mandarin'), or a name
+    we have no record of ('Klingon', 'Haitian Creole', 'ASL'), which is kept as said so
+    find_options can say truthfully that none of our doctors is listed as speaking it.
+    "No preference" words mean no language wish. Anything else is refused with a
+    problem saying how to pass it: a sentence ("not Spanish"), more than two words, or
+    a value that mixes a language we have with other words ("Spanish French",
+    "Spanish only"), because picking one of the words would be a guess."""
     words = " ".join(str(said or "").split())
     if not words or means_no_preference(words):
         return "", ""
-    parts = words.lower().split()
+    low = words.lower()
     spoken = {l.lower(): l for p in catalog.providers.values() for l in p.languages}
-    known = [spoken[w] for w in parts if w in spoken]
-    if len(parts) > 2 or not all(w.isalpha() for w in parts) or set(parts) & NOT_A_LANGUAGE or len(known) > 1:
+    if low in spoken:
+        return spoken[low], ""
+    if low in LANGUAGE_ALSO_CALLED:
+        return LANGUAGE_ALSO_CALLED[low], ""
+    parts = low.split()
+    if (len(parts) > 2 or not all(w.isalpha() for w in parts) or set(parts) & NOT_A_LANGUAGE
+            or any(w in spoken for w in parts)):
         return "", (f"I couldn't use the language '{words}'. Pass one language name, like 'Spanish', "
                     "or leave it empty for no language wish.")
-    if known:
-        return known[0], ""
     return " ".join(w[:1].upper() + w[1:] for w in words.split()), ""  # keeps "ASL" as said
 
 
@@ -455,8 +478,8 @@ def _sentence_problems(prefs: Preferences) -> list:
                         "empty for no doctor wish. To turn doctors down, use turn_down_doctors.")
     place = " ".join(str(prefs.location_hint or "").split())
     if place and not means_no_preference(place) and looks_like_a_sentence(place):
-        problems.append(f"I couldn't use the place '{place}'. Pass just the place (a neighbourhood, street or "
-                        "location name, with 'near' for somewhere close), or leave it empty for no place wish.")
+        problems.append(f"I couldn't use the place '{place}'. Pass just a place name (a neighbourhood, street or "
+                        "location name; set near for somewhere close), or leave it empty for no place wish.")
     return problems
 
 
@@ -486,14 +509,14 @@ def _place_wishes(catalog: Catalog, prefs: Preferences) -> tuple:
     wishes, notes, point, point_label = [], [], None, ""
     hint = " ".join(str(prefs.location_hint or "").split())
     if hint:
-        place = catalog.resolve_place(hint)
+        place = catalog.resolve_place(hint, near=prefs.near)
         if place.kind == "none":
-            notes.append(Note(PLACE_UNKNOWN, f"I don't recognise the place '{hint}'. "
-                                             "Ask for a neighbourhood, a street or one of our location names."))
+            notes.append(Note(PLACE_UNKNOWN, f"I don't recognise the place '{hint}'. Pass just a place name: "
+                                             "a neighbourhood, a street or one of our location names."))
         elif place.kind == "ambiguous":
             names = [catalog.locations[i].name for i in place.location_ids]
             notes.append(Note(PLACE_AMBIGUOUS, f"'{hint}' could mean {_join(names, 'or')}. Ask the caller which one."))
-            if not place.near:  # "the Mission one" narrows to those; "near the Mission" doesn't narrow
+            if not place.near:  # "Mission" narrows to those; near the Mission doesn't narrow
                 either = _join(names, "or")
                 wishes.append(_Wish(LOCATION, either, f"at {either}", location_ids=frozenset(place.location_ids)))
         elif place.kind in ("location", "landmark"):
@@ -522,20 +545,21 @@ def _conflict_note(w: _Wish, applied: list) -> Note:
 def _turned_down_note(w: _Wish, names: list) -> Note:
     """The wish could only be met by doctors the caller turned down. `names`: those
     turned-down doctors who really have times meeting it."""
+    listed = _a_few(names)
     if w.kind == DOCTOR:  # "Dr. Chen", when the only Chen who can do it was turned down
         if len(names) == 1:
             return Note(WISH_CONFLICT, f"The only doctor matching '{w.heard or w.label}' who can do this is "
                                        f"{names[0]}, whom you turned down. Check whether the caller wants "
                                        "that doctor after all.")
         return Note(WISH_CONFLICT, f"The only doctors matching '{w.heard or w.label}' who can do this are "
-                                   f"{_join(names)}, whom you turned down. Check whether the caller wants "
+                                   f"{listed}, whom you turned down. Check whether the caller wants "
                                    "one of them after all.")
     subject = w.label
     if w.kind == TIME:  # "on Wednesday 7 October" -> "Wednesday 7 October"; "in the morning" -> "The morning"
         subject = re.sub(r"^on ", "", subject)
         subject = re.sub(r"^in the ", "the ", subject)
     subject = subject[:1].upper() + subject[1:]
-    return Note(WISH_CONFLICT, f"{subject} is only possible with {_join(names)}, whom you turned down.")
+    return Note(WISH_CONFLICT, f"{subject} is only possible with {listed}, whom you turned down.")
 
 
 def _impossible_note(catalog: Catalog, caller: Caller, vt: VisitType, w: _Wish, rule_ok: list, valid: list,
@@ -563,7 +587,7 @@ def _impossible_note(catalog: Catalog, caller: Caller, vt: VisitType, w: _Wish, 
     for code, names in groups.items():
         one, many = _REASONS[code]
         reason = (one if len(names) == 1 else many).format(vt=vt.name, cap=vt.required_capability, days=days)
-        parts.append(f"{_join(names)} {reason}")
+        parts.append(f"{_a_few(names)} {reason}")
     said = w.heard or w.label
     who = f" Doctors who can: {_who_can(valid)}." if valid else ""
     return Note(WISH_IMPOSSIBLE, f"No doctor matching '{said}' can do this: {'; '.join(parts)}.{who}")
@@ -579,7 +603,7 @@ def _same_name_note(catalog: Catalog, vt: VisitType, w: _Wish, pairs: list) -> l
         places = sorted({loc.name for q, loc in pairs if q.id == pid})
         desc.append(f"{p.name}, {p.title} ({p.specialty}) at {' / '.join(places)}")
     return [Note(SAME_NAME, f"There are {len(offering)} doctors matching '{w.heard}' who offer {vt.name}: "
-                            + "; ".join(desc) + ". Ask the caller which one they mean.")]
+                            + _a_few(desc, "; ") + ". Ask the caller which one they mean.")]
 
 
 def _name_guess_notes(heard: str, matches: list) -> list:

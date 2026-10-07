@@ -12,6 +12,7 @@ NOW = datetime(2026, 10, 6, 9, 0)
 
 SKIN_CANCER_SCREENING = "appt_027"
 ANNUAL_PHYSICAL = "appt_002"
+NEW_PATIENT_CONSULTATION = "appt_001"  # offered by the most doctors
 KNEE_MRI = "appt_065"
 MOLE_REMOVAL = "appt_029"         # Dermatology, needs a referral
 WELL_WOMAN_EXAM = "appt_041"      # OB/GYN; for a returning caller only Dr. Linda Nguyen does it

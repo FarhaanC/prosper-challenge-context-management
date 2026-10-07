@@ -68,32 +68,43 @@ def test_name_matching_edge_cases(catalog):
     assert cohen and all(m.describe() == "close spelling" for m in cohen)
 
 
-@pytest.mark.parametrize("hint,kind,locs,near", [
-    ("near Downtown", "location", [DOWNTOWN], True),
-    ("closer to Downtown", "location", [DOWNTOWN], True),           # 3: the baseline caller's own words
-    ("the one near Downtown", "location", [DOWNTOWN], True),
-    ("the Mission Bay one", "location", [MISSION_BAY], False),
-    ("the Mission District one", "location", [MISSION_DISTRICT], False),
-    ("Mission", "ambiguous", [MISSION_BAY, MISSION_DISTRICT], False),
-    ("the Mission", "ambiguous", [MISSION_BAY, MISSION_DISTRICT], False),  # Farhaan's decision: ask
-    ("North", "ambiguous", [NORTH_BEACH, NORTH_GATE], False),
-    ("the Marina District", "location", [NORTH_GATE], False),        # 3: was taken as Mission District
-    ("Richmond District", "location", [RICHMOND], False),            # 3: was unrecognised
-    ("the Hayes Valley one", "location", [MIDTOWN], False),          # 17: neighbourhood as a name
-    ("near Hayes Valley", "location", [MIDTOWN], True),              # ...but "near" still only ranks
-    ("near Mission Street", "location", [NORTH_BEACH], True),        # 3: 481 Mission St, not Mission District
-    ("the one on Geary", "ambiguous", [DOWNTOWN, SUNSET], False),    # 17: street names
+# Round 6 (Farhaan's decision): the AI passes a place NAME plus near = yes/no. Names are
+# matched forgivingly against our list; "near" is never read from the words.
+@pytest.mark.parametrize("name,near,kind,locs", [
+    ("Downtown", True, "location", [DOWNTOWN]),                       # "closer to Downtown" (baseline caller)
+    ("Mission Bay", False, "location", [MISSION_BAY]),                # "the Mission Bay one"
+    ("Mission District", False, "location", [MISSION_DISTRICT]),
+    ("Mission", False, "ambiguous", [MISSION_BAY, MISSION_DISTRICT]),
+    ("the Mission", False, "ambiguous", [MISSION_BAY, MISSION_DISTRICT]),  # Farhaan's decision: ask
+    ("North", False, "ambiguous", [NORTH_BEACH, NORTH_GATE]),
+    ("the Marina District", False, "location", [NORTH_GATE]),        # 3: was taken as Mission District
+    ("Richmond District", False, "location", [RICHMOND]),            # 3: was unrecognised
+    ("Hayes Valley", False, "location", [MIDTOWN]),                  # 17: neighbourhood as a name
+    ("Hayes Valley", True, "location", [MIDTOWN]),                   # ...near only ranks
+    ("Mission Street", True, "location", [NORTH_BEACH]),             # 3: 481 Mission St, not Mission District
+    ("Geary Street", False, "ambiguous", [DOWNTOWN, SUNSET]),        # 17: "the one on Geary"
+    ("Downtown SF", False, "location", [DOWNTOWN]),
+    ("mid town", False, "location", [MIDTOWN]),
+    ("4874 Main St", False, "location", [MISSION_BAY]),              # R3-9: a full address
+    ("4455 Geary Blvd", False, "location", [DOWNTOWN]),               # the number settles a shared street
 ])
-def test_places(catalog, hint, kind, locs, near):
-    m = catalog.resolve_place(hint)
+def test_places(catalog, name, near, kind, locs):
+    m = catalog.resolve_place(name, near=near)
     assert (m.kind, sorted(m.location_ids), m.near) == (kind, sorted(locs), near)
 
 
-@pytest.mark.parametrize("hint,landmark", [("near the Castro", "Castro"), ("Castro District", "Castro"),
-                                           ("fishermans wharf", "Fisherman's Wharf")])
-def test_landmarks(catalog, hint, landmark):
-    m = catalog.resolve_place(hint)
-    assert m.kind == "landmark" and m.label == landmark and m.near
+@pytest.mark.parametrize("name,landmark", [("Castro", "Castro"), ("the Castro", "Castro"),
+                                           ("Castro District", "Castro"), ("fishermans wharf", "Fisherman's Wharf")])
+def test_landmarks(catalog, name, landmark):
+    m = catalog.resolve_place(name)
+    assert m.kind == "landmark" and m.label == landmark and m.near   # a landmark is never a clinic
+
+
+@pytest.mark.parametrize("phrase", ["near Downtown", "closer to Downtown", "the Midtown one", "on Geary",
+                                    "Union Square area", "the Midtown one in SF", "Geary", "main"])
+def test_r6_place_phrases_are_not_read(catalog, phrase):
+    # The AI passes the name and near; a whole phrase isn't a place name, so it isn't guessed at.
+    assert catalog.resolve_place(phrase).kind == "none"
 
 
 @pytest.mark.parametrize("hint", ["Narnia", "", "   ", None, "the clinic",
@@ -109,18 +120,6 @@ def test_unknown_places_are_not_guessed(catalog, hint):
 @pytest.mark.parametrize("hint", ["anywhere", "no preference", "none", "don't mind", "I don't mind", "SF"])
 def test_no_preference_is_not_a_place(catalog, hint):
     assert catalog.resolve_place(hint).kind == "any"
-
-
-@pytest.mark.parametrize("hint,loc,near", [
-    ("on the way to Downtown", DOWNTOWN, True), ("on Main", MISSION_BAY, False),
-    ("Downtown SF", DOWNTOWN, False), ("mid town", MIDTOWN, False),
-    # round 3, R3-9: full addresses (the number settles shared streets), "in", "near <street>"
-    ("4874 Main St", MISSION_BAY, False), ("4455 Geary Blvd", DOWNTOWN, False),
-    ("the Midtown one in SF", MIDTOWN, False), ("downtown in San Francisco", DOWNTOWN, False),
-])
-def test_round_2_place_phrasings(catalog, hint, loc, near):
-    m = catalog.resolve_place(hint)
-    assert (m.kind, m.location_ids, m.near) == ("location", [loc], near)
 
 
 # ---- 7: bad data fails loudly at load instead of being papered over
@@ -217,9 +216,9 @@ def test_r4_every_kind_of_problem_is_listed_in_one_go():
 
 
 def test_r4_a_house_number_we_do_not_have_is_somewhere_on_that_street(catalog):
-    # "near 9999 Geary": the caller is on Geary, so both Geary clinics are relevant,
+    # "9999 Geary Street": the caller is on Geary, so both Geary clinics are relevant,
     # but neither is the place they named, so the search isn't narrowed to them.
-    for said in ("near 9999 Geary", "9999 Geary Blvd"):
+    for said in ("9999 Geary Street", "9999 Geary Blvd"):
         place = catalog.resolve_place(said)
         assert (place.kind, sorted(place.location_ids), place.near) == ("ambiguous", [DOWNTOWN, SUNSET], True)
     assert catalog.resolve_place("4455 Geary Blvd").location_ids == [DOWNTOWN]
@@ -246,3 +245,9 @@ def test_r5_an_empty_neighbourhood_is_fine():
     extras = copy.deepcopy(EXTRAS)
     extras["locations"][MIDTOWN]["neighbourhood"] = ""
     Catalog(RAW, extras)
+
+
+def test_r6_a_repeated_id_is_reported_once():
+    raw = copy.deepcopy(RAW)
+    raw["providers"] += [copy.deepcopy(raw["providers"][0]) for _ in range(2)]
+    assert _problems(raw).count("appears more than once") == 1

@@ -6,8 +6,11 @@ Loads the given `catalog.json` untouched, plus our own fake map data
 - the list of specialties, and the visit types inside one specialty
 - doctors matching a (possibly misheard) name: ALL matches, because names
   repeat (two Dr. Maria Garcias), each labelled with how close the match is
-- which location, landmark or street a caller means ("near Downtown",
-  "the Midtown one", "the one on Geary"), and distances between places
+- which location, landmark or street a place name means ("Midtown",
+  "Union Square", "Geary Street"), and distances between places. Like doctor
+  names, place names are matched forgivingly against our own list; whether the
+  caller wants somewhere NEAR it is a separate yes/no the AI passes, not read
+  from their words.
 """
 
 from __future__ import annotations
@@ -41,27 +44,14 @@ VISIT_SPELLING = 0.7
 SHORT_PLACE_WORD = 5
 PLACE_SPELLING = 0.8
 
-# Words in place phrases that don't help tell places apart.
+# Words in place names that don't help tell places apart ("Mission Bay Health Center").
 GENERIC_PLACE_WORDS = {
     "health", "center", "centre", "clinic", "medical", "group", "family", "specialty",
-    "care", "community", "the", "one", "office", "location", "hospital", "place",
-    "site", "branch", "please", "a", "of", "in", "at", "to", "from", "and",
+    "care", "community", "the", "office", "location", "hospital", "site", "branch", "of", "and",
 }
 CITY_WORDS = {"sf", "san", "francisco", "city"}
 STREET_WORDS = {"street", "avenue", "boulevard", "road", "lane"}
 STREET_ABBREVIATIONS = {"st", "ave", "blvd", "rd", "ln"}  # count only as the last word ("Mission St", not "St Mary's")
-# Phrases meaning "close to X": rank by distance from X rather than requiring X.
-NEAR_WORDS = ("on the way to", "not far from", "closest to", "closer to", "close to", "next to",
-              "nearby", "near", "around", "by")
-NEAR_PHRASE = re.compile(r"\b(" + "|".join(NEAR_WORDS) + r")\b")
-FILLER_PREFIX = re.compile(
-    r"^(?:(?:somewhere|anywhere|something|one|the one|a clinic|a place)\s+)?"
-    r"(?:(?:" + "|".join(NEAR_WORDS + ("in", "at", "on")) + r")\s+)?"
-    r"(?:the\s+)?"
-)
-ON_A_STREET = re.compile(r"(^|\s)on\s")
-FILLER_SUFFIX = re.compile(r"(?:\s+(?:area|side|neighbou?rhood|one|location|clinic|office|please))+$")
-
 
 @dataclass(frozen=True)
 class Location:
@@ -144,7 +134,7 @@ class PlaceMatch:
     label: str = ""
     location_ids: list = field(default_factory=list)  # one if kind=location, several if ambiguous
     point: Optional[tuple] = None  # (lat, lon) to measure distance from
-    near: bool = False  # "near X" (rank by distance) rather than "the X one" (only X)
+    near: bool = False  # rank by distance from it, rather than only that place (passed in, never read from words)
 
 
 class CatalogError(ValueError):
@@ -251,12 +241,12 @@ def _check_records(raw: dict) -> list:
         if not isinstance(records, list):
             problems.append(f"The catalog has no '{section}' list.")
             continue
-        seen = set()
+        seen, repeated = set(), set()
         for i, r in enumerate(records):
             if not isinstance(r, dict):
                 problems.append(f"{section} entry #{i} isn't a record.")
                 continue
-            rid = r.get("id") if isinstance(r.get("id"), str) else None  # a list as an id mustn't crash the check
+            rid = r.get("id").strip() if isinstance(r.get("id"), str) else None  # a list as an id mustn't crash the check
             label = rid or f"#{i}"
             missing = [f for f in fields if f not in r]
             if missing:
@@ -266,7 +256,8 @@ def _check_records(raw: dict) -> list:
                      if f in r and not (r[f] is None and f in OPTIONAL_FIELDS[section]) and not _right_type(r[f], kind)]
             if wrong:
                 problems.append(f"{section} entry {label}: {'; '.join(wrong)}.")
-            if rid is not None and rid in seen:
+            if rid and rid in seen and rid not in repeated:  # said once, however many copies
+                repeated.add(rid)
                 problems.append(f"{section} id {label} appears more than once.")
             seen.add(rid)
     return problems
@@ -471,49 +462,39 @@ class Catalog:
         return [m.provider for m in self.match_providers(heard)]
 
     # ---- places ------------------------------------------------------------
-    def resolve_place(self, hint) -> PlaceMatch:
-        """Work out what place a caller means.
+    def resolve_place(self, hint, near: bool = False) -> PlaceMatch:
+        """Work out which place a place name means. `near` comes from the AI as a plain
+        yes/no: True means "somewhere close to it" (rank by distance, don't restrict).
 
         In this order:
-        1. "Anywhere", "no preference" -> kind "any": no place wish.
-        2. If the caller named a street ("Mission Street", "Geary Blvd") or said
-           "on X" ("the one on Geary"): a street from our addresses. If they said a
-           street word and it isn't one of ours, stop: it's not recognised.
+        1. A "no preference" word ("anywhere") -> kind "any": no place wish.
+        2. A name ending in a street word ("Mission Street", "Geary Blvd", "4455 Geary
+           Blvd") -> a street from our addresses; if it isn't one of ours, not recognised.
         3. One of our locations by name, nickname or neighbourhood ("Mission Bay",
-           "the Midtown one", "the Hayes Valley one") -> that location.
-           A name several locations share ("Mission", "North") -> ambiguous: ask.
-        4. A known landmark or neighbourhood ("near Union Square", "Chinatown").
-        5. Steps 3-4 again without the word "district" ("the Marina District").
-        With "near", "closer to" and the like, near=True: rank by distance, don't restrict.
+           "Midtown", "Hayes Valley") -> that location. A name several share
+           ("Mission", "North") -> ambiguous: the agent asks which one.
+        4. A known landmark or neighbourhood ("Union Square", "Chinatown").
+        5. Steps 3-4 again without the word "district" ("Marina District").
+        A street needs its street word, so the AI passes "Geary Street" for "the one on
+        Geary"; a bare "Main" is not taken as Main Street ("the main one").
         """
         text = normalize(hint)
         if not text:
             return PlaceMatch(kind="none")
         if means_no_preference(text):
             return PlaceMatch(kind="any")
-        near = bool(NEAR_PHRASE.search(text))
-        on_street = bool(ON_A_STREET.search(text))
-        core = FILLER_SUFFIX.sub("", FILLER_PREFIX.sub("", text)).strip()
-        words = set(_distinct_words(core))
+        words = set(_distinct_words(text))
         if not words:
-            # Only city words ("in SF") or generic ones: no particular place.
-            return PlaceMatch(kind="any") if set(core.split()) & CITY_WORDS else PlaceMatch(kind="none", label=str(hint))
+            # Only city words ("SF") or generic ones: no particular place.
+            return PlaceMatch(kind="any") if set(text.split()) & CITY_WORDS else PlaceMatch(kind="none", label=str(hint))
 
-        last = core.split()[-1]
+        last = text.split()[-1]
         if words & STREET_WORDS or last in STREET_ABBREVIATIONS:
             street_words = words - STREET_WORDS - STREET_ABBREVIATIONS
             return self._match_street(street_words, near) or PlaceMatch(kind="none", label=str(hint))
-        if on_street:
-            found = self._match_street(words, near)
-            if found:
-                return found
         for attempt in (words, words - {"district"}):
-            said = "".join(w for w in core.split() if w in attempt)
+            said = "".join(w for w in text.split() if w in attempt)
             found = self._match_locations(attempt, said, near) or self._match_landmarks(attempt, said)
-            if found:
-                return found
-        if near:  # "near Geary": a street, said without "street"
-            found = self._match_street(words, near)
             if found:
                 return found
         return PlaceMatch(kind="none", label=str(hint))

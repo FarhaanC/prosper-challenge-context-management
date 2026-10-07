@@ -34,13 +34,8 @@ END = "end"
 DOCTOR, LOCATION, TIME, LANGUAGE = "doctor", "location", "time", "language"
 VISIT = "visit_type"
 
-CHANGEABLE = {
-    "visit_type": VISIT, "visit": VISIT, "reason": VISIT, "service": VISIT, "appointment_type": VISIT,
-    "doctor": DOCTOR, "provider": DOCTOR,
-    "location": LOCATION, "place": LOCATION, "clinic": LOCATION,
-    "time": TIME, "day": TIME, "date": TIME, "slot": TIME,
-    "language": LANGUAGE,
-}
+# The five things a caller can change, by the exact names the tools use.
+CHANGEABLE = {"visit_type": VISIT, "doctor": DOCTOR, "location": LOCATION, "time": TIME, "language": LANGUAGE}
 TIMES_OF_DAY = ("morning", "afternoon")
 @dataclass
 class Preferences:
@@ -57,7 +52,8 @@ class Preferences:
     visit_description: str = ""        # "knee MRI", "skin check"
     doctor_name_heard: str = ""        # "Dr. Garsha"
     preferred_provider_id: str = ""
-    location_hint: str = ""            # "near Downtown", "the Midtown one"
+    location_hint: str = ""            # a place name: "Midtown", "Union Square", "Geary Street"
+    near: bool = False                 # somewhere close to location_hint, rather than only that place
     preferred_location_id: str = ""
     days: list = field(default_factory=list)  # each one of: "Thursday", "today", "tomorrow", "2026-10-13"
     time_of_day: str = ""              # "morning" (before 12:00) | "afternoon" (12:00 or later) | ""
@@ -131,7 +127,7 @@ class BookingCard:
 
     # ---- changing a choice -------------------------------------------------
     def change_choice(self, what: str, new_value: str = "", days: Optional[list] = None,
-                      time_of_day: Optional[str] = None) -> str:
+                      time_of_day: Optional[str] = None, near: bool = False) -> str:
         """The caller changed their mind about one part of the booking.
 
         Clears that choice and everything that depended on it, records the new wish,
@@ -153,7 +149,10 @@ class BookingCard:
           It is never read as an instruction: turning doctors down is its own
           method, turn_down_doctors. Naming a doctor who was turned down brings them
           back if the name picks out that one doctor (see turned_down_ids).
-        - location: the caller's place words ("the Midtown one", "near Union Square").
+        - location: a place name ("Midtown", "Union Square", "Geary Street"), or "" for
+          no place wish, plus `near`: True for "somewhere close to it" (rank by
+          distance), False for "that place". The AI decides `near` from what the
+          caller said; the code doesn't look for words like "near".
         - time: plain values, never a phrase. `days` is a list where each entry is one
           weekday name, "today", "tomorrow" or a date (YYYY-MM-DD); [] clears the day
           wish. `time_of_day` is "morning", "afternoon", or "" to clear it. Leaving
@@ -164,14 +163,21 @@ class BookingCard:
           else with a note saying how to pass it).
         - language: one language name ("Spanish"), or "" to clear it.
 
-        "No preference" words ("don't mind", "any") count as "" for every kind.
+        "No preference" words ("don't mind", "any") count as "" for every kind, and
+        are stored as "".
         """
         kind = CHANGEABLE.get(str(what).lower().strip().replace(" ", "_"))
         if kind is None:
-            raise ValueError(f"Can't change {what!r}; choose visit type, doctor, location, time or language.")
+            raise ValueError(f"Can't change {what!r}; choose visit_type, doctor, location, time or language.")
         said = " ".join(str(new_value or "").split())
         if kind == TIME and said and days is not None:
             raise ValueError("Pass the day either as new_value or in days, not both.")
+        if kind == TIME and said:
+            days, said = [said], ""   # new_value is one day entry ("any day" in it clears the day)
+        if means_no_preference(said):
+            said = ""
+        if near and kind != LOCATION:
+            raise ValueError("near goes with a location change only.")
         prefs = self.preferences
         self._start_change(kind)
 
@@ -186,11 +192,10 @@ class BookingCard:
             prefs.doctor_name_heard, prefs.preferred_provider_id = said, ""
         elif kind == LOCATION:
             prefs.location_hint, prefs.preferred_location_id = said, ""
+            prefs.near = bool(near and said)
         elif kind == LANGUAGE:
             prefs.language = said
         elif kind == TIME:
-            if said:
-                days = [said]
             if days is not None:
                 entries = [" ".join(str(d or "").split()) for d in days]
                 prefs.days = [d for d in entries if d and not means_no_preference(d)]
@@ -256,7 +261,7 @@ class BookingCard:
         if c.provider_id and kind != DOCTOR:
             prefs.preferred_provider_id, prefs.doctor_name_heard = c.provider_id, ""
         if c.location_id and kind != LOCATION:
-            prefs.preferred_location_id, prefs.location_hint = c.location_id, ""
+            prefs.preferred_location_id, prefs.location_hint, prefs.near = c.location_id, "", False
 
     def _no_longer_turned_down(self, provider_id: str) -> None:
         prefs = self.preferences
@@ -292,7 +297,7 @@ class BookingCard:
             wishes.append(f"doctor: {doctor}")
         place = catalog.locations[p.preferred_location_id].name if p.preferred_location_id else p.location_hint
         if place:
-            wishes.append(f"place: {place}")
+            wishes.append(f"place: {'near ' if p.near else ''}{place}")
         if p.days:
             wishes.append("days: " + ", ".join(p.days))
         if p.time_of_day:
