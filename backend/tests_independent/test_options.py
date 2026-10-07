@@ -2,6 +2,7 @@
 
 import json
 import math
+import re
 from datetime import timedelta
 
 import pytest
@@ -9,6 +10,7 @@ import pytest
 from clinic import Preferences, check_booking, find_options
 from conftest import NOW, new_caller, returning
 from reference import DATA, PROV, SPECIALTIES, VT, ref_bookable, ref_pairs
+from round6_reference import split_doctor_list
 
 EXTRAS = json.loads((DATA / "location_extras.json").read_text())
 WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
@@ -372,5 +374,6 @@ def test_alternatives_list_does_not_repeat_a_name_unexplained(catalog, schedule)
     r = run(catalog, schedule, new_caller(), "appt_002", doctor_name_heard="Dr. Linda Ramirez")
     note = next(n.say for n in r.notes if "who can" in n.say)
     listed = note.split("who can:")[1]
-    names = [x.strip(" .") for x in listed.replace(" and ", ",").split(",") if x.strip().startswith("Dr.")]
+    listed = re.sub(r" and \d+ more$", "", listed.strip().rstrip("."))   # round 8 s2: labels can hold commas
+    names = [x.strip(" .") for x in split_doctor_list(listed) if x.strip().startswith("Dr.")]
     assert len(names) == len(set(names)), note

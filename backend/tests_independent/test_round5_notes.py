@@ -24,7 +24,7 @@ import pytest
 from clinic import Preferences, Schedule, find_options
 from conftest import NOW, new_caller, returning
 from reference import LOC, PROV, SPECIALTIES, VT, ref_bookable, ref_pairs
-from round6_reference import capped_names_problems, who_can_problems
+from round6_reference import capped_names_problems, split_doctor_list, who_can_problems
 
 CALLERS = {"new": (True, []), "returning-none": (False, []), "returning-all": (False, list(SPECIALTIES))}
 _SLOTS = {}
@@ -74,7 +74,7 @@ def list_problems(names_text, want):
     if len(want) > 3 or more:
         if not more:
             return [f"{len(want)} names but no 'and N more': {names_text!r}"]
-        shown = more.group("shown").split(", ")
+        shown = split_doctor_list(more.group("shown"), last_and=False)
         if len(shown) != 3 or len(set(shown)) != 3:
             out.append(f"'and N more' after {len(shown)} names, not 3: {names_text!r}")
         if not set(shown) <= want or names_in(more.group("shown")) != set(shown):
@@ -84,7 +84,7 @@ def list_problems(names_text, want):
         return out
     if names_in(names_text) != want:
         out.append(f"names {sorted(names_in(names_text))} != {sorted(want)}")
-    parts = re.split(r", | and ", names_text)
+    parts = split_doctor_list(names_text)
     if sorted(parts) != sorted(want) or (len(want) > 1 and not re.fullmatch(r"(.+, )*.+ and .+", names_text)):
         out.append(f"list not written as 'A, B and C': {names_text!r}")
     return out

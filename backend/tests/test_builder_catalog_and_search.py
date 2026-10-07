@@ -255,7 +255,15 @@ def test_r6_a_repeated_id_is_reported_once():
     assert _problems(raw).count("appears more than once") == 1
 
 
-def test_r7_a_word_from_our_own_names_is_fine(catalog):
-    # "Clinic" is part of two of our names, so it doesn't stop a match; "office" isn't, so it does.
-    assert catalog.resolve_place("Richmond clinic").location_ids == [RICHMOND]
-    assert catalog.resolve_place("Sunset Community Clinic").location_ids == [SUNSET]
+@pytest.mark.parametrize("name, loc", [("Sunset Clinic", SUNSET), ("Sunset Community Clinic", SUNSET),
+                                       ("Mission Bay Health Center", MISSION_BAY), ("Richmond Care Center", RICHMOND)])
+def test_r7_a_word_from_that_place_own_name_is_fine(catalog, name, loc):
+    assert catalog.resolve_place(name).location_ids == [loc]
+
+
+@pytest.mark.parametrize("name", ["Richmond clinic", "Downtown clinic", "Chinatown clinic", "Richmond Medical Group",
+                                  "Midtown Health Center"])
+def test_r7_a_word_from_another_place_name_is_not_borrowed(catalog, name):
+    # Verifier's ruling (round 7): "clinic" counts only for a place whose own name has it.
+    # "Chinatown clinic" must not quietly become "near Chinatown".
+    assert catalog.resolve_place(name).kind == "none"

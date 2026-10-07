@@ -226,11 +226,11 @@ Findings from [`round-6-check.md`](round-6-check.md), a check by one fresh agent
 
 Findings from [`round-7-check.md`](round-7-check.md), a check by one fresh agent acting as tester and reviewer (**R7**, numbered as in its Part B). It confirmed all 192 out-of-date tests came only from agreed changes: it fixed every one by changing tests only.
 
-**Status:** fixed in the "round-7 fixes" commit. Two failure groups are **disputed** and went to a fresh verifier, as `docs/process.md` requires (see the end of this section).
+**Status:** fixed in the "round-7 fixes" commit, then in a follow-up after a fresh verifier ruled on two disputed failure groups, as `docs/process.md` requires (see the end of this section). **All 3,124 tests pass.**
 
 | # | Problem (plain words) | Found by | Decision | Outcome |
 | --- | --- | --- | --- | --- |
-| R7-1 | **Leftover place words still read phrases:** "Midtown office", "Downtown location", "Sunset hospital", "Richmond branch" were taken as our clinics. Eight words in the generic-word list (office, location, hospital, site, branch, centre, of, and) appear in none of our place names. | R7 must-fix 1 | Fix | **Fixed.** The list now holds only words that are part of our own place names (health, center, clinic, medical, group, family, specialty, care, community) plus "the" ("the Castro"). "Clinic" stays because it's in two of our names, so "Richmond clinic" still finds Richmond: the rule is "words from our own names", not a list of filler. |
+| R7-1 | **Leftover place words still read phrases:** "Midtown office", "Downtown location", "Sunset hospital", "Richmond branch" were taken as our clinics. Eight words in the generic-word list (office, location, hospital, site, branch, centre, of, and) appear in none of our place names. | R7 must-fix 1 | Fix | **Fixed in two steps.** First the eight words were removed. The builder kept "clinic" as a word of two of our names; the verifier ruled that wrong (below). **Final rule:** a word like "clinic", "health" or "center" is allowed only if it's part of *that* place's own name. "Sunset Clinic" finds Sunset Community Clinic; "Richmond clinic", "Downtown clinic" and "Richmond Medical Group" are not recognised; "Chinatown clinic" no longer quietly becomes "near Chinatown". |
 | R7-2 | **Same-name, same-specialty doctors weren't told apart** in the "can't do this" reasons or "Doctors with that surname". The surname note had its own copy of the "three, then N more" code. | R7 should-fix 2 | Fix | **Fixed.** One labelling helper (`_labels`) for every doctor list: a label that would repeat becomes "Dr. Daniel Chen (Dermatology, Downtown Health Center / Richmond Care Center)". Every list now uses `_a_few` for "three, then N more". |
 | R7-3 | `answer_question` refused "Visit Type". | R7 should-fix 3 | Fix | **Fixed.** Case and spaces ignored, as in `change_choice`. |
 | R7-4 | **The claim should name the two word lists.** | R7 should-fix 4 (judgement) | Fix (wording) | **Reworded** and now stated once in the code, in the package overview (`clinic/__init__.py`), and in the round-8 spec note (the older notes keep their wording as history): *names (doctors, places, languages) are matched forgivingly against our own records; two fixed word lists are read, one of "no preference" words (treated as empty) and one of words no name has (refused); everything else is a plain instruction.* |
@@ -244,11 +244,11 @@ Findings from [`round-7-check.md`](round-7-check.md), a check by one fresh agent
 | R7-12 | The builder's "phrases not read" test missed "…office", "…location". | R7 NIT 12 | Fix | **Fixed.** Added, plus "Richmond clinic" as a must-match. |
 | R7-extra | **Found by the builder:** an earlier edit had left two blank lines missing between a function and the next block in `patients.py`. | builder | Fix | **Fixed** while moving the date check. |
 
-## Results after the round-7 fixes
+## Results after the round-7 fixes and the verifier's ruling
 
-- **Builder tests:** 268 of 268 pass (12 new).
-- **Independent tests:** 2,840 of 2,848 pass. **All 22 round-7 failures except 8 are fixed.** The 8 left are disputed (below).
-- **Speed and code checker:** unchanged; pyflakes finds nothing.
+- **Builder tests:** 276 of 276 pass (20 new this round, including the builder's "Richmond clinic" test, reversed after the ruling).
+- **Independent tests:** 2,848 of 2,848 pass. All 22 round-7 failures are fixed: 20 by code changes, 2 by a fresh tester correcting its own list reader.
+- **Speed and code checker:** unchanged; pyflakes finds nothing in `clinic/`, the builder tests or the independent tests.
 
 ## Disputed: sent to a fresh verifier
 
@@ -257,4 +257,7 @@ The builder thinks these 8 failing tests are wrong, which `docs/process.md` says
 - **6 × "{x} clinic" is not recognised** (`test_round7_places.py`). The builder's view: "clinic" is a word of two of our own place names, so it's allowed under the rule; the round-7 spec note was wrong to list it.
 - **2 × same-name, same-specialty labels** (`test_round7_notes.py`: the "can't do this" reasons and the surname note). The builder's view: the notes are right ("Dr. Daniel Chen (Dermatology, Downtown Health Center / Richmond Care Center) and Dr. Daniel Chen (Dermatology, Sunset Community Clinic) aren't taking new patients"), and the tests' list reader splits on the comma inside the brackets.
 
-The verifier's ruling is recorded below.
+**Ruling** (full text in [`round-7-verifier.md`](round-7-verifier.md)). The verifier formed its view first and read the builder's argument afterwards.
+
+- **"{x} clinic": code bug.** The spec says "…clinic" isn't a place name. Allowing words from *other* places' names is a rule that only fits this catalog, and it turned "Chinatown clinic" into "near Chinatown". The builder's argument didn't change the ruling. **Done:** the code now allows such words only from the place's own name (R7-1 above). The builder's own test that asserted the opposite was reversed, and the round-8 spec note was corrected.
+- **Same-name lists: test bug.** The notes are right. The tests' list reader split on the comma inside the brackets. **Done:** a fresh tester (not the builder) added one shared splitter and used it in every test that splits a list of doctors, including three that were passing but would have broken on the catalog's real same-name pairs. No check was loosened.

@@ -11,13 +11,19 @@ Names (doctors, places, languages) are matched forgivingly against our own recor
 
 Everything else is a plain instruction: ids, yes/no, a weekday or a date, "morning" or "afternoon". Anything that isn't one of those is refused, never guessed.
 
-## 1. Places: only words from our own names are ignored (corrects round 7, section 1)
+## 1. Places: a place's own name words only (confirms round 7, section 1; fresh verifier's ruling)
 
-When a place name is matched, the only words ignored are words that are part of our own place names (health, center, clinic, medical, group, family, specialty, care, community), plus "the" ("the Castro").
+When a place name is matched, words that don't tell our places apart (health, center, clinic, medical, group, family, specialty, care, community) are allowed **only if they're part of that place's own name**. "the" is always ignored ("the Castro").
 
-- "Richmond clinic", "Sunset Community Clinic" → recognised. "Clinic" is a word in two of our names. Round 7 wrongly listed "…clinic" as not recognised.
-- "Midtown office", "Downtown location", "Sunset hospital", "Richmond branch", "Mission Bay Health Centre" → not recognised (`place_unknown`). These words are in none of our names.
-- A value containing a word no name has ("not far from Union Square", "the Midtown one please") is refused as `bad_input` before any matching. That is the round-6 sentence guard; round 7 wrongly listed "not far from…" as "not recognised".
+- **Recognised:**
+  - "Sunset Clinic" and "Sunset Community Clinic" → Sunset Community Clinic;
+  - "Mission Bay Health Center" → Mission Bay Health Center;
+  - "Richmond Care Center" → Richmond Care Center.
+- **Not recognised** (`place_unknown`), because the word belongs to *other* places' names or to none:
+  - "Richmond clinic", "Downtown clinic", "Richmond Medical Group", "Midtown Health Center";
+  - "Midtown office", "Downtown location", "Sunset hospital", "Richmond branch", "Mission Bay Health Centre".
+- **"Chinatown clinic" is not recognised.** It is not quietly read as "near Chinatown", because we have no clinic there.
+- A value containing a word no name has ("not far from Union Square", "the Midtown one please") is refused as `bad_input` before any matching. This is the round-6 sentence guard; round 7 wrongly listed "not far from…" as "not recognised".
 - The "could mean A or B" note for a shared place name reads three names, then "or N more".
 
 ## 2. Doctor labels: one form everywhere (adds to round 7, section 5)

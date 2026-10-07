@@ -10,6 +10,7 @@ The clock is fixed: Tuesday 6 Oct 2026, 09:00 (conftest.NOW), so the booking win
 
 import copy
 import json
+import re
 from datetime import date, datetime, timedelta
 
 import pytest
@@ -18,6 +19,7 @@ from clinic import BOOKING, BookingCard, Catalog, CatalogError, Choices, Patient
     find_options
 from conftest import NOW, new_caller
 from reference import DATA, LOC, PROV, VT, ref_pairs
+from round6_reference import split_doctor_list
 
 RAW = json.loads((DATA / "catalog.json").read_text())
 EXTRAS = json.loads((DATA / "location_extras.json").read_text())
@@ -526,7 +528,8 @@ def test_summary_never_lists_the_chosen_doctor_even_if_filled_in_directly(catalo
     summary = card.summary(catalog)
     assert "not: " in summary
     not_part = summary.split("not: ")[1].split("\n")[0]
-    assert PROV[doctor]["name"] not in not_part.split(", "), summary
+    listed = [re.sub(r" \(.*\)$", "", x) for x in split_doctor_list(not_part, last_and=False)]   # label -> name
+    assert PROV[doctor]["name"] not in listed, summary
     assert PROV["prov_049"]["name"] in not_part
 
 

@@ -44,9 +44,11 @@ VISIT_SPELLING = 0.7
 SHORT_PLACE_WORD = 5
 PLACE_SPELLING = 0.8
 
-# Words that are part of our own place names but don't tell them apart ("Mission Bay
-# Health Center", "Sunset Community Clinic"), plus "the" ("the Castro"). Only words from
-# our names: anything else ("Midtown office") isn't a place name and isn't guessed at.
+# Words in our place names that don't tell them apart ("Mission Bay Health Center",
+# "Sunset Community Clinic"). When a name is matched, such a word is allowed only if
+# it's part of THAT place's own name: "Sunset Clinic" fits Sunset Community Clinic,
+# but "Downtown clinic" doesn't fit Downtown Health Center, and "Chinatown clinic"
+# isn't quietly read as "near Chinatown". (Verifier's ruling, review round 7.)
 GENERIC_PLACE_WORDS = {"health", "center", "clinic", "medical", "group", "family", "specialty", "care",
                        "community", "the"}
 CITY_WORDS = {"sf", "san", "francisco", "city"}
@@ -171,6 +173,18 @@ def _distinct_words(text: str) -> list:
     return [w for w in normalize(text).split() if w not in GENERIC_PLACE_WORDS | CITY_WORDS]
 
 
+def _heard_words(text: str) -> list:
+    """The words of the place name the AI passed, in order, without "the" and city words."""
+    return [w for w in normalize(text).split() if w != "the" and w not in CITY_WORDS]
+
+
+def _without_own_generic(heard: list, name: str) -> list:
+    """Drop the heard words that are this name's own non-distinctive words ("health",
+    "center" for Mission Bay Health Center). Other generic words stay, and must fit."""
+    own = set(normalize(name).split()) - set(_distinct_words(name))
+    return [h for h in heard if h not in own]
+
+
 def _word_fits(heard: str, real: str) -> bool:
     if heard == real:
         return True
@@ -179,24 +193,31 @@ def _word_fits(heard: str, real: str) -> bool:
     return similarity(heard, real) >= PLACE_SPELLING
 
 
-def _name_fits(heard: set, name: str, said: str = "") -> bool:
-    """Does what the caller said pick out this place name?
+def _name_fits(heard: list, name: str) -> bool:
+    """Does the place name passed pick out this name?
 
-    Every word they said must fit a word of the name, AND they must have said the
-    name's first distinctive word or all of its words. So "Mission" fits Mission Bay,
-    but "Bay", "Valley" or "Gate" on their own don't pick anything. `said` is the
-    caller's words run together, so "mid town" still fits "Midtown".
+    Every word passed must fit a distinctive word of the name (or be one of the name's
+    own other words, like "Health Center"), AND the name's first distinctive word or
+    all of them must be there. So "Mission" fits Mission Bay, but "Bay", "Valley" or
+    "Gate" on their own don't pick anything. Words run together also fit, so "mid
+    town" fits "Midtown".
     """
     words = _distinct_words(name)
+    heard = _without_own_generic(heard, name)
     if not heard or not words:
         return False
-    if said and said == "".join(words):
+    if "".join(heard) == "".join(words):
         return True
     if not all(any(_word_fits(h, w) for w in words) for h in heard):
         return False
     said_lead = any(_word_fits(h, words[0]) for h in heard)
     said_all = all(any(_word_fits(h, w) for h in heard) for w in words)
     return said_lead or said_all
+
+
+def _names_exactly(heard: list, name: str) -> bool:
+    """The words passed are exactly this name's distinctive words (spelled right)."""
+    return set(_without_own_generic(heard, name)) == set(_distinct_words(name))
 
 
 _TEXT, _LIST, _YES_NO, _NUMBER = "text", "list of text", "true/false", "whole number"
@@ -486,28 +507,26 @@ class Catalog:
             return PlaceMatch(kind="none")
         if means_no_preference(text):
             return PlaceMatch(kind="any")
-        words = set(_distinct_words(text))
-        if not words:
-            # Only city words ("SF") or generic ones: no particular place.
+        heard = _heard_words(text)
+        if not heard:
+            # Only city words ("SF") or "the": no particular place.
             return PlaceMatch(kind="any") if set(text.split()) & CITY_WORDS else PlaceMatch(kind="none", label=str(hint))
 
-        last = text.split()[-1]
-        if words & STREET_WORDS or last in STREET_ABBREVIATIONS:
-            street_words = words - STREET_WORDS - STREET_ABBREVIATIONS
+        if set(heard) & STREET_WORDS or heard[-1] in STREET_ABBREVIATIONS:
+            street_words = [w for w in heard if w not in STREET_WORDS | STREET_ABBREVIATIONS]
             return self._match_street(street_words, near) or PlaceMatch(kind="none", label=str(hint))
-        for attempt in (words, words - {"district"}):
-            said = "".join(w for w in text.split() if w in attempt)
-            found = self._match_locations(attempt, said, near) or self._match_landmarks(attempt, said)
+        for attempt in (heard, [w for w in heard if w != "district"]):
+            found = self._match_locations(attempt, near) or self._match_landmarks(attempt)
             if found:
                 return found
         return PlaceMatch(kind="none", label=str(hint))
 
-    def _match_locations(self, words: set, said: str, near: bool) -> Optional[PlaceMatch]:
+    def _match_locations(self, heard: list, near: bool) -> Optional[PlaceMatch]:
         hits = [loc for loc in self.locations.values()
-                if any(n and _name_fits(words, n, said) for n in (loc.name, loc.neighbourhood, *loc.also_called))]
+                if any(n and _name_fits(heard, n) for n in (loc.name, loc.neighbourhood, *loc.also_called))]
         if len(hits) > 1:
             # "Mission District" names Mission District fully but Mission Bay only partly.
-            full = [l for l in hits if any(set(_distinct_words(n)) == words
+            full = [l for l in hits if any(_names_exactly(heard, n)
                                            for n in (l.name, l.neighbourhood, *l.also_called) if n)]
             if len(full) == 1:
                 hits = full
@@ -519,21 +538,21 @@ class Catalog:
                               location_ids=[l.id for l in hits], near=near)
         return None
 
-    def _match_landmarks(self, words: set, said: str) -> Optional[PlaceMatch]:
-        hits = [(name, point) for name, point in self.landmarks.items() if _name_fits(words, name, said)]
-        exact = [h for h in hits if set(_distinct_words(h[0])) == words]
+    def _match_landmarks(self, heard: list) -> Optional[PlaceMatch]:
+        hits = [(name, point) for name, point in self.landmarks.items() if _name_fits(heard, name)]
+        exact = [h for h in hits if _names_exactly(heard, h[0])]
         if exact or len(hits) == 1:
             name, point = (exact or hits)[0]
             return PlaceMatch(kind="landmark", label=name, point=point, near=True)
         return None
 
-    def _match_street(self, words: set, near: bool) -> Optional[PlaceMatch]:
+    def _match_street(self, words: list, near: bool) -> Optional[PlaceMatch]:
         """Our locations on the street the caller named. A house number picks between
         clinics on the same street ("4455 Geary Blvd"). A number none of them has
         ("9999 Geary") is somewhere else on that street, so the street's clinics are
         only used to measure distance from, not as the place they asked for."""
         numbers = {w for w in words if w.isdigit()}
-        street = words - numbers
+        street = [w for w in words if not w.isdigit()]
         if not street:
             return None
         on_street = [l for l in self.locations.values() if _name_fits(street, l.street)]

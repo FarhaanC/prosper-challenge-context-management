@@ -10,6 +10,33 @@ from reference import LOC, PROV as PROV_FILE
 LABEL = re.compile(r"(?P<name>Dr\. [^(]+?) \((?P<specialty>[^,()]+)(?:, (?P<places>[^()]+))?\)")
 
 
+def split_doctor_list(text, last_and=True):
+    """Cut a written list of doctor labels into its labels. Round 8 s2: a label can hold a
+    comma inside its brackets ("Dr. Daniel Chen (Dermatology, Downtown Health Center /
+    Richmond Care Center)"), so the list is cut only at ", " OUTSIDE brackets, and only where
+    the next label starts with "Dr.". With `last_and`, the final " and " before a "Dr." label
+    (outside brackets) is a cut too ("A, B and C" -> A, B, C); without it only commas cut (use
+    that for the part before "and N more", so a wrong join there is not hidden)."""
+    seps = [", "] + ([" and "] if last_and else [])
+    items, depth, start, i = [], 0, 0, 0
+    while i < len(text):
+        ch = text[i]
+        if ch == "(":
+            depth += 1
+        elif ch == ")":
+            depth = max(depth - 1, 0)
+        elif depth == 0:
+            sep = next((x for x in seps if text.startswith(x, i) and text.startswith("Dr.", i + len(x))), None)
+            if sep:
+                items.append(text[start:i])
+                i += len(sep)
+                start = i
+                continue
+        i += 1
+    items.append(text[start:])
+    return items
+
+
 def who_can_problems(names_text, able_ids, prov=None):
     """Round 6 s5: the "no other doctor" list reuses the "Doctors who can" list: up to three
     "Name (Specialty)" labels, then "and N more"; same-name doctors get their locations; the
@@ -73,14 +100,14 @@ def capped_names_problems(names_text, want):
     out = []
     more = re.fullmatch(r"(?P<shown>.+) and (?P<n>\d+) more", names_text)
     if more:
-        shown = more.group("shown").split(", ")
+        shown = split_doctor_list(more.group("shown"), last_and=False)
         total = len(shown) + int(more.group("n"))
         if len(shown) != 3:
             out.append(f"'and N more' after {len(shown)} names, not 3: {names_text!r}")
     else:
-        shown = re.split(r", | and ", names_text)
+        shown = split_doctor_list(names_text)
         total = len(shown)
-        if len(shown) > 1 and not re.fullmatch(r"(?:[^,]+, )*[^,]+ and [^,]+", names_text):
+        if len(shown) > 1 and names_text != ", ".join(shown[:-1]) + " and " + shown[-1]:
             out.append(f"list not written as 'A, B and C': {names_text!r}")
     if len(shown) > 3:
         out.append(f"{len(shown)} names read out: {names_text!r}")

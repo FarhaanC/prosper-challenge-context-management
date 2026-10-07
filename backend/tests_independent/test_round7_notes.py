@@ -21,6 +21,7 @@ import pytest
 from clinic import Catalog, Preferences, Schedule, find_options
 from conftest import NOW, new_caller, returning
 from reference import DATA, LOC, SPECIALTIES, VT, ref_bookable
+from round6_reference import split_doctor_list
 
 RAW = json.loads((DATA / "catalog.json").read_text())
 EXTRAS = json.loads((DATA / "location_extras.json").read_text())
@@ -69,16 +70,16 @@ def caller(kind):
 
 def split_more(text, sep):
     """'A, B, C and 4 more' / 'A; B; C; and 4 more' -> (['A', 'B', 'C'], 4). Without 'more':
-    'A, B and C' / 'A; B' -> (items, 0)."""
+    'A, B and C' / 'A; B' -> (items, 0). A ", " list is cut with split_doctor_list (only at
+    commas outside brackets, before "Dr."), as labels can hold a comma (round 8 s2)."""
     if sep == "; ":
         items = text.split("; ")
         m = re.fullmatch(r"and (\d+) more", items[-1])
         return (items[:-1], int(m.group(1))) if m else (items, 0)
     m = re.fullmatch(r"(?P<shown>.+) and (?P<n>\d+) more", text)
     if m:
-        return m.group("shown").split(", "), int(m.group("n"))
-    parts = re.split(r", | and (?=Dr\. )", text)
-    return parts, 0
+        return split_doctor_list(m.group("shown"), last_and=False), int(m.group("n"))
+    return split_doctor_list(text), 0
 
 
 def label_problems(items, prov, loc, candidates, want_places=None):
