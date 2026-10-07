@@ -16,8 +16,9 @@ note is checked against ALL valid options before it's written, so it's true:
 - nobody can meet it: "None of the doctors available to you for Skin Cancer Screening speaks Klingon."
 - it clashes with a stronger wish: "Dr. Daniel Chen isn't available at Midtown Medical Group."
 
-Doctors the caller turned down ("someone else, please") are left out, unless
-nobody else can do the visit, or the caller names them again.
+Doctors the caller turned down (BookingCard.turn_down_doctors) are left out,
+unless nobody else can do the visit, or the caller names them again
+(card.turned_down_ids has the rule).
 
 How the options are picked: if the caller named a place, by distance from it
 (unless they asked for the soonest); otherwise soonest first. Different
@@ -32,9 +33,9 @@ from dataclasses import dataclass, field
 from datetime import date, datetime
 from typing import Callable, Optional
 
-from .card import DOCTOR, LANGUAGE, LOCATION, TIME, TIMES_OF_DAY, Preferences, parse_time_phrase
+from .card import DOCTOR, LANGUAGE, LOCATION, TIME, TIMES_OF_DAY, Preferences, parse_time_phrase, turned_down_ids
 from .catalog import Catalog, VisitType, distance_miles
-from .fuzzy import means_no_preference
+from .fuzzy import means_any_day, means_no_preference
 from .patients import Caller
 from .rules import can_book_visit_type, pair_problems
 from .slots import DAYS_AHEAD, Schedule, booking_days, spoken_time
@@ -136,7 +137,7 @@ class TimeTests:
     day_ok: Optional[Callable] = None
     time_ok: Optional[Callable] = None
     phrase: str = ""            # "on Thursday in the morning", "today"
-    soon_only: bool = False     # only "today"/"tomorrow": don't say "in the next 14 days"
+    dates_only: bool = False    # only actual dates ("today", "2026-10-10"): don't add "in the next 14 days"
     problems: list = field(default_factory=list)
 
 
@@ -150,6 +151,7 @@ def check_time_wishes(days, time_of_day, now: datetime) -> TimeTests:
     """
     window = booking_days(now)
     day_tests, labels, problems = [], [], []
+    weekdays_named = False
     spoken_tod = None
     for raw in days or []:
         wish = parse_time_phrase(raw)
@@ -166,6 +168,7 @@ def check_time_wishes(days, time_of_day, now: datetime) -> TimeTests:
             if weekday is not None:
                 day_tests.append(lambda day, i=weekday: day.weekday() == i)
                 labels.append("on " + WEEKDAYS[weekday].capitalize())
+                weekdays_named = True
                 continue
             target = date.fromisoformat(low) if ISO_DATE.fullmatch(low) and _is_date(low) else None
             if target is None:
@@ -180,17 +183,17 @@ def check_time_wishes(days, time_of_day, now: datetime) -> TimeTests:
 
     tod = " ".join(str(time_of_day or "").split()).lower() or (spoken_tod or "")
     time_ok = None
-    if tod and not means_no_preference(tod):
+    if tod and not (means_no_preference(tod) or means_any_day(tod)):  # "any day" has no time of day in it
         if tod == TIMES_OF_DAY[0]:
             time_ok = lambda t: t.hour < 12  # noqa: E731
         elif tod == TIMES_OF_DAY[1]:
             time_ok = lambda t: t.hour >= 12  # noqa: E731
         else:
-            problems.append(f"I couldn't use the time '{time_of_day}'. Pass 'morning' or 'afternoon', or leave it empty.")
+            problems.append(f"I couldn't use the time '{tod}'. Pass 'morning' or 'afternoon', or leave it empty "
+                            "(to look at mornings on one day and afternoons on another, search one day at a time).")
     day_ok = (lambda day: any(test(day) for test in day_tests)) if day_tests else None
     phrase = " ".join(filter(None, [_join(labels, "or") if labels else "", f"in the {tod}" if time_ok else ""]))
-    soon_only = bool(labels) and all(label in ("today", "tomorrow") for label in labels)
-    return TimeTests(day_ok, time_ok, phrase, soon_only, problems)
+    return TimeTests(day_ok, time_ok, phrase, bool(labels) and not weekdays_named, problems)
 
 
 def _is_date(text: str) -> bool:
@@ -310,8 +313,10 @@ def find_options(
     vt = catalog.visit_types[visit_type_id]
 
     when = check_time_wishes(prefs.days, prefs.time_of_day, now)
-    if when.problems:
-        return OptionsResult(notes=[Note(BAD_INPUT, p) for p in when.problems])
+    language, language_problem = _known_language(catalog, prefs.language)
+    problems = when.problems + ([language_problem] if language_problem else [])
+    if problems:
+        return OptionsResult(notes=[Note(BAD_INPUT, p) for p in problems])
 
     times = _Times(schedule, vt, now)
     notes: list = []
@@ -324,20 +329,18 @@ def find_options(
     notes += doctor_notes
     if when.day_ok or when.time_ok:
         wishes.append(_Wish(TIME, when.phrase, when.phrase, day_ok=when.day_ok, time_ok=when.time_ok))
-    language = _known_language(catalog, prefs.language)
     if language:
         wishes.append(_Wish(LANGUAGE, language, f"with {_a(language + '-speaking')} doctor", language=language))
 
-    # Doctors the caller turned down are left out, unless they've just named them again
-    # or nobody else can do it.
-    named_again = {pid for w in doctor_wishes if not w.carried for pid in (w.provider_ids or ())}
-    turned_down = (set(prefs.not_provider_ids or []) | _ids_named(catalog, prefs.not_doctor_names)) - named_again
+    # Doctors the caller turned down are left out, unless nobody else can do it.
+    turned_down = turned_down_ids(catalog, prefs)
     valid = [pr for pr in every_valid if pr[0].id not in turned_down]
     if turned_down and not valid:
         valid = every_valid
-        names = sorted({catalog.providers[i].name for i in turned_down if i in catalog.providers})
+        names = sorted({p.name for p, _ in every_valid})  # all of them were turned down
         notes.append(Note(NO_OTHER_DOCTOR, f"No other doctor can do {vt.name} for you; "
-                                           f"{_join(names)} {'is' if len(names) == 1 else 'are'} the only option."))
+                                           + (f"{names[0]} is the only option." if len(names) == 1 else
+                                              f"{_join(names)} are the only options.")))
 
     by_distance = point is not None and not prefs.soonest
 
@@ -356,9 +359,9 @@ def find_options(
         if times.any_open(alone, w.day_ok, w.time_ok):
             notes.append(_conflict_note(w, applied))
         elif times.any_open(with_turned_down, w.day_ok, w.time_ok):
-            names = sorted({p.name for p, _ in with_turned_down if p.id in turned_down})
-            notes.append(Note(WISH_CONFLICT, f"{w.label} is only possible with {_join(names)}, "
-                                             "whom you turned down."))
+            able = {p.name for p, l in with_turned_down
+                    if p.id in turned_down and times.any_open([(p, l)], w.day_ok, w.time_ok)}
+            notes.append(_turned_down_note(w, sorted(able)))
         else:
             notes.append(_impossible_note(catalog, caller, vt, w, b.valid_pairs, valid, by_distance, when))
 
@@ -413,22 +416,31 @@ def time_ok_of(wishes: list) -> Optional[Callable]:
 
 
 # ---------------------------------------------------------------- building wishes
-def _known_language(catalog: Catalog, said) -> str:
-    """'mandarin chinese' -> 'Mandarin' (a language some doctor speaks). Unknown
-    languages are kept as said, so the note can tell the caller nobody speaks it."""
+# Words that show a language value is a sentence, not a language name. The AI is
+# asked to pass one language name, or "" to clear the wish; this only catches the
+# mistake, so "any language" or "not Spanish" can't become a false note or the
+# opposite wish. (It doesn't try to work out what was meant.)
+NOT_A_LANGUAGE = {"any", "not", "no", "but", "except", "without", "language", "languages", "speaker",
+                  "speaking", "please", "whatever", "none", "dont", "mind", "preference", "other"}
+
+
+def _known_language(catalog: Catalog, said) -> tuple:
+    """Returns (language, problem). 'mandarin chinese' -> 'Mandarin' (a language some
+    doctor speaks). Unknown languages are kept as said ('Klingon'), so the note can
+    tell the caller nobody speaks it. Anything that isn't one or two words naming a
+    language is refused with a problem saying how to pass it."""
     words = " ".join(str(said or "").split())
-    if not words or means_no_preference(words):
-        return ""
+    if not words:
+        return "", ""
+    parts = words.lower().split()
+    if len(parts) > 2 or not all(w.isalpha() for w in parts) or set(parts) & NOT_A_LANGUAGE:
+        return "", (f"I couldn't use the language '{words}'. Pass one language name, like 'Spanish', "
+                    "or leave it empty for no language wish.")
     spoken = {l.lower(): l for p in catalog.providers.values() for l in p.languages}
-    for w in words.lower().split():
+    for w in parts:
         if w in spoken:
-            return spoken[w]
-    return words.capitalize()
-
-
-def _ids_named(catalog: Catalog, names: list) -> set:
-    """Doctors matching names the caller turned down ("not Dr. Chen")."""
-    return {m.provider.id for n in names or [] for m in catalog.match_providers(n)}
+            return spoken[w], ""
+    return words.capitalize(), ""
 
 
 def _doctor_wishes(catalog: Catalog, prefs: Preferences) -> tuple:
@@ -490,6 +502,21 @@ def _conflict_note(w: _Wish, applied: list) -> Note:
     return Note(WISH_CONFLICT, f"{w.label} isn't available {context}.")
 
 
+def _turned_down_note(w: _Wish, names: list) -> Note:
+    """The wish could only be met by doctors the caller turned down. `names`: those
+    turned-down doctors who really have times meeting it."""
+    if w.kind == DOCTOR:  # "Dr. Chen", when the only Chen who can do it was turned down
+        return Note(WISH_CONFLICT, f"The only doctor matching '{w.heard or w.label}' who can do this is "
+                                   f"{_join(names)}, whom you turned down. Check whether the caller wants "
+                                   f"{'them' if len(names) > 1 else 'that doctor'} after all.")
+    subject = w.label
+    if w.kind == TIME:  # "on Wednesday 7 October" -> "Wednesday 7 October"; "in the morning" -> "The morning"
+        subject = re.sub(r"^on ", "", subject)
+        subject = re.sub(r"^in the ", "the ", subject)
+    subject = subject[:1].upper() + subject[1:]
+    return Note(WISH_CONFLICT, f"{subject} is only possible with {_join(names)}, whom you turned down.")
+
+
 def _impossible_note(catalog: Catalog, caller: Caller, vt: VisitType, w: _Wish, rule_ok: list, valid: list,
                      by_distance: bool, when: TimeTests) -> Note:
     """Nobody can meet this wish. `rule_ok`: pairs passing the rules; `valid`: those with open times."""
@@ -497,7 +524,7 @@ def _impossible_note(catalog: Catalog, caller: Caller, vt: VisitType, w: _Wish, 
     if w.kind == LANGUAGE:
         return Note(WISH_IMPOSSIBLE, f"None of the doctors available to you for {vt.name} speaks {w.language}.")
     if w.kind == TIME:
-        window = "" if when.soon_only else f" in the next {days} days"
+        window = "" if when.dates_only else f" in the next {days} days"
         return Note(WISH_IMPOSSIBLE, f"Nothing is open {w.label} for {vt.name}{window}; here are other options.")
     if w.kind == LOCATION:
         tail = "; these are the closest alternatives." if by_distance else "; here are other options."

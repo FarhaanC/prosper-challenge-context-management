@@ -166,3 +166,75 @@ def test_unknown_ids_refused():
     with pytest.raises(CatalogError) as e:
         Catalog(raw, EXTRAS)
     assert "loc_999" in str(e.value) and "appt_999" in str(e.value)
+
+
+# ---- round 4 (triage.md, round 4 section): the data checks have no holes left
+def _problems(raw=RAW, extras=EXTRAS) -> str:
+    with pytest.raises(CatalogError) as e:
+        Catalog(raw, extras)
+    return str(e.value)
+
+
+def test_r4_a_time_that_does_not_exist_is_a_catalog_error():
+    raw = copy.deepcopy(RAW)
+    raw["locations"][0]["hours"] = "Mon-Fri 8:00-25:00"
+    assert "doesn't exist" in _problems(raw)
+
+
+def test_r4_an_id_written_as_a_list_is_reported_not_a_crash():
+    raw = copy.deepcopy(RAW)
+    raw["providers"][0]["id"] = ["prov_001"]
+    assert "id should be text" in _problems(raw)
+
+
+def test_r4_capabilities_must_be_a_list():
+    # As text, "imaging" would be read letter by letter and MRIs would quietly vanish.
+    raw = copy.deepcopy(RAW)
+    raw["locations"][0]["capabilities"] = "imaging"
+    assert "capabilities should be list of text" in _problems(raw)
+
+
+@pytest.mark.parametrize("lat", ["abc", "", None, 999, True])
+def test_r4_map_points_must_be_real_coordinates(lat):
+    extras = copy.deepcopy(EXTRAS)
+    extras["locations"][MIDTOWN]["lat"] = lat
+    assert f"Location {MIDTOWN} in location_extras.json: lat should be a latitude" in _problems(extras=extras)
+
+
+def test_r4_landmarks_must_be_points():
+    extras = copy.deepcopy(EXTRAS)
+    extras["landmarks"]["Somewhere"] = "near the park"
+    assert "Landmark 'Somewhere'" in _problems(extras=extras)
+
+
+def test_r4_every_kind_of_problem_is_listed_in_one_go():
+    raw, extras = copy.deepcopy(RAW), copy.deepcopy(EXTRAS)
+    raw["locations"][1]["hours"] = "Mon-Fri 8:00-25:00"
+    raw["providers"][0]["location_ids"].append("loc_999")
+    del extras["locations"][MIDTOWN]
+    msg = _problems(raw, extras)
+    assert "doesn't exist" in msg and "loc_999" in msg and MIDTOWN in msg
+
+
+def test_r4_a_house_number_we_do_not_have_is_somewhere_on_that_street(catalog):
+    # "near 9999 Geary": the caller is on Geary, so both Geary clinics are relevant,
+    # but neither is the place they named, so the search isn't narrowed to them.
+    for said in ("near 9999 Geary", "9999 Geary Blvd"):
+        place = catalog.resolve_place(said)
+        assert (place.kind, sorted(place.location_ids), place.near) == ("ambiguous", [DOWNTOWN, SUNSET], True)
+    assert catalog.resolve_place("4455 Geary Blvd").location_ids == [DOWNTOWN]
+
+
+@pytest.mark.parametrize("word, specialty", [
+    ("dentist", "Dental"), ("orthopedist", "Orthopedics"), ("pediatrician", "Pediatrics"),
+    ("allergist", "Allergy/Immunology"), ("physical therapist", "Physical Therapy"), ("urologists", "Urology"),
+])
+def test_r4_doctor_words_regular_rule_plus_a_short_table(catalog, word, specialty):
+    assert catalog.match_specialty(word) == specialty
+
+
+def test_r4_one_no_preference_list_and_a_separate_any_day_list():
+    from clinic.fuzzy import ANY_DAY, NO_PREFERENCE, means_any_day, means_no_preference
+    assert not NO_PREFERENCE & ANY_DAY   # so the order they're checked in can't matter
+    assert means_any_day("Any day!") and not means_no_preference("any day")
+    assert means_no_preference("any time works") and not means_any_day("any time works")

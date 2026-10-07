@@ -13,7 +13,7 @@ harness both call this same code, so what we test is what runs.
     facts.py     small factual answers (answer_question)
 """
 
-from .card import BOOKING, END, IDENTIFY, VISIT_TYPE, BookingCard, Choices, Preferences
+from .card import BOOKING, END, IDENTIFY, VISIT_TYPE, BookingCard, Choices, Preferences, turned_down_ids
 from .catalog import Catalog, CatalogError, PlaceMatch, ProviderMatch
 from .facts import answer_question
 from .options import Note, Option, OptionsResult, find_options
@@ -22,7 +22,7 @@ from .rules import Bookability, alternatives_for, can_book_visit_type, check_boo
 from .slots import Schedule, SlotTaken, clinic_now, spoken_time
 
 __all__ = [
-    "BOOKING", "END", "IDENTIFY", "VISIT_TYPE", "BookingCard", "Choices", "Preferences",
+    "BOOKING", "END", "IDENTIFY", "VISIT_TYPE", "BookingCard", "Choices", "Preferences", "turned_down_ids",
     "Catalog", "CatalogError", "PlaceMatch", "ProviderMatch", "answer_question",
     "Note", "Option", "OptionsResult", "find_options",
     "Caller", "IdentityCheck", "IdentityStep", "LookupResult", "PatientDirectory",

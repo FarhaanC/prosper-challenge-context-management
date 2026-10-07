@@ -44,12 +44,16 @@ TITLE_WORDS = {"dr", "doctor", "doc", "mr", "mrs", "ms", "miss", "mx",
 
 # Ways of saying "no preference", written with spaces and apostrophes removed
 # (compare with `squash(text)`). Shared by day, time, place and doctor wishes.
+# This is the only list: "any day" (which clears the day but keeps a time of day)
+# is kept separate in ANY_DAY, and the two never overlap, so the order they're
+# checked in can't change the answer.
 NO_PREFERENCE = {
-    "any", "anything", "anytime", "anywhere", "anyone", "anybody", "anyday", "anydate",
+    "any", "anything", "anytime", "anywhere", "anyone", "anybody",
     "nopreference", "dontmind", "idontmind", "doesntmatter", "itdoesntmatter", "whatever",
     "whenever", "wherever", "whoever", "either", "eitherisfine", "notfussed", "none", "no",
-    "anyisfine", "anyofthem", "anywhereisfine", "anywhereisok", "anytimeisfine", "anydayisfine",
+    "anyisfine", "anyofthem", "anywhereisfine", "anywhereisok", "anytimeisfine", "anytimeworks",
 }
+ANY_DAY = {"anyday", "anydate", "anydayisfine", "anydayworks"}
 
 
 @lru_cache(maxsize=50_000)  # the same catalog names are compared on every search
@@ -74,6 +78,11 @@ def squash(text) -> str:
 
 def means_no_preference(text) -> bool:
     return squash(text) in NO_PREFERENCE
+
+
+def means_any_day(text) -> bool:
+    """"Any day" clears the day wish only; a time of day ("mornings") is kept."""
+    return squash(text) in ANY_DAY
 
 
 def name_tokens(text) -> list:

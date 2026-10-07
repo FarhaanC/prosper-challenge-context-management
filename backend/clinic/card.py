@@ -19,7 +19,7 @@ from datetime import datetime
 from typing import Optional
 
 from .catalog import Catalog
-from .fuzzy import means_no_preference, squash
+from .fuzzy import means_any_day, means_no_preference
 from .patients import Caller, IdentityCheck
 from .slots import spoken_time
 
@@ -43,10 +43,6 @@ CHANGEABLE = {
     "language": LANGUAGE,
 }
 TIMES_OF_DAY = ("morning", "afternoon")
-ANY_DAY = {"anyday", "anydate", "anydayisfine"}  # clears the day only (squashed, see fuzzy.squash)
-# Ways of asking for a different doctor without naming one (squashed).
-SOMEONE_ELSE = {"", "someoneelse", "somebodyelse", "anotherdoctor", "adifferentdoctor", "differentdoctor",
-                "otherdoctor", "anotherone", "someonedifferent", "anyoneelse", "notthem", "notthatone"}
 # Words that carry no meaning in a spoken time wish.
 TIME_FILLER = {"please", "on", "the", "in", "at", "a", "an", "maybe", "preferably", "ideally", "would", "be", "good"}
 
@@ -65,22 +61,25 @@ def parse_time_phrase(text) -> TimeWish:
     "Thursday morning" -> days ["Thursday"], morning. "afternoon" -> afternoon only.
     "this afternoon" -> days ["today"], afternoon. "Thursday or Friday" -> two days.
     "Thursday, morning please" works too. "any day" clears the day; "any time" (or
-    "don't mind") clears day and time. Anything not understood is kept as a day entry
-    ("next Thursday"), which find_options then refuses with a note saying how to put it.
+    "don't mind") clears day and time. Anything not understood is kept as it was said
+    ("next Thursday", or "morning or afternoon" when both are mentioned), and
+    find_options then refuses it with a note saying how to put it, rather than
+    quietly searching for something the caller didn't ask for.
     """
     t = str(text or "").strip()
     if not t:
         return TimeWish()
-    if squash(t) in ANY_DAY:
+    if means_any_day(t):
         return TimeWish(days=[])
-    if means_no_preference(t) or squash(t) in {"anytimeisfine", "anytimeworks"}:
+    if means_no_preference(t):
         return TimeWish(days=[], time_of_day="")
-    days, current, tod = [], [], None
+    days, current, tods = [], [], []
     words = [w for w in re.split(r"[\s,;]+", t) if w]
     for i, word in enumerate(words):
         w = word.lower().strip(".!?")
         if w in TIMES_OF_DAY:
-            tod = w
+            if w not in tods:
+                tods.append(w)
         elif w == "this":
             if i + 1 < len(words) and words[i + 1].lower().strip(".!?") in TIMES_OF_DAY:
                 days.append("today")  # "this afternoon"
@@ -92,7 +91,9 @@ def parse_time_phrase(text) -> TimeWish:
             current.append(word.strip(".!?"))
     if current:
         days.append(" ".join(current))
-    return TimeWish(days=days or None, time_of_day=tod)
+    # Both "morning" and "afternoon" can't be one wish ("Thursday morning or Friday
+    # afternoon"); keeping both words makes find_options ask for one search at a time.
+    return TimeWish(days=days or None, time_of_day=" or ".join(tods) if tods else None)
 
 
 @dataclass
@@ -116,8 +117,7 @@ class Preferences:
     time_of_day: str = ""              # "morning" (before 12:00) | "afternoon" (12:00 or later) | ""
     soonest: bool = False              # rank by earliest time even when a place was named
     language: str = ""                 # a language the doctor should speak
-    not_provider_ids: list = field(default_factory=list)  # doctors the caller turned down ("someone else")
-    not_doctor_names: list = field(default_factory=list)  # doctors turned down by name ("not Dr. Chen")
+    not_provider_ids: list = field(default_factory=list)  # doctors the caller turned down (turn_down_doctors)
     latest: str = ""                   # the last thing changed: DOCTOR | LOCATION | TIME | LANGUAGE | ""
 
 
@@ -128,6 +128,23 @@ class Choices:
     provider_id: str = ""
     location_id: str = ""
     slot: Optional[datetime] = None
+
+
+def turned_down_ids(catalog: Catalog, prefs: Preferences) -> set:
+    """The doctors the caller turned down and hasn't asked for again since.
+
+    Asking for a turned-down doctor by a name that picks out that one doctor
+    ("Dr. Daniel Chen") brings them back. A name that fits several different doctors
+    ("Dr. Chen") doesn't: the caller may well mean one of the others. Two doctors
+    who share the exact same name are treated as one name. Unknown ids are ignored.
+    """
+    down = {i for i in prefs.not_provider_ids or [] if i in catalog.providers}
+    heard = " ".join(str(prefs.doctor_name_heard or "").split())
+    if down and heard:
+        matches = catalog.match_providers(heard)
+        if len({m.provider.name for m in matches}) == 1:
+            down -= {m.provider.id for m in matches}
+    return down
 
 
 @dataclass
@@ -171,53 +188,37 @@ class BookingCard:
         Doctor, place and time are cleared together because one option is always the
         three together. Without a chosen visit type, every change goes to visit_type.
 
-        Details:
-        - doctor, "someone else" (or no name): the doctor chosen, or carried over, or
-          every doctor in the options just offered, is turned down for the rest of the
-          call. "not Dr. Chen" turns that name down. Naming a doctor again later
-          brings them back (find_options lets a named doctor override a turn-down).
-        - time: a spoken value is read by parse_time_phrase ("Thursday morning",
-          "this afternoon"). Only what's mentioned changes, so "afternoon" keeps an
-          earlier "Thursday". "any day" clears the day; "any time" clears both.
-        - language: "" clears the language wish.
+        What new_value means for each kind:
+        - doctor: the doctor's name ("Dr. Daniel Chen"), or "" for no doctor wish.
+          It is never read as an instruction: turning doctors down is its own
+          method, turn_down_doctors. Naming a doctor who was turned down brings them
+          back if the name picks out that one doctor (see turned_down_ids).
+        - location: the caller's place words ("the Midtown one", "near Union Square").
+        - time: read by parse_time_phrase ("Thursday morning", "this afternoon").
+          Only what's mentioned changes, so "afternoon" keeps an earlier "Thursday".
+          "any day" clears the day; "any time" clears both.
+        - language: one language name ("Spanish"), or "" to clear it.
         """
         kind = CHANGEABLE.get(str(what).lower().strip().replace(" ", "_"))
         if kind is None:
             raise ValueError(f"Can't change {what!r}; choose visit type, doctor, location, time or language.")
-        c, prefs = self.choices, self.preferences
-        offered_doctors = {getattr(o, "provider_id", "") for o in self.offered_options} - {""}
-        self.offered_options = []
-
-        # What was chosen becomes a weaker wish, unless it's the thing being changed.
-        if c.provider_id and kind != DOCTOR:
-            prefs.preferred_provider_id, prefs.doctor_name_heard = c.provider_id, ""
-        if c.location_id and kind != LOCATION:
-            prefs.preferred_location_id, prefs.location_hint = c.location_id, ""
+        prefs = self.preferences
+        self._start_change(kind)
 
         if kind == VISIT:
             if new_value:
                 prefs.visit_description = new_value
-            prefs.latest, prefs.not_provider_ids, prefs.not_doctor_names = "", [], []
+            prefs.latest, prefs.not_provider_ids = "", []
             self.choices = Choices()
             return VISIT_TYPE
 
+        said = " ".join(str(new_value or "").split())
         if kind == DOCTOR:
-            said = " ".join(str(new_value or "").split())
-            if squash(said) in SOMEONE_ELSE:
-                current = {c.provider_id} if c.provider_id else (
-                    {prefs.preferred_provider_id} if prefs.preferred_provider_id else offered_doctors)
-                prefs.not_provider_ids = sorted(set(prefs.not_provider_ids) | (current - {""}))
-                prefs.doctor_name_heard = ""
-            elif said.lower().startswith("not "):
-                prefs.not_doctor_names = prefs.not_doctor_names + [said[4:].strip()]
-                prefs.doctor_name_heard = ""
-            else:
-                prefs.doctor_name_heard = said
-            prefs.preferred_provider_id = ""
+            prefs.doctor_name_heard, prefs.preferred_provider_id = said, ""
         elif kind == LOCATION:
-            prefs.location_hint, prefs.preferred_location_id = new_value, ""
+            prefs.location_hint, prefs.preferred_location_id = said, ""
         elif kind == LANGUAGE:
-            prefs.language = "" if means_no_preference(new_value) else " ".join(str(new_value or "").split())
+            prefs.language = said
         elif kind == TIME:
             wish = parse_time_phrase(new_value)
             if days is not None:
@@ -234,7 +235,65 @@ class BookingCard:
             if wish.time_of_day is not None:
                 prefs.time_of_day = wish.time_of_day
             prefs.soonest = False
-        prefs.latest = kind
+        return self._finish_change(kind)
+
+    def turn_down_doctors(self, catalog: Catalog, provider_ids=(), on_offer: bool = False,
+                          current: bool = False) -> str:
+        """The caller doesn't want certain doctors ("someone else, please", "not Dr. Chen").
+
+        The AI decides who the caller meant and says so exactly; this method never
+        reads the caller's words. Any mix of:
+        - provider_ids: these doctors (the tool layer turns a name into ids, and asks
+          the caller "which one?" if the name fits several doctors);
+        - on_offer: every doctor in the options currently on offer;
+        - current: the doctor chosen, or if none, the one carried over from earlier.
+
+        They're left out of later searches for the rest of the call, unless nobody
+        else can do the visit (find_options says so), the caller names one of them
+        again, or the caller picks one of them anyway. A change of visit type starts
+        the list again. Counts as a doctor change (see change_choice) and returns the
+        stage to go to. Raises ValueError, changing nothing, if the instruction can't
+        be followed.
+        """
+        ids = [str(i).strip() for i in (provider_ids or []) if str(i).strip()]
+        unknown = [i for i in ids if i not in catalog.providers]
+        if unknown:
+            raise ValueError(f"No doctor has the id {', '.join(unknown)}. Use ids from the options or the catalog.")
+        if on_offer:
+            offered = [getattr(o, "provider_id", "") for o in self.offered_options]
+            if not any(offered):
+                raise ValueError("No options are on offer, so there are no doctors on offer to turn down.")
+            ids += offered
+        if current:
+            doctor = self.choices.provider_id or self.preferences.preferred_provider_id
+            if not doctor:
+                raise ValueError("No doctor is chosen or carried over, so there is no current doctor to turn down.")
+            ids.append(doctor)
+        ids = {i for i in ids if i}
+        if not ids:
+            raise ValueError("Say which doctors to turn down: provider_ids, on_offer or current.")
+
+        prefs = self.preferences
+        self._start_change(DOCTOR)
+        prefs.not_provider_ids = sorted(set(prefs.not_provider_ids) | ids)
+        prefs.doctor_name_heard, prefs.preferred_provider_id = "", ""
+        return self._finish_change(DOCTOR)
+
+    def _start_change(self, kind: str) -> None:
+        """Common start of every change: nothing is on offer any more, and what was
+        chosen becomes a weaker wish, unless it's the thing being changed."""
+        c, prefs = self.choices, self.preferences
+        self.offered_options = []
+        if c.provider_id and kind != DOCTOR:
+            prefs.preferred_provider_id, prefs.doctor_name_heard = c.provider_id, ""
+            # The caller picked this doctor, so they no longer count as turned down.
+            prefs.not_provider_ids = [i for i in prefs.not_provider_ids if i != c.provider_id]
+        if c.location_id and kind != LOCATION:
+            prefs.preferred_location_id, prefs.location_hint = c.location_id, ""
+
+    def _finish_change(self, kind: str) -> str:
+        c = self.choices
+        self.preferences.latest = kind
         c.provider_id, c.location_id, c.slot = "", "", None
         return BOOKING if c.visit_type_id else VISIT_TYPE
 
@@ -271,9 +330,9 @@ class BookingCard:
             wishes.append("as soon as possible")
         if p.language:
             wishes.append(f"language: {p.language}")
-        turned_down = [catalog.providers[i].name for i in p.not_provider_ids if i in catalog.providers]
-        if turned_down or p.not_doctor_names:
-            wishes.append("not: " + ", ".join(turned_down + p.not_doctor_names))
+        turned_down = sorted(catalog.providers[i].name for i in turned_down_ids(catalog, p))
+        if turned_down:
+            wishes.append("not: " + ", ".join(turned_down))
         if wishes:
             lines.append("Caller asked for: " + "; ".join(wishes))
         c = self.choices

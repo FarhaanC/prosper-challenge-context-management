@@ -82,10 +82,27 @@ def _caller_dict(caller: Optional[Caller]) -> Optional[dict]:
 
 class PatientDirectory:
     def __init__(self, records: list):
-        for r in records:
+        """Checks every record first and lists every problem at once, like the catalog."""
+        if not isinstance(records, list):
+            raise CatalogError("The patient data should be a list of patient records.")
+        problems = []
+        for i, r in enumerate(records):
+            if not isinstance(r, dict):
+                problems.append(f"Patient entry #{i} isn't a record.")
+                continue
+            label = r.get("id") if isinstance(r.get("id"), str) and r.get("id").strip() else f"#{i}"
             missing = [k for k in ("id", "name", "date_of_birth") if not r.get(k)]
             if missing:
-                raise CatalogError(f"Patient record {r!r} is missing {', '.join(missing)}.")
+                problems.append(f"Patient {label} is missing {', '.join(missing)}.")
+            wrong = [k for k in ("id", "name", "date_of_birth") if r.get(k) and not isinstance(r[k], str)]
+            refs = r.get("referrals_on_file", [])
+            if not (isinstance(refs, list) and all(isinstance(x, str) for x in refs)):
+                wrong.append("referrals_on_file")  # text here would be read letter by letter
+            if wrong:
+                problems.append(f"Patient {label}: {', '.join(wrong)} "
+                                f"{'has' if len(wrong) == 1 else 'have'} the wrong kind of value.")
+        if problems:
+            raise CatalogError("The patient data has problems:\n- " + "\n- ".join(problems))
         self.records = records
 
     @classmethod

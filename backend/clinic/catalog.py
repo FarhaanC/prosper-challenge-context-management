@@ -157,7 +157,10 @@ def parse_hours(hours: str) -> tuple:
     if not m or m.group(1) not in DAY_ABBREVIATIONS or m.group(2) not in DAY_ABBREVIATIONS:
         raise CatalogError(f"Can't read opening hours {hours!r}; expected e.g. 'Mon-Fri 8:00-17:00'.")
     d1, d2 = DAY_ABBREVIATIONS.index(m.group(1)), DAY_ABBREVIATIONS.index(m.group(2))
-    opens, closes = time(int(m.group(3)), int(m.group(4))), time(int(m.group(5)), int(m.group(6)))
+    try:
+        opens, closes = time(int(m.group(3)), int(m.group(4))), time(int(m.group(5)), int(m.group(6)))
+    except ValueError:  # "8:00-25:00"
+        raise CatalogError(f"Opening hours {hours!r} contain a time that doesn't exist.") from None
     if d2 < d1 or closes <= opens:
         raise CatalogError(f"Opening hours {hours!r} don't make sense.")
     return frozenset(range(d1, d2 + 1)), opens, closes
@@ -204,6 +207,7 @@ def _name_fits(heard: set, name: str, said: str = "") -> bool:
 
 
 _TEXT, _LIST, _YES_NO, _NUMBER = "text", "list of text", "true/false", "whole number"
+_LATITUDE, _LONGITUDE = "a latitude (a number from -90 to 90)", "a longitude (a number from -180 to 180)"
 REQUIRED_FIELDS = {
     "locations": {"id": _TEXT, "name": _TEXT, "address": _TEXT, "city": _TEXT, "phone": _TEXT, "hours": _TEXT},
     "providers": {"id": _TEXT, "name": _TEXT, "title": _TEXT, "specialty": _TEXT, "location_ids": _LIST,
@@ -213,7 +217,20 @@ REQUIRED_FIELDS = {
 }
 
 
+# Fields that may be left out, but must be the right kind of value when present.
+OPTIONAL_FIELDS = {
+    "locations": {"capabilities": _LIST},
+    "providers": {},
+    "appointment_types": {"required_capability": _TEXT},
+}
+EXTRA_LOCATION_FIELDS = {"lat": _LATITUDE, "lon": _LONGITUDE}
+EXTRA_LOCATION_OPTIONAL = {"neighbourhood": _TEXT, "also_called": _LIST}
+
+
 def _right_type(value, kind: str) -> bool:
+    if kind in (_LATITUDE, _LONGITUDE):
+        limit = 90 if kind == _LATITUDE else 180
+        return isinstance(value, (int, float)) and not isinstance(value, bool) and -limit <= value <= limit
     if kind == _TEXT:
         return isinstance(value, str) and bool(value.strip())
     if kind == _LIST:
@@ -236,85 +253,138 @@ def _check_records(raw: dict) -> list:
             if not isinstance(r, dict):
                 problems.append(f"{section} entry #{i} isn't a record.")
                 continue
-            label = r.get("id", f"#{i}")
+            rid = r.get("id") if isinstance(r.get("id"), str) else None  # a list as an id mustn't crash the check
+            label = rid or f"#{i}"
             missing = [f for f in fields if f not in r]
             if missing:
                 problems.append(f"{section} entry {label} is missing {', '.join(missing)}.")
-            wrong = [f"{f} should be {kind}" for f, kind in fields.items() if f in r and not _right_type(r[f], kind)]
+            checked = {**fields, **OPTIONAL_FIELDS[section]}
+            wrong = [f"{f} should be {kind}" for f, kind in checked.items()
+                     if f in r and not (r[f] is None and f in OPTIONAL_FIELDS[section]) and not _right_type(r[f], kind)]
             if wrong:
                 problems.append(f"{section} entry {label}: {'; '.join(wrong)}.")
-            if r.get("id") in seen:
+            if rid is not None and rid in seen:
                 problems.append(f"{section} id {label} appears more than once.")
-            seen.add(r.get("id"))
+            seen.add(rid)
     return problems
 
 
+def _check_extras(extras, location_ids: list) -> list:
+    """Our own map data (location_extras.json), checked like the catalog: every
+    location needs a real latitude and longitude, and landmarks need a point."""
+    if not isinstance(extras, dict) or not isinstance(extras.get("locations"), dict):
+        return ["location_extras.json has no 'locations' record."]
+    problems = []
+    for lid in location_ids:
+        x = extras["locations"].get(lid)
+        if not isinstance(x, dict):
+            problems.append(f"Location {lid} has no coordinates in location_extras.json.")
+            continue
+        missing = [f for f in EXTRA_LOCATION_FIELDS if f not in x]
+        if missing:
+            problems.append(f"Location {lid} in location_extras.json is missing {', '.join(missing)}.")
+        checked = {**EXTRA_LOCATION_FIELDS, **EXTRA_LOCATION_OPTIONAL}
+        wrong = [f"{f} should be {kind}" for f, kind in checked.items() if f in x and not _right_type(x[f], kind)]
+        if wrong:
+            problems.append(f"Location {lid} in location_extras.json: {'; '.join(wrong)}.")
+    landmarks = extras.get("landmarks", {})
+    if not isinstance(landmarks, dict):
+        problems.append("location_extras.json: landmarks should be a record of name -> [latitude, longitude].")
+    else:
+        for name, point in landmarks.items():
+            if not (isinstance(point, list) and len(point) == 2
+                    and _right_type(point[0], _LATITUDE) and _right_type(point[1], _LONGITUDE)):
+                problems.append(f"Landmark {name!r} in location_extras.json should be [latitude, longitude].")
+    return problems
+
+
+def _find_problems(raw, extras) -> list:
+    """Every problem with the catalog and our map data, as plain sentences, so one
+    load lists them all: missing or wrong fields, repeated ids, map data, opening
+    hours, and doctors pointing at locations or visit types that don't exist."""
+    problems = _check_records(raw)
+    if any(p.startswith("The catalog has no") for p in problems):
+        return problems  # a whole section is missing; nothing further can be checked
+
+    def records(section):
+        return [r for r in raw[section] if isinstance(r, dict) and isinstance(r.get("id"), str)]
+
+    locations, visit_types = records("locations"), records("appointment_types")
+    problems += _check_extras(extras, [l["id"] for l in locations])
+    for l in locations:
+        if isinstance(l.get("hours"), str):
+            try:
+                parse_hours(l["hours"])
+            except CatalogError as e:
+                problems.append(f"Location {l['id']}: {e}")
+    location_ids, visit_type_ids = {l["id"] for l in locations}, {a["id"] for a in visit_types}
+    for p in records("providers"):
+        where, offers = p.get("location_ids"), p.get("appointment_type_ids")
+        if isinstance(where, list):
+            problems += [f"Doctor {p['id']} works at unknown location {lid}." for lid in where
+                         if isinstance(lid, str) and lid not in location_ids]
+            if not where:
+                problems.append(f"Doctor {p['id']} works at no location.")
+        if isinstance(offers, list):
+            problems += [f"Doctor {p['id']} offers unknown visit type {vt}." for vt in offers
+                         if isinstance(vt, str) and vt not in visit_type_ids]
+    return problems
+
+
+# The usual word for a doctor whose specialty name doesn't follow the regular
+# English pattern (dermatology -> dermatologist, allergy -> allergist,
+# psychiatry -> psychiatrist, physical therapy -> physical therapist).
+IRREGULAR_DOCTOR_WORDS = {
+    "dental": ["dentist"],
+    "orthopedics": ["orthopedist"],
+    "pediatrics": ["pediatrician"],
+}
+
+
 def _doctor_words(specialty: str) -> list:
-    """The usual word for a doctor in this specialty, from its name's ending:
-    dermatology -> dermatologist, allergy -> allergist, pediatrics -> pediatrician,
-    dental -> dentist, physicaltherapy -> physicaltherapist. (Orthopedics gives
-    "orthopedician"; the common "orthopedist" is added as the one known exception.)"""
+    """The usual word(s) for a doctor in this specialty (written without spaces),
+    or [] if there isn't one ("ENT", "Family Medicine")."""
+    if specialty in IRREGULAR_DOCTOR_WORDS:
+        return IRREGULAR_DOCTOR_WORDS[specialty]
     if specialty.endswith("y"):
         return [specialty[:-1] + "ist"]
-    if specialty.endswith("ics"):
-        return [specialty[:-1] + "ian"] + (["orthopedist"] if specialty == "orthopedics" else [])
-    if specialty.endswith("al") and specialty != "general":
-        return [specialty[:-2] + "ist"]
     return []
 
 
 class Catalog:
     def __init__(self, raw: dict, extras: dict):
-        problems = _check_records(raw)
+        problems = _find_problems(raw, extras)
         if problems:
             raise CatalogError("The catalog data has problems:\n- " + "\n- ".join(problems))
-        extra_locs = extras.get("locations", {})
-
+        # Everything below can trust the data: it has all been checked.
+        extra_locs = extras["locations"]
         self.locations: dict = {}
         for l in raw["locations"]:
-            x = extra_locs.get(l["id"])
-            if not x or "lat" not in x or "lon" not in x:
-                problems.append(f"Location {l['id']} has no coordinates in location_extras.json.")
-                continue
-            try:
-                days, opens, closes = parse_hours(l["hours"])
-            except CatalogError as e:
-                problems.append(f"Location {l['id']}: {e}")
-                continue
+            x = extra_locs[l["id"]]
+            days, opens, closes = parse_hours(l["hours"])
             self.locations[l["id"]] = Location(
                 id=l["id"], name=l["name"], address=l["address"], city=l["city"], phone=l["phone"],
-                hours=l["hours"], capabilities=tuple(l.get("capabilities", [])),
+                hours=l["hours"], capabilities=tuple(l.get("capabilities") or []),
                 open_days=days, opens=opens, closes=closes,
                 neighbourhood=x.get("neighbourhood", ""), also_called=tuple(x.get("also_called", [])),
                 lat=float(x["lat"]), lon=float(x["lon"]),
             )
         self.visit_types: dict = {
             a["id"]: VisitType(
-                id=a["id"], name=a["name"], specialty=a["specialty"], duration_min=int(a["duration_min"]),
-                requires_referral=bool(a["requires_referral"]), new_patients_allowed=bool(a["new_patients_allowed"]),
+                id=a["id"], name=a["name"], specialty=a["specialty"], duration_min=a["duration_min"],
+                requires_referral=a["requires_referral"], new_patients_allowed=a["new_patients_allowed"],
                 required_capability=a.get("required_capability"),
             )
             for a in raw["appointment_types"]
         }
-        known_location_ids = {l["id"] for l in raw["locations"]}
-        self.providers: dict = {}
-        for p in raw["providers"]:
-            for lid in p["location_ids"]:
-                if lid not in known_location_ids:
-                    problems.append(f"Doctor {p['id']} works at unknown location {lid}.")
-            for vt in p["appointment_type_ids"]:
-                if vt not in self.visit_types:
-                    problems.append(f"Doctor {p['id']} offers unknown visit type {vt}.")
-            if not p["location_ids"]:
-                problems.append(f"Doctor {p['id']} works at no location.")
-            self.providers[p["id"]] = Provider(
+        self.providers: dict = {
+            p["id"]: Provider(
                 id=p["id"], name=p["name"], title=p["title"], specialty=p["specialty"],
-                location_ids=tuple(p["location_ids"]), accepting_new_patients=bool(p["accepting_new_patients"]),
+                location_ids=tuple(p["location_ids"]), accepting_new_patients=p["accepting_new_patients"],
                 languages=tuple(p["languages"]), appointment_type_ids=tuple(p["appointment_type_ids"]),
             )
-        if problems:
-            raise CatalogError("The catalog data has problems:\n- " + "\n- ".join(problems))
-
+            for p in raw["providers"]
+        }
         self.landmarks: dict = {k: tuple(v) for k, v in extras.get("landmarks", {}).items()}
 
         # Indexes built once, so lookups stay fast as the catalog grows.
@@ -471,14 +541,18 @@ class Catalog:
         return None
 
     def _match_street(self, words: set, near: bool) -> Optional[PlaceMatch]:
-        """Our locations on the street the caller named. A house number, if given, must
-        match too ("4455 Geary Blvd" picks one of the two clinics on Geary)."""
+        """Our locations on the street the caller named. A house number picks between
+        clinics on the same street ("4455 Geary Blvd"). A number none of them has
+        ("9999 Geary") is somewhere else on that street, so the street's clinics are
+        only used to measure distance from, not as the place they asked for."""
         numbers = {w for w in words if w.isdigit()}
         street = words - numbers
         if not street:
             return None
-        hits = [l for l in self.locations.values() if _name_fits(street, l.street)
-                and (not numbers or l.house_number in numbers)]
+        on_street = [l for l in self.locations.values() if _name_fits(street, l.street)]
+        hits = [l for l in on_street if not numbers or l.house_number in numbers]
+        if numbers and not hits:
+            hits, near = on_street, True
         if len(hits) == 1:
             l = hits[0]
             return PlaceMatch(kind="location", label=f"{l.name} ({l.address})", location_ids=[l.id],

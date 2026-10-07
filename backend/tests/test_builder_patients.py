@@ -118,3 +118,17 @@ def test_r3_8_blank_spelling_is_no_spelling_and_first_name_plus_spelling_works(p
 def test_r3_7_do_is_a_surname_not_a_title():
     d = PatientDirectory([{"id": "x", "name": "Anh Do", "date_of_birth": "1990-01-01"}])
     assert d.lookup("Anh Do", "1990-01-01").status == "found"
+
+
+# ---- round 4 (triage.md, round 4 section): broken patient data is refused, every problem listed
+def test_r4_broken_patient_records_are_refused_together():
+    from clinic import CatalogError
+    with pytest.raises(CatalogError) as e:
+        PatientDirectory([
+            "James Wilson, 1984-03-12",                                   # not a record
+            {"id": "p1", "name": "Ann Lee", "date_of_birth": "1990-01-01",
+             "referrals_on_file": "Radiology"},                           # would be read letter by letter
+            {"id": "p2", "name": "Bo Chan"},                              # no date of birth
+        ])
+    msg = str(e.value)
+    assert "#0 isn't a record" in msg and "p1: referrals_on_file" in msg and "p2 is missing date_of_birth" in msg
