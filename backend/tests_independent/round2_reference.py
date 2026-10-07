@@ -26,6 +26,14 @@ Round 4 updates (spec-changes-round-4.md, "Four deliberate behaviour changes"):
 - change 4: a doctor the caller NAMES again (doctor_name_heard) is no longer
   turned down; a carried-over doctor id does not override a turn-down.
 
+Round 5 updates (spec-changes-round-5.md):
+- s3: a doctor name brings turned-down doctors back ONLY if it picks out one doctor
+  (one full name; two doctors with exactly the same full name count as one name).
+  A surname that fits several doctors brings nobody back.
+- s3: when the only fitting doctor for a doctor wish was turned down, the wish_conflict
+  note reads "The only doctor matching '...' who can do this is X, whom you turned
+  down. Check whether ..." (it does not end with "turned down.").
+
 Only the exact forms below are interpreted (exact doctor names / surnames,
 exact location names or "the <neighbourhood> one"), so nothing here depends on
 the module's fuzzy matching.
@@ -106,7 +114,8 @@ def interpret(prefs):
     wishes.excluded = frozenset(getattr(prefs, "not_provider_ids", []) or [])
     if prefs.doctor_name_heard.strip() and prefs.doctor_name_heard.strip().lower() not in ANY_DOCTOR:
         ids = doctors_named(prefs.doctor_name_heard)
-        wishes.excluded = wishes.excluded - ids  # round 4, change 4: naming them again brings them back
+        if len({PROV[i]["name"] for i in ids}) == 1:  # round 5 s3: only a name picking out one doctor
+            wishes.excluded = wishes.excluded - ids
         kw = PROV[next(iter(ids))]["name"].split()[-1]
         wishes.append(("doctor", False, lambda p, l, s, ids=ids: p in ids, kw))
     if prefs.location_hint.strip():
@@ -211,7 +220,8 @@ def check(result, slots, wishes):
         problems.append(f"wish notes {got_kinds} != expected {exp_kinds}: {[str(n) for n in result.notes]}")
     for w, kind in aside:
         if kind == TURNED_DOWN:
-            down = [n.say for n in wish_notes if n.kind == "wish_conflict" and n.say.endswith("whom you turned down.")
+            down = [n.say for n in wish_notes if n.kind == "wish_conflict"
+                    and (n.say.endswith("whom you turned down.") or ", whom you turned down. Check whether" in n.say)
                     and (not w[3] or w[3].lower() in n.say.lower())]
             if not down:
                 problems.append(f"no 'whom you turned down' note for {w[0]} wish: {[str(n) for n in wish_notes]}")

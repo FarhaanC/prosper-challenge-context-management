@@ -10,7 +10,7 @@ import pytest
 
 from clinic import Catalog, CatalogError, Note, Preferences, Schedule, check_booking, find_options
 from conftest import NOW, new_caller, returning
-from reference import DATA, LOC, PROV, SPECIALTIES, VT, ref_bookable
+from reference import DATA, PROV, SPECIALTIES, VT, ref_bookable
 
 RAW = json.loads((DATA / "catalog.json").read_text())
 EXTRAS = json.loads((DATA / "location_extras.json").read_text())

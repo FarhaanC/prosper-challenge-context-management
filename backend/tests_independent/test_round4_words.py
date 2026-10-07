@@ -144,9 +144,13 @@ def test_language_change_is_latest_and_maps_two_word_names(catalog, schedule):
         assert r.options and all(o.provider_id in speakers for o in r.options)
     else:
         assert any("Mandarin" in n.say and "chinese" not in n.say.lower() for n in r.notes), [n.say for n in r.notes]
-    for clear in ("", "any"):
-        card.change_choice("language", clear)
-        assert card.preferences.language == ""
+    # Round 5 s2: only "" clears the language wish. "any" is no longer read as "clear":
+    # it is refused by the search with a bad_input note (s5), never a false note.
+    card.change_choice("language", "")
+    assert card.preferences.language == ""
+    card.change_choice("language", "any")
+    r = run(catalog, schedule, card.preferences)
+    assert not r.options and [n.kind for n in r.notes] == ["bad_input"], [n.say for n in r.notes]
 
 
 def test_unknown_language_is_kept_as_said(catalog, schedule):

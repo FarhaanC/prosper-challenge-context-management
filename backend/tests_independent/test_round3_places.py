@@ -5,7 +5,7 @@ import pytest
 
 from clinic import Preferences, find_options
 from conftest import NOW, new_caller, returning
-from reference import LOC, SPECIALTIES
+from reference import SPECIALTIES
 
 ALL = returning(list(SPECIALTIES))
 

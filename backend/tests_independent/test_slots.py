@@ -9,11 +9,10 @@ import sys
 from datetime import datetime, time, timedelta
 from pathlib import Path
 
-import pytest
 
 from clinic import Schedule
 from conftest import NOW
-from reference import LOC, PROV, VT
+from reference import PROV, VT
 
 DURATIONS = sorted({v["duration_min"] for v in VT.values()})
 PAIRS = [(pid, lid) for pid, p in PROV.items() for lid in p["location_ids"]]

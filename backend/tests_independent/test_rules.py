@@ -1,6 +1,6 @@
 """The 6 booking rules: differential tests across the whole catalog, plus named cases."""
 
-from datetime import datetime, timedelta
+from datetime import datetime
 
 import pytest
 

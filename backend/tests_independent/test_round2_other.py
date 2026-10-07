@@ -6,10 +6,10 @@ from datetime import datetime, timedelta
 
 import pytest
 
-from clinic import (BOOKING, VISIT_TYPE, BookingCard, Catalog, CatalogError, Choices, Preferences, Schedule,
+from clinic import (VISIT_TYPE, BookingCard, Catalog, CatalogError, Choices, Preferences, Schedule,
                     SlotTaken, alternatives_for, answer_question, clinic_now, find_options)
 from conftest import NOW, new_caller, returning
-from reference import DATA, LOC, PROV, SPECIALTIES, VT, last_name, ref_bookable
+from reference import DATA, PROV, SPECIALTIES, VT, last_name, ref_bookable
 
 RAW = json.loads((DATA / "catalog.json").read_text())
 EXTRAS = json.loads((DATA / "location_extras.json").read_text())

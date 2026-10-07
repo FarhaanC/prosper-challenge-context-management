@@ -1,12 +1,17 @@
-"""Round 4 (spec-changes-round-4.md): "someone else" in all its forms through
-BookingCard.change_choice, naming a turned-down doctor again (change 4), and the
-"whom you turned down" note (change 1), checked against the whole catalog.
+"""Round 4 (spec-changes-round-4.md): "someone else" in all its forms, naming a
+turned-down doctor again (change 4), and the "whom you turned down" note (change 1),
+checked against the whole catalog.
+
+Updated for round 5 (spec-changes-round-5.md): turning doctors down is now the clear
+instruction BookingCard.turn_down_doctors; change_choice("doctor", ...) only ever takes
+a name. Each test keeps its round-4 intent but makes the call the AI would make.
 
 Expected answers come from the spec and catalog.json (reference.py). The module's
 calendar is used only as the source of open times, as in earlier rounds.
 """
 
 import re
+from dataclasses import replace
 
 import pytest
 
@@ -69,18 +74,27 @@ def test_skin_check_has_several_doctors(schedule):
     assert len(skin_doctors(schedule)) >= 3  # the scenarios below need a real choice
 
 
-# ---------------------------------------------------------------- the spec's phrases, three contexts
-SPEC_PHRASES = ["", "someone else", "somebody else", "a different doctor", "another doctor", "anyone else",
-                "other doctor", "Someone Else", "  someone   else  ", "another doctor."]
+# ---------------------------------------------------------------- "someone else", three contexts
+# Round 5 (spec-changes-round-5.md s1-s2): the code no longer reads phrases. For "someone
+# else" the AI calls turn_down_doctors with exactly who: current=True (the chosen doctor,
+# or else the carried-over one), on_offer=True (every doctor in the options on offer), or
+# provider_ids. These tests keep the round-4 intent but make the call the AI would make.
+CHOSEN_FORMS = ["current", "ids", "ids-with-spaces", "current+ids"]
 
 
-@pytest.mark.parametrize("phrase", SPEC_PHRASES)
-def test_someone_else_turns_down_the_chosen_doctor(catalog, schedule, phrase):
+def _instruction(form, pid):
+    return {"current": {"current": True}, "ids": {"provider_ids": [pid]},
+            "ids-with-spaces": {"provider_ids": [f"  {pid} "]},
+            "current+ids": {"current": True, "provider_ids": [pid]}}[form]
+
+
+@pytest.mark.parametrize("form", CHOSEN_FORMS)
+def test_someone_else_turns_down_the_chosen_doctor(catalog, schedule, form):
     card = card_for("new", SKIN)
     r = search(catalog, schedule, card)
     choose(card, r.options[0])
     chosen = r.options[0].provider_id
-    assert card.change_choice("doctor", phrase) == BOOKING
+    assert card.turn_down_doctors(catalog, **_instruction(form, chosen)) == BOOKING
     assert card.preferences.not_provider_ids == [chosen]
     r2 = search(catalog, schedule, card)
     assert r2.options and all(o.provider_id != chosen for o in r2.options)
@@ -88,8 +102,8 @@ def test_someone_else_turns_down_the_chosen_doctor(catalog, schedule, phrase):
     assert "not: " + PROV[chosen]["name"] in card.summary(catalog)
 
 
-@pytest.mark.parametrize("phrase", SPEC_PHRASES)
-def test_someone_else_turns_down_the_carried_over_doctor(catalog, schedule, phrase):
+@pytest.mark.parametrize("form", ["current", "ids"])
+def test_someone_else_turns_down_the_carried_over_doctor(catalog, schedule, form):
     card = card_for("new", SKIN)
     r = search(catalog, schedule, card)
     choose(card, r.options[0])
@@ -97,20 +111,19 @@ def test_someone_else_turns_down_the_carried_over_doctor(catalog, schedule, phra
     card.change_choice("time", "Thursday")      # the doctor is now only carried over
     assert card.preferences.preferred_provider_id == chosen
     search(catalog, schedule, card)             # Thursday options are on offer
-    card.change_choice("doctor", phrase)        # "someone else"
-    # spec: "otherwise the carried-over doctor" (not every doctor on offer)
+    card.turn_down_doctors(catalog, **_instruction(form, chosen))
+    # current means the carried-over doctor, not every doctor on offer
     assert card.preferences.not_provider_ids == [chosen]
     r3 = search(catalog, schedule, card)
     assert r3.options and all(o.provider_id != chosen for o in r3.options)
     assert all(o.start.strftime("%A") == "Thursday" for o in r3.options)  # the day wish survives
 
 
-@pytest.mark.parametrize("phrase", SPEC_PHRASES)
-def test_someone_else_during_an_offer_turns_down_everyone_on_offer(catalog, schedule, phrase):
+def test_someone_else_during_an_offer_turns_down_everyone_on_offer(catalog, schedule):
     card = card_for("new", SKIN)
     r = search(catalog, schedule, card)         # nothing chosen, nothing carried
     on_offer = sorted({o.provider_id for o in r.options})
-    card.change_choice("doctor", phrase)
+    card.turn_down_doctors(catalog, on_offer=True)
     assert card.preferences.not_provider_ids == on_offer
     r2 = search(catalog, schedule, card)
     left = set(skin_doctors(schedule)) - set(on_offer)
@@ -125,67 +138,75 @@ def test_someone_else_during_an_offer_of_one_named_doctor(catalog, schedule):
     card.preferences.doctor_name_heard = "Dr. Daniel Chen"
     r = search(catalog, schedule, card)
     assert {o.provider_name for o in r.options} == {"Dr. Daniel Chen"}
-    card.change_choice("doctor", "someone else")
-    assert card.preferences.doctor_name_heard == ""
+    card.turn_down_doctors(catalog, on_offer=True)
+    assert card.preferences.doctor_name_heard == ""   # "clears any doctor wish"
     r2 = search(catalog, schedule, card)
     assert r2.options and "Dr. Daniel Chen" not in {o.provider_name for o in r2.options}
 
 
-# The heading of this spec section is literally "Someone else, please". An AI passing the
-# caller's words will add filler like this; the doctor must still be turned down.
+# Round 4 tested that filler words still turned the doctor down. Round 5 reverses that on
+# purpose: the words are only ever a name. The intent that survives: the mistake must be
+# VISIBLE (a doctor_not_found note), nobody is turned down, and nothing is guessed.
 @pytest.mark.parametrize("phrase", ["Someone else, please", "someone else please", "the other doctor",
                                     "Another doctor, please"])
 def test_someone_else_with_ordinary_filler_words(catalog, schedule, phrase):
     card = card_for("new", SKIN)
     r = search(catalog, schedule, card)
     choose(card, r.options[0])
-    chosen = r.options[0].provider_id
     card.change_choice("doctor", phrase)
     r2 = search(catalog, schedule, card)
-    says = [n.say for n in r2.notes]
-    assert chosen in card.preferences.not_provider_ids, (phrase, card.preferences.doctor_name_heard, says)
-    assert all(o.provider_id != chosen for o in r2.options)
-    assert not any("couldn't find a doctor called" in s for s in says), says
+    # the same card without the doctor words (the chosen place is still carried over)
+    base = find_options(catalog, schedule, new_caller(), SKIN, replace(card.preferences, doctor_name_heard=""), NOW)
+    assert card.preferences.not_provider_ids == []
+    assert [n.kind for n in r2.notes] == ["doctor_not_found"], [n.say for n in r2.notes]
+    assert [(o.provider_id, o.start) for o in r2.options] == [(o.provider_id, o.start) for o in base.options]
 
 
 def test_not_dr_name_turns_down_every_match(catalog, schedule):
+    # "not Dr. Chen": the tool layer turns the name into ids and passes them all.
     card = card_for("new", SKIN)
-    card.change_choice("doctor", "not Dr. Chen")
+    chens = sorted(p for p, x in PROV.items() if x["name"].split()[-1] == "Chen")
+    card.turn_down_doctors(catalog, provider_ids=chens)
     r = search(catalog, schedule, card)
-    chens = {p for p, x in PROV.items() if x["name"].split()[-1] == "Chen"}
-    assert r.options and not {o.provider_id for o in r.options} & chens
-    assert "Dr. Chen" in card.summary(catalog)
+    assert r.options and not {o.provider_id for o in r.options} & set(chens)
+    # round 5 s4: "not: ..." lists the doctors still turned down, by full name, sorted
+    assert "not: " + ", ".join(sorted(PROV[c]["name"] for c in chens)) in card.summary(catalog)
 
 
-@pytest.mark.parametrize("phrase", ["No, not Dr. Chen", "anyone but Dr. Chen"])
+@pytest.mark.parametrize("phrase", ["No, not Dr. Chen", "anyone but Dr. Chen", "not Dr. Chen"])
 def test_a_negated_name_never_becomes_a_wish_for_that_doctor(catalog, schedule, phrase):
-    # The opposite of "not Dr. Chen" (spec: "turns down doctors matching that name") must
-    # never happen: offering ONLY the doctor the caller just refused.
+    # Round 5 s2: if the AI wrongly passes these words to change_choice, they are "treated
+    # as a name, which matches nobody, so the agent gets a doctor_not_found note". The
+    # opposite must never happen: offering ONLY the doctor the caller just refused.
     card = card_for("new", SKIN)
     card.change_choice("doctor", phrase)
     r = search(catalog, schedule, card)
     names = {o.provider_name for o in r.options}
     assert names != {"Dr. Daniel Chen"}, (phrase, names, [n.say for n in r.notes])
+    assert "doctor_not_found" in [n.kind for n in r.notes], [n.say for n in r.notes]
 
 
 def test_visit_type_change_forgets_turned_down_doctors(catalog, schedule):
     card = card_for("new", SKIN)
     search(catalog, schedule, card)
-    card.change_choice("doctor", "")
-    card.change_choice("doctor", "not Dr. Kim")
-    assert card.preferences.not_provider_ids and card.preferences.not_doctor_names
+    card.turn_down_doctors(catalog, on_offer=True)
+    kims = [p for p, x in PROV.items() if x["name"].endswith(" Kim")]
+    card.turn_down_doctors(catalog, provider_ids=kims)
+    assert set(kims) <= set(card.preferences.not_provider_ids)
     card.change_choice("visit_type", "a mole check")
-    assert card.preferences.not_provider_ids == [] and card.preferences.not_doctor_names == []
+    assert card.preferences.not_provider_ids == []
+    assert not hasattr(card.preferences, "not_doctor_names")   # round 5 s2: removed
 
 
-# ---------------------------------------------------------------- change 4: naming them again
+# ---------------------------------------------------------------- naming them again (round 5 s3)
 @pytest.mark.parametrize("named", ["Dr. Daniel Chen", "Daniel Chen", "Dr. Daniel Chen's"])
 def test_naming_a_turned_down_doctor_again_brings_them_back(catalog, schedule, named):
     card = card_for("new", SKIN)
     card.preferences.doctor_name_heard = "Dr. Daniel Chen"
     r = search(catalog, schedule, card)
     choose(card, r.options[0])
-    card.change_choice("doctor", "someone else")
+    card.turn_down_doctors(catalog, current=True)
+    assert card.preferences.not_provider_ids == [pid_named("Dr. Daniel Chen")]
     search(catalog, schedule, card)
     card.change_choice("doctor", named)        # "actually, Dr. Chen is fine"
     r3 = search(catalog, schedule, card)
@@ -195,13 +216,11 @@ def test_naming_a_turned_down_doctor_again_brings_them_back(catalog, schedule, n
 
 
 def test_a_doctor_named_back_stays_back_after_another_change(catalog, schedule):
-    # someone else -> "actually Dr. Daniel Chen is fine" -> choose his option -> "Thursday instead?"
-    # Change 4 says naming him brings him back; the caller then CHOSE him. Changing the day
-    # must not silently drop him again, and no note may call him turned down.
+    # turn down -> "actually Dr. Daniel Chen is fine" -> choose his option -> "Thursday instead?"
     card = card_for("new", SKIN)
     card.preferences.doctor_name_heard = "Dr. Daniel Chen"
     choose(card, search(catalog, schedule, card).options[0])
-    card.change_choice("doctor", "someone else")
+    card.turn_down_doctors(catalog, current=True)
     search(catalog, schedule, card)
     card.change_choice("doctor", "Dr. Daniel Chen")
     choose(card, search(catalog, schedule, card).options[0])
@@ -211,6 +230,7 @@ def test_a_doctor_named_back_stays_back_after_another_change(catalog, schedule):
     has_thursday = any(s[0] == chen and s[2].strftime("%A") == "Thursday" for s in slots(schedule, "new", SKIN))
     says = [n.say for n in r.notes]
     assert not any("turned down" in s for s in says), says
+    assert "not:" not in card.summary(catalog)
     if has_thursday:
         assert any(o.provider_id == chen for o in r.options), ([o.spoken for o in r.options], says)
 
@@ -222,11 +242,19 @@ def test_carried_over_doctor_does_not_override_a_turn_down(catalog, schedule):
     assert r.options and all(o.provider_id != kim for o in r.options)
 
 
-def test_naming_a_doctor_turned_down_by_name_brings_only_that_doctor_back(catalog, schedule):
-    p = Preferences(not_doctor_names=["Dr. Chen"], doctor_name_heard="Dr. Daniel Chen")
+def test_naming_one_of_several_turned_down_doctors_brings_only_that_doctor_back(catalog, schedule):
+    # Round 4 used the removed not_doctor_names=["Dr. Chen"]; round 5: all Chens turned down
+    # by id, then the caller names one Chen in full.
+    chens = sorted(p for p, x in PROV.items() if x["name"].split()[-1] == "Chen")
+    p = Preferences(not_provider_ids=chens, doctor_name_heard="Dr. Daniel Chen")
     r = find_options(catalog, schedule, new_caller(), SKIN, p, NOW)
     assert r.options and {o.provider_name for o in r.options} == {"Dr. Daniel Chen"}
     assert not [n for n in r.notes if "turned down" in n.say or n.kind == "wish_impossible"]
+    card = card_for("new", SKIN)
+    card.preferences = p
+    summary = card.summary(catalog)
+    others = sorted(PROV[c]["name"] for c in chens if PROV[c]["name"] != "Dr. Daniel Chen")
+    assert "not: " + ", ".join(others) in summary and "Dr. Daniel Chen, " not in summary.split("not: ")[1]
 
 
 # ---------------------------------------------------------------- change 1: the note, whole catalog
@@ -322,7 +350,9 @@ def test_no_other_doctor_note_names_only_doctors_who_can_do_the_visit(catalog, s
                 continue
             surname = PROV[able[0]]["name"].split()[-1]
             card = card_for(kind, vt)
-            card.change_choice("doctor", f"not Dr. {surname}")
+            # round 5: "not Dr. <surname>" -> the tool layer passes every doctor with that surname
+            card.turn_down_doctors(catalog, provider_ids=[p for p, x in PROV.items()
+                                                          if x["name"].split()[-1] == surname])
             r = find_options(catalog, schedule, card.caller, vt, card.preferences, NOW)
             nod = [n.say for n in r.notes if n.kind == "no_other_doctor"]
             tried += 1

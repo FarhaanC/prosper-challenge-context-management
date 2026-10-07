@@ -8,7 +8,7 @@ import pytest
 
 from clinic import Preferences, find_options
 from conftest import NOW, new_caller, returning
-from reference import DATA, LOC, SPECIALTIES
+from reference import DATA, SPECIALTIES
 
 EXTRAS = json.loads((DATA / "location_extras.json").read_text())
 

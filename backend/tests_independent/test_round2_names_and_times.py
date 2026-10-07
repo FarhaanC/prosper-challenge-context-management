@@ -4,9 +4,9 @@ from datetime import timedelta
 
 import pytest
 
-from clinic import Note, OptionsResult, Preferences, find_options
+from clinic import Note, Preferences, find_options
 from conftest import NOW, new_caller, returning
-from reference import PROV, SPECIALTIES, VT, first_name, last_name, ref_bookable
+from reference import PROV, SPECIALTIES, VT, first_name, last_name
 
 GARCIAS = {pid for pid, p in PROV.items() if last_name(p["name"]) == "Garcia"}
 CHENS = {pid for pid, p in PROV.items() if last_name(p["name"]) == "Chen"}

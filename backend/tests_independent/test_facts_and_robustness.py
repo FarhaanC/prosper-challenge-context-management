@@ -4,7 +4,7 @@ import pytest
 
 from clinic import Preferences, answer_question, can_book_visit_type, find_options
 from conftest import NOW, new_caller
-from reference import LOC, PROV
+from reference import LOC
 
 
 # ---------------------------------------------------------------- locations

@@ -8,7 +8,7 @@ import pytest
 
 from clinic import Preferences, check_booking, find_options
 from conftest import NOW, new_caller, returning
-from reference import DATA, LOC, PROV, SPECIALTIES, VT, ref_bookable, ref_pairs
+from reference import DATA, PROV, SPECIALTIES, VT, ref_bookable, ref_pairs
 
 EXTRAS = json.loads((DATA / "location_extras.json").read_text())
 WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]

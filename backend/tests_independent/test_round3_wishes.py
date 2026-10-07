@@ -272,6 +272,9 @@ def test_every_note_is_true_and_well_formed_whole_catalog(catalog, schedule, kin
 
 
 # ---------------------------------------------------------------- "someone else, please"
+# Round 5 (spec-changes-round-5.md s1-s2): the code no longer reads "someone else" or "".
+# The AI gives a clear instruction instead: turn_down_doctors(catalog, current=True) for
+# "someone else" about the chosen (or carried-over) doctor. These tests now make that call.
 def _chosen_card(kind, vt, pid, lid, slot):
     card = BookingCard(caller=caller_for(kind))
     card.choices = Choices(specialty=VT[vt]["specialty"], visit_type_id=vt, provider_id=pid, location_id=lid, slot=slot)
@@ -287,7 +290,7 @@ def test_someone_else_whole_catalog(catalog, schedule, kind):
             continue
         pid, lid, start = slots[0]
         card = _chosen_card(kind, vt, pid, lid, start)
-        assert card.change_choice("doctor", "") == BOOKING
+        assert card.turn_down_doctors(catalog, current=True) == BOOKING
         p = card.preferences
         if pid not in p.not_provider_ids:
             problems.append((VT[vt]["name"], "not recorded", p.not_provider_ids))
@@ -314,11 +317,11 @@ def test_someone_else_twice_and_kept_through_other_changes(catalog, schedule):
     slots = slots_for(schedule, kind, vt)
     first = slots[0]
     card = _chosen_card(kind, vt, *first)
-    card.change_choice("doctor", "")
+    card.turn_down_doctors(catalog, current=True)
     r = find_options(catalog, schedule, card.caller, vt, card.preferences, NOW)
     o = r.options[0]
     card.choices.provider_id, card.choices.location_id, card.choices.slot = o.provider_id, o.location_id, o.start
-    card.change_choice("doctor", "")
+    card.turn_down_doctors(catalog, current=True)
     assert set(card.preferences.not_provider_ids) == {first[0], o.provider_id}
     card.change_choice("time", "Thursday")
     card.change_choice("location", "the Midtown one")
@@ -329,10 +332,16 @@ def test_someone_else_twice_and_kept_through_other_changes(catalog, schedule):
     assert card.preferences.not_provider_ids == []  # "Changing the visit type clears the list."
 
 
-def test_someone_else_without_a_chosen_doctor_turns_nobody_down():
+def test_someone_else_without_a_chosen_doctor_turns_nobody_down(catalog):
     card = BookingCard(caller=new_caller(), preferences=Preferences(doctor_name_heard="Dr. Daniel Chen"))
     card.choices = Choices(specialty="Dermatology", visit_type_id="appt_027")
-    card.change_choice("doctor", "")
+    # Round 5: "current" with no chosen or carried-over doctor is refused and changes nothing
+    # (a doctor who was only NAMED isn't "current").
+    before = card.to_dict()
+    with pytest.raises(ValueError):
+        card.turn_down_doctors(catalog, current=True)
+    assert card.to_dict() == before
+    card.change_choice("doctor", "")   # "" now only means "no doctor wish"
     assert card.preferences.not_provider_ids == [] and card.preferences.doctor_name_heard == ""
 
 
@@ -343,7 +352,8 @@ def test_turned_down_doctor_asked_for_again_gets_a_true_note(catalog, schedule):
     chen = [s for s in slots if s[0] == "prov_001"]
     assert chen  # from the calendar: he has open times
     card = _chosen_card("new", "appt_027", *chen[0])
-    card.change_choice("doctor", "")
+    card.turn_down_doctors(catalog, current=True)
+    assert card.preferences.not_provider_ids == ["prov_001"]
     card.change_choice("doctor", "Dr. Daniel Chen")
     r = find_options(catalog, schedule, card.caller, "appt_027", card.preferences, NOW)
     false = [n.say for n in r.notes if "Daniel Chen" in n.say and "no open times" in n.say]
@@ -355,7 +365,7 @@ def test_who_can_list_leaves_out_turned_down_doctors(catalog, schedule):
     slots = slots_for(schedule, "new", "appt_027")
     first = slots[0]
     card = _chosen_card("new", "appt_027", *first)
-    card.change_choice("doctor", "")
+    card.turn_down_doctors(catalog, current=True)
     card.change_choice("doctor", "Dr. Garcia")  # no Garcia does skin screening -> 'Doctors who can' note
     r = find_options(catalog, schedule, card.caller, "appt_027", card.preferences, NOW)
     for n in r.notes:
@@ -444,7 +454,7 @@ def test_someone_else_after_a_time_change_does_not_offer_the_same_doctor(catalog
     first = next(s for s in slots if s[0] == "prov_001")
     card = _chosen_card("new", "appt_027", *first)
     card.change_choice("time", "Thursday")
-    card.change_choice("doctor", "")
+    card.turn_down_doctors(catalog, current=True)   # round 5: "current" covers a carried-over doctor
     r = find_options(catalog, schedule, card.caller, "appt_027", card.preferences, NOW)
     others = {s[0] for s in slots if s[2].strftime("%A") == "Thursday"} - {"prov_001"}
     assert others
