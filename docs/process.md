@@ -37,6 +37,7 @@ Each step is one item from the build schedule (for example "catalog and rules mo
 
    **Agreeing with a finding needs no further check. Dismissing one does:** a disputed finding goes to a fresh verifier or to Farhaan. The builder can't wave away criticism of its own code.
 7. **Fix**, then rerun **both** test folders. The builder must not edit an independent test to make it pass. If a test is wrong, that's a disputed finding (step 6), and the change is recorded.
+   - **When an agreed change makes old independent tests fail, prove it, don't claim it:** a throwaway adapter (never committed) plays the AI's part, e.g. turns an old phrase into the new plain value, and the testers' unchanged tests are rerun. Whatever still fails is listed one by one in the triage. The changes go to the next fresh tester as a written spec-change note.
 8. **Save a version:** commit "review fixes", referring to the triage file.
 9. **Understanding check:** Farhaan gets a plain-language walkthrough of what was built and what changed. Likely interviewer questions, with answers, go in `docs/defence-notes.md`. Anything he can't explain gets simplified or explained before moving on.
 10. **Update the record:** decision log, build log, changelog, and the status in the project overview. Tag the version.
