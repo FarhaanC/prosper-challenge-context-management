@@ -1,0 +1,2105 @@
+diff -ruN -x __pycache__ tests_independent_before/round2_reference.py ../work/backend/tests_independent/round2_reference.py
+--- tests_independent_before/round2_reference.py	2026-10-07 19:14:54.390969365 +0400
++++ ../work/backend/tests_independent/round2_reference.py	2026-10-07 19:21:41.124550047 +0400
+@@ -55,15 +55,17 @@
+ 
+ WEEKDAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
+ 
+-# Place phrases that NAME one of our locations (restrict), from catalog.json names
+-# and the spec's examples. Near-phrases are not wishes (they only rank).
++# Place NAMES that pick one of our locations (restrict when near is False), from
++# catalog.json names and the spec's examples. Round 7: the AI passes a name plus near
++# yes/no; phrases ("the Midtown one") are no longer read, so only names are listed.
++# With near=True a name only ranks, so it is not a wish.
+ RESTRICT_PHRASES = {}
+ for _lid, _l in LOC.items():
+     RESTRICT_PHRASES[_l["name"].lower()] = _lid
+ RESTRICT_PHRASES.update({
+-    "the midtown one": "loc_005", "the hayes valley one": "loc_005", "the downtown one": "loc_004",
+-    "the marina district": "loc_003", "richmond district": "loc_007", "the sunset one": "loc_006",
+-    "the north beach one": "loc_002", "mission bay": "loc_000", "the mission district one": "loc_001",
++    "midtown": "loc_005", "hayes valley": "loc_005", "downtown": "loc_004",
++    "the marina district": "loc_003", "richmond district": "loc_007", "sunset": "loc_006",
++    "north beach": "loc_002", "mission bay": "loc_000", "mission district": "loc_001",
+ })
+ 
+ 
+@@ -102,8 +104,10 @@
+ # Round 6 s3: words no name has.
+ SENTENCE_WORDS = {"not", "but", "except", "without", "another", "other", "else", "someone", "somebody",
+                   "anyone", "anybody", "different", "instead", "please"}
+-SHORT_DAYS = {w[:3]: w for w in WEEKDAYS} | {w[:4]: w for w in WEEKDAYS} | {"thurs": "thursday", "tues": "tuesday",
+-                                                                              "weds": "wednesday"}
++# Round 7 s6: exactly these short forms, plus full names and their plurals ("thursdays").
++SHORT_DAYS = {"mon": "monday", "tue": "tuesday", "tues": "tuesday", "wed": "wednesday", "thu": "thursday",
++              "thur": "thursday", "thurs": "thursday", "fri": "friday", "sat": "saturday", "sun": "sunday"} | \
++             {w + "s": w for w in WEEKDAYS}
+ 
+ 
+ def no_pref(text):
+@@ -167,7 +171,7 @@
+         wishes.append(("doctor", False, lambda p, l, s, ids=ids: p in ids, kw))
+     if prefs.location_hint.strip() and not no_pref(prefs.location_hint):
+         lid = RESTRICT_PHRASES.get(prefs.location_hint.strip().lower())
+-        if lid:
++        if lid and not getattr(prefs, "near", False):
+             wishes.append(("place", False, lambda p, l, s, lid=lid: l == lid, LOC[lid]["name"]))
+     days = days_given
+     tod = tod_given
+diff -ruN -x __pycache__ tests_independent_before/round6_reference.py ../work/backend/tests_independent/round6_reference.py
+--- tests_independent_before/round6_reference.py	2026-10-07 19:14:54.391001293 +0400
++++ ../work/backend/tests_independent/round6_reference.py	2026-10-07 19:18:48.595322230 +0400
+@@ -46,7 +46,48 @@
+         if len(same_name) > 1 and not m.group("places"):
+             out.append(f"same-name doctor without locations: {m.group(0)}")
+         if m.group("places"):
+-            places = set(re.split(r", | and ", m.group("places")))
++            places = set(m.group("places").split(" / "))   # round 7 s5: places joined with " / "
+             if not any(places <= {LOC[l]["name"] for l in PROV[p]["location_ids"]} for p in fits):
+                 out.append(f"wrong locations in {m.group(0)}")
+     return out
++
++
++# Round 7 s5: every list of doctors in a note reads at most three names, then "and N more".
++NAMES = sorted({x["name"] for x in PROV_FILE.values()}, key=len, reverse=True)
++
++
++def names_in(text):
++    """Doctor names written in a piece of text (longest first, so no name hides inside another)."""
++    found = set()
++    for n in NAMES:
++        if n in text:
++            found.add(n)
++            text = text.replace(n, "#")
++    return found
++
++
++def capped_names_problems(names_text, want):
++    """A list of plain doctor names ("A", "A and B", "A, B and C", or "A, B, C and N more"):
++    the people shown must be among `want` (a set of names), at most three are read, and the
++    count must add up to len(want)."""
++    out = []
++    more = re.fullmatch(r"(?P<shown>.+) and (?P<n>\d+) more", names_text)
++    if more:
++        shown = more.group("shown").split(", ")
++        total = len(shown) + int(more.group("n"))
++        if len(shown) != 3:
++            out.append(f"'and N more' after {len(shown)} names, not 3: {names_text!r}")
++    else:
++        shown = re.split(r", | and ", names_text)
++        total = len(shown)
++        if len(shown) > 1 and not re.fullmatch(r"(?:[^,]+, )*[^,]+ and [^,]+", names_text):
++            out.append(f"list not written as 'A, B and C': {names_text!r}")
++    if len(shown) > 3:
++        out.append(f"{len(shown)} names read out: {names_text!r}")
++    if len(set(shown)) != len(shown):
++        out.append(f"a name read twice: {names_text!r}")
++    if not set(shown) <= set(want) or names_in(", ".join(shown)) != set(shown):
++        out.append(f"names {shown} not all among {sorted(want)}")
++    if total != len(want):
++        out.append(f"count {total} != {len(want)}")
++    return out
+diff -ruN -x __pycache__ tests_independent_before/test_card.py ../work/backend/tests_independent/test_card.py
+--- tests_independent_before/test_card.py	2026-10-07 19:14:54.391035822 +0400
++++ ../work/backend/tests_independent/test_card.py	2026-10-07 19:15:10.582138546 +0400
+@@ -44,12 +44,12 @@
+ 
+ def test_change_location():
+     c = full_card()
+-    stage = c.change_choice("location", "the Midtown one")
++    stage = c.change_choice("location", "Midtown")   # round 7: a place name, not "the Midtown one"
+     assert stage == BOOKING
+     ch = c.choices
+     assert ch.visit_type_id == "appt_027"
+     assert (ch.provider_id, ch.location_id, ch.slot) == ("", "", None)
+-    assert c.preferences.location_hint == "the Midtown one"
++    assert c.preferences.location_hint == "Midtown" and c.preferences.near is False
+     assert c.preferences.preferred_provider_id == "prov_001"  # old doctor kept as a wish
+     assert c.preferences.preferred_location_id != "loc_004"
+ 
+@@ -113,7 +113,7 @@
+     Midtown has valid dermatologists (Dr. Kenji Kim). Expected: Midtown options."""
+     caller = new_caller()
+     c = full_card(caller)
+-    c.change_choice("location", "the Midtown one")
++    c.change_choice("location", "Midtown")   # round 7: the name; "the Midtown one" is a phrase
+     r = find_options(catalog, schedule, caller, "appt_027", c.preferences, NOW)
+     assert r.options and all(o.location_id == "loc_005" for o in r.options), \
+         ([(o.provider_name, o.location_name) for o in r.options], r.notes)
+diff -ruN -x __pycache__ tests_independent_before/test_facts_and_robustness.py ../work/backend/tests_independent/test_facts_and_robustness.py
+--- tests_independent_before/test_facts_and_robustness.py	2026-10-07 19:14:54.391071456 +0400
++++ ../work/backend/tests_independent/test_facts_and_robustness.py	2026-10-07 19:15:34.059352950 +0400
+@@ -61,11 +61,17 @@
+     assert any("Grace Rodriguez" in x["name"] for x in r.get("results", [])), r
+ 
+ 
+-@pytest.mark.parametrize("about", ["Doctor", " DOCTOR ", "provider"])
++@pytest.mark.parametrize("about", ["Doctor", " DOCTOR "])
+ def test_doctor_about_casing(catalog, about):
+     assert answer_question(catalog, about, "Dr. Wei Lee")["found"]
+ 
+ 
++# round 7 s4: synonyms such as "provider" are refused with a how-to message
++def test_doctor_about_synonym_is_refused(catalog):
++    r = answer_question(catalog, "provider", "Dr. Wei Lee")
++    assert r["found"] is False and r["message"] == "Pass about as location, doctor or visit_type."
++
++
+ # ---------------------------------------------------------------- visit types
+ def test_visit_type_facts_knee_mri(catalog):
+     r = answer_question(catalog, "visit_type", "knee MRI")
+diff -ruN -x __pycache__ tests_independent_before/test_options.py ../work/backend/tests_independent/test_options.py
+--- tests_independent_before/test_options.py	2026-10-07 19:14:54.391116930 +0400
++++ ../work/backend/tests_independent/test_options.py	2026-10-07 19:15:10.581494585 +0400
+@@ -207,13 +207,13 @@
+ 
+ 
+ def test_named_place_note_is_true_when_doctor_wish_also_set(catalog, schedule):
+-    # Dr. Daniel Chen (Downtown, Richmond) + "the Midtown one": another valid doctor does skin
++    # Dr. Daniel Chen (Downtown, Richmond) + "the Midtown one" (round 7: "Midtown", near=False): another valid doctor does skin
+     # screening at Midtown, so the place is set aside as a CLASH with the stronger said doctor.
+     # Round 3: rewritten to check behaviour instead of searching for an old sentence.
+     slots = ref_slots(schedule, True, "appt_027")
+     assert any(l == "loc_005" for _, l, _ in slots) and "loc_005" not in PROV["prov_001"]["location_ids"]
+     r = run(catalog, schedule, new_caller(), "appt_027", doctor_name_heard="Dr. Daniel Chen",
+-            location_hint="the Midtown one")
++            location_hint="Midtown")
+     assert r.options and all(o.provider_id == "prov_001" for o in r.options)
+     assert "wish_impossible" not in [n.kind for n in r.notes], [str(n) for n in r.notes]
+     clash = [n.say for n in r.notes if n.kind == "wish_conflict"]
+@@ -275,7 +275,7 @@
+ 
+ def test_knee_mri_near_downtown(catalog, schedule, directory):
+     james = directory.lookup("James Wilson", "1984-03-12").caller
+-    r = run(catalog, schedule, james, "appt_065", location_hint="near Downtown")
++    r = run(catalog, schedule, james, "appt_065", location_hint="Downtown", near=True)  # round 7: name + near
+     assert r.options[0].location_id == "loc_004"
+     assert {o.location_id for o in r.options} == {"loc_004", "loc_005"}  # near ranks, does not exclude
+     assert not any("recognise" in n.say for n in r.notes)
+@@ -283,26 +283,27 @@
+ 
+ def test_knee_mri_closer_to_downtown_baseline_phrase(catalog, schedule, directory):
+     james = directory.lookup("James Wilson", "1984-03-12").caller
+-    r = run(catalog, schedule, james, "appt_065", location_hint="closer to downtown")
++    # round 7: the AI turns "closer to downtown" into the name plus near=True
++    r = run(catalog, schedule, james, "appt_065", location_hint="downtown", near=True)
+     assert r.options[0].location_id == "loc_004"
+     assert not any("recognise" in n.say for n in r.notes), r.notes
+ 
+ 
+ def test_knee_mri_the_midtown_one(catalog, schedule, directory):
+     james = directory.lookup("James Wilson", "1984-03-12").caller
+-    r = run(catalog, schedule, james, "appt_065", location_hint="the Midtown one")
++    r = run(catalog, schedule, james, "appt_065", location_hint="Midtown")  # "the Midtown one" -> name, near=False
+     assert r.options and all((o.provider_id, o.location_id) == ("prov_015", "loc_005") for o in r.options)
+ 
+ 
+ def test_knee_mri_the_sunset_one_not_possible(catalog, schedule, directory):
+     james = directory.lookup("James Wilson", "1984-03-12").caller
+-    r = run(catalog, schedule, james, "appt_065", location_hint="the Sunset one")
++    r = run(catalog, schedule, james, "appt_065", location_hint="Sunset")  # "the Sunset one"
+     assert r.options  # closest alternatives
+     assert any("Sunset" in n.say for n in r.notes)
+ 
+ 
+ def test_ambiguous_place_note(catalog, schedule):
+-    r = run(catalog, schedule, new_caller(), "appt_027", location_hint="the Mission one")
++    r = run(catalog, schedule, new_caller(), "appt_027", location_hint="Mission")  # "the Mission one"
+     text = " ".join(n.say for n in r.notes)
+     assert "Mission Bay" in text and "Mission District" in text
+ 
+@@ -319,7 +320,7 @@
+ 
+ def test_near_landmark_ranks_by_distance(catalog, schedule):
+     caller = new_caller()
+-    r = run(catalog, schedule, caller, "appt_027", location_hint="near Chinatown")
++    r = run(catalog, schedule, caller, "appt_027", location_hint="Chinatown", near=True)  # "near Chinatown"
+     pt = tuple(EXTRAS["landmarks"]["Chinatown"])
+     d = [miles(pt, loc_pt(o.location_id)) for o in r.options]
+     assert d == sorted(d)
+diff -ruN -x __pycache__ tests_independent_before/test_places.py ../work/backend/tests_independent/test_places.py
+--- tests_independent_before/test_places.py	2026-10-07 19:14:54.391170942 +0400
++++ ../work/backend/tests_independent/test_places.py	2026-10-07 19:14:54.424660242 +0400
+@@ -1,15 +1,18 @@
+-"""Places (decision 24): 'near X' ranks; 'the X one' restricts; shared names are
++"""Places (decision 24, as changed by round 7): the AI passes a place NAME plus near
++yes/no. near=False restricts to that place; near=True ranks; shared names are
+ ambiguous; unknown places are reported, not guessed."""
+ 
+ import pytest
+ 
+ 
+ @pytest.mark.parametrize("hint,loc", [
+-    ("Midtown", "loc_005"), ("the Midtown one", "loc_005"), ("Midtown Medical Group", "loc_005"),
+-    ("midtown!!", "loc_005"), ("Downtown", "loc_004"), ("the downtown clinic", "loc_004"),
+-    ("Mission Bay", "loc_000"), ("the Mission District one", "loc_001"), ("Mission District Family Clinic", "loc_001"),
++    # round 7: "the X one", "the downtown clinic", "the Downtown location" are phrases, not
++    # names; the AI now passes the bare name ("Midtown", "Downtown", "Mission District").
++    ("Midtown", "loc_005"), ("Midtown Medical Group", "loc_005"),
++    ("midtown!!", "loc_005"), ("Downtown", "loc_004"), ("downtown", "loc_004"),
++    ("Mission Bay", "loc_000"), ("Mission District", "loc_001"), ("Mission District Family Clinic", "loc_001"),
+     ("North Beach", "loc_002"), ("North Gate", "loc_003"), ("Sunset", "loc_006"), ("Richmond", "loc_007"),
+-    ("Union Square", "loc_004"), ("Civic Center", "loc_005"), ("the Downtown location", "loc_004"),
++    ("Union Square", "loc_004"), ("Civic Center", "loc_005"), ("Downtown Health Center", "loc_004"),
+     ("SUNSET COMMUNITY CLINIC", "loc_006"), ("Outer Sunset", "loc_006"),
+ ])
+ def test_named_location_restricts(catalog, hint, loc):
+@@ -17,43 +20,40 @@
+     assert m.kind == "location" and m.location_ids == [loc] and m.near is False
+ 
+ 
++# round 7: what the caller said ("near Downtown", "close to Downtown", "around Midtown",
++# "not far from Richmond", "by the Sunset", "somewhere near downtown") becomes the name plus near=True.
+ @pytest.mark.parametrize("hint,loc", [
+-    ("near Downtown", "loc_004"), ("close to Downtown", "loc_004"), ("around Midtown", "loc_005"),
+-    ("next to Union Square", "loc_004"), ("not far from Richmond", "loc_007"), ("by the Sunset", "loc_006"),
+-    ("somewhere near downtown", "loc_004"), ("near downtown, please", None),
++    ("Downtown", "loc_004"), ("Midtown", "loc_005"), ("Union Square", "loc_004"), ("Richmond", "loc_007"),
++    ("the Sunset", "loc_006"), ("downtown", "loc_004"),
+ ])
+ def test_near_location(catalog, hint, loc):
+-    m = catalog.resolve_place(hint)
+-    if loc is None:
+-        return  # just must not crash
++    m = catalog.resolve_place(hint, near=True)
+     assert m.kind == "location" and m.location_ids == [loc] and m.near is True
+ 
+ 
+-@pytest.mark.parametrize("hint", ["the one near Downtown", "closer to Downtown", "closest to downtown"])
++@pytest.mark.parametrize("hint", ["Downtown", "downtown", "DOWNTOWN"])
+ def test_everyday_near_phrasings(catalog, hint):
+-    """'Closer to downtown' is the exact phrase from the baseline call (case 4).
+-    Decision 24 lists near / close to / ... ; 'closer to' and 'the one near' are the
+-    same wish in everyday speech, so they should resolve to Downtown with near=True."""
+-    m = catalog.resolve_place(hint)
++    """'Closer to downtown' is the exact phrase from the baseline call (case 4). In round 7
++    the AI hears it and passes "Downtown" with near=True; the code must rank by distance."""
++    m = catalog.resolve_place(hint, near=True)
+     assert m.point is not None and m.near is True
+-    assert m.kind in ("location", "landmark")
+-    if m.kind == "location":
+-        assert m.location_ids == ["loc_004"]
++    assert m.kind == "location" and m.location_ids == ["loc_004"]
+ 
+ 
+-@pytest.mark.parametrize("hint,locs", [
+-    ("Mission", {"loc_000", "loc_001"}), ("the Mission one", {"loc_000", "loc_001"}),
+-    ("North", {"loc_002", "loc_003"}), ("near Mission", {"loc_000", "loc_001"}),
++@pytest.mark.parametrize("hint,near,locs", [
++    ("Mission", False, {"loc_000", "loc_001"}), ("the Mission", False, {"loc_000", "loc_001"}),
++    ("North", False, {"loc_002", "loc_003"}), ("Mission", True, {"loc_000", "loc_001"}),
+ ])
+-def test_ambiguous(catalog, hint, locs):
+-    m = catalog.resolve_place(hint)
+-    assert m.kind == "ambiguous" and set(m.location_ids) == locs
++def test_ambiguous(catalog, hint, near, locs):
++    m = catalog.resolve_place(hint, near=near)
++    assert m.kind == "ambiguous" and set(m.location_ids) == locs and m.near is near
+ 
+ 
+-@pytest.mark.parametrize("hint", ["Chinatown", "near Chinatown", "Financial District", "Castro",
++@pytest.mark.parametrize("hint", ["Chinatown", "Financial District", "Castro",
+                                   "Golden Gate Park", "Fisherman's Wharf", "fishermans wharf", "Noe Valley"])
+-def test_landmarks(catalog, hint):
+-    m = catalog.resolve_place(hint)
++@pytest.mark.parametrize("near", [False, True])
++def test_landmarks(catalog, hint, near):
++    m = catalog.resolve_place(hint, near=near)   # a landmark is always "near": it isn't a clinic
+     assert m.kind == "landmark" and m.point is not None and m.near is True
+ 
+ 
+diff -ruN -x __pycache__ tests_independent_before/test_round2_other.py ../work/backend/tests_independent/test_round2_other.py
+--- tests_independent_before/test_round2_other.py	2026-10-07 19:14:54.391242508 +0400
++++ ../work/backend/tests_independent/test_round2_other.py	2026-10-07 19:21:03.657886579 +0400
+@@ -47,7 +47,7 @@
+     assert c.preferences.preferred_provider_id == "prov_001" and c.preferences.preferred_location_id == "loc_004"
+ 
+ 
+-@pytest.mark.parametrize("what,value", [("doctor", "Dr. Kenji Kim"), ("location", "the Midtown one"),
++@pytest.mark.parametrize("what,value", [("doctor", "Dr. Kenji Kim"), ("location", "Midtown"),   # round 7: a name
+                                         ("time", "Monday")])
+ def test_at_most_one_doctor_and_one_place_wish(what, value):
+     c = full_card()
+@@ -315,7 +315,7 @@
+ 
+ 
+ def test_answer_question_location_and_unknowns(catalog):
+-    a = answer_question(catalog, "location", "the Midtown one")
++    a = answer_question(catalog, "location", "Midtown")   # round 7: a name, not "the Midtown one"
+     assert a["results"][0]["name"] == "Midtown Medical Group" and "2099 Market St" in a["results"][0]["address"]
+     assert answer_question(catalog, "doctor", "Dr. Zzyzx")["found"] is False
+     assert answer_question(catalog, "weather", "today")["found"] is False
+diff -ruN -x __pycache__ tests_independent_before/test_round2_places.py ../work/backend/tests_independent/test_round2_places.py
+--- tests_independent_before/test_round2_places.py	2026-10-07 19:14:54.391270916 +0400
++++ ../work/backend/tests_independent/test_round2_places.py	2026-10-07 19:16:06.155205975 +0400
+@@ -25,28 +25,33 @@
+ 
+ 
+ # ---------------------------------------------------------------- spec phrasings
++# Round 7: every one of these the AI now passes as the bare name plus near=True. The
++# phrase itself is no longer read, so it isn't a place name ("not recognised").
+ NEAR_WORDS = ["near", "nearby", "close to", "closer to", "closest to", "around", "next to", "not far from", "by",
+               "the one near", "on the way to"]
+ 
+ 
+ @pytest.mark.parametrize("word", NEAR_WORDS)
+ def test_every_near_phrasing_ranks_without_restricting(catalog, word):
+-    m = catalog.resolve_place(f"{word} Downtown")
++    m = catalog.resolve_place("Downtown", near=True)
+     assert m.kind in ("location", "landmark") and m.near is True, (word, m)
+     assert m.point is not None
++    assert catalog.resolve_place(f"{word} Downtown").kind == "none"
+ 
+ 
+ @pytest.mark.parametrize("word", NEAR_WORDS)
+ def test_every_near_phrasing_with_a_landmark(catalog, word):
+-    m = catalog.resolve_place(f"{word} Chinatown")
++    m = catalog.resolve_place("Chinatown", near=True)
+     assert m.kind == "landmark" and m.near is True and m.label == "Chinatown", (word, m)
++    assert catalog.resolve_place(f"{word} Chinatown").kind == "none"
+ 
+ 
++# round 7: "the X one" became the bare name X (near=False)
+ @pytest.mark.parametrize("hint,lid", [
+-    ("the Hayes Valley one", "loc_005"), ("the Marina District", "loc_003"), ("Richmond District", "loc_007"),
+-    ("the Midtown one", "loc_005"), ("the Mission District one", "loc_001"), ("Mission Bay", "loc_000"),
+-    ("the Marina one", "loc_003"), ("the Sunset one", "loc_006"), ("North Beach", "loc_002"),
+-    ("Downtown Health Center", "loc_004"), ("the downtown one", "loc_004"),
++    ("Hayes Valley", "loc_005"), ("the Marina District", "loc_003"), ("Richmond District", "loc_007"),
++    ("Midtown", "loc_005"), ("Mission District", "loc_001"), ("Mission Bay", "loc_000"),
++    ("Marina", "loc_003"), ("Sunset", "loc_006"), ("North Beach", "loc_002"),
++    ("Downtown Health Center", "loc_004"), ("downtown", "loc_004"),
+ ])
+ def test_naming_one_of_our_locations_restricts(catalog, hint, lid):
+     m = catalog.resolve_place(hint)
+@@ -54,8 +59,8 @@
+ 
+ 
+ def test_near_a_neighbourhood_ranks(catalog):
+-    m = catalog.resolve_place("near Hayes Valley")
+-    assert m.near is True and m.point is not None
++    m = catalog.resolve_place("Hayes Valley", near=True)   # round 7: "near Hayes Valley"
++    assert m.near is True and m.point is not None and m.location_ids == ["loc_005"]
+ 
+ 
+ def test_castro_district_is_the_landmark(catalog):
+@@ -63,26 +68,30 @@
+     assert m.kind == "landmark" and m.label == "Castro"
+ 
+ 
+-@pytest.mark.parametrize("hint", ["near Mission Street", "the one on Mission Street", "Mission Street"])
+-def test_mission_street_is_north_beach_specialty_center(catalog, hint):
+-    m = catalog.resolve_place(hint)
++# round 7: "near Mission Street" -> ("Mission Street", near=True); "the one on Mission Street" -> near=False
++@pytest.mark.parametrize("hint,near", [("Mission Street", True), ("Mission Street", False), ("Mission St", False),
++                                       ("481 Mission St", True)])
++def test_mission_street_is_north_beach_specialty_center(catalog, hint, near):
++    m = catalog.resolve_place(hint, near=near)
+     assert m.location_ids == ["loc_002"], m  # 481 Mission St
+-    assert m.near == hint.startswith("near")
++    assert m.near == near
+ 
+ 
+ @pytest.mark.parametrize("hint,ids", [
+-    ("the one on Geary", {"loc_004", "loc_006"}), ("Geary Boulevard", {"loc_004", "loc_006"}),
+-    ("the one on Market", {"loc_001", "loc_005"}), ("the one on Bryant Street", {"loc_003", "loc_007"}),
++    # round 7: "the one on Geary" -> "Geary Street"; "the North one" -> "North"
++    ("Geary Street", {"loc_004", "loc_006"}), ("Geary Boulevard", {"loc_004", "loc_006"}),
++    ("Market Street", {"loc_001", "loc_005"}), ("Bryant Street", {"loc_003", "loc_007"}),
+     ("the Mission", {"loc_000", "loc_001"}), ("Mission", {"loc_000", "loc_001"}),
+-    ("the North one", {"loc_002", "loc_003"}),
++    ("North", {"loc_002", "loc_003"}),
+ ])
+ def test_ambiguous_places(catalog, hint, ids):
+     m = catalog.resolve_place(hint)
+     assert m.kind == "ambiguous" and set(m.location_ids) == ids, m
+ 
+ 
+-@pytest.mark.parametrize("hint,lid", [("the one on Main Street", "loc_000"), ("Main St", "loc_000"),
+-                                      ("the one on Main", "loc_000"), ("on Main", "loc_000")])
++# round 7: "the one on Main (Street)" / "on Main" -> "Main Street"
++@pytest.mark.parametrize("hint,lid", [("Main Street", "loc_000"), ("Main St", "loc_000"),
++                                      ("main street", "loc_000"), ("4874 Main St", "loc_000")])
+ def test_main_street_is_mission_bay(catalog, hint, lid):
+     """4874 Main St is Mission Bay Health Center (catalog.json)."""
+     m = catalog.resolve_place(hint)
+@@ -105,11 +114,12 @@
+     assert wrong not in m.location_ids, (hint, m)
+ 
+ 
+-@pytest.mark.parametrize("hint,wrong", [("Glen Park", "Golden Gate Park"), ("near Cole Valley", "Noe Valley")])
+-def test_no_wrong_landmark_guessed(catalog, hint, wrong):
++@pytest.mark.parametrize("hint,wrong", [("Glen Park", "Golden Gate Park"), ("Cole Valley", "Noe Valley")])
++@pytest.mark.parametrize("near", [False, True])
++def test_no_wrong_landmark_guessed(catalog, hint, wrong, near):
+     """Real San Francisco neighbourhoods we have no data for must be reported as unknown,
+     not swapped for a different place miles away."""
+-    m = catalog.resolve_place(hint)
++    m = catalog.resolve_place(hint, near=near)
+     assert m.label != wrong, (hint, m)
+ 
+ 
+@@ -147,11 +157,12 @@
+     assert [n.kind for n in r.notes] == ["place_unknown"] and r.options
+ 
+ 
+-@pytest.mark.parametrize("hint,origin", [("near Hayes Valley", "loc_005"), ("closer to downtown", "loc_004"),
+-                                         ("on the way to Downtown", "loc_004")])
++# round 7: the AI passes the name plus near=True for each of these phrasings
++@pytest.mark.parametrize("hint,origin", [("Hayes Valley", "loc_005"), ("downtown", "loc_004"),
++                                         ("Downtown", "loc_004")])
+ def test_near_ranks_by_distance_and_keeps_other_places(catalog, schedule, hint, origin):
+     r = find_options(catalog, schedule, returning(list(SPECIALTIES)), "appt_027",
+-                     Preferences(location_hint=hint), NOW)
++                     Preferences(location_hint=hint, near=True), NOW)
+     assert r.options and not r.notes, [str(n) for n in r.notes]
+     d = [miles(pt(origin), pt(o.location_id)) for o in r.options]
+     assert d == sorted(d), [(o.location_name, round(x, 2)) for o, x in zip(r.options, d)]
+@@ -159,8 +170,9 @@
+ 
+ 
+ def test_soonest_ranks_by_time_even_with_a_named_place(catalog, schedule):
+-    for hint in ["near Downtown", "the Midtown one", "near Chinatown"]:
++    for hint, near in [("Downtown", True), ("Midtown", False), ("Chinatown", True)]:   # round 7: name + near
+         r = find_options(catalog, schedule, returning(list(SPECIALTIES)), "appt_002",
+-                         Preferences(location_hint=hint, soonest=True), NOW)
++                         Preferences(location_hint=hint, near=near, soonest=True), NOW)
++        assert r.options and not r.notes, hint
+         starts = [o.start for o in r.options]
+         assert starts == sorted(starts), hint
+diff -ruN -x __pycache__ tests_independent_before/test_round2_wishes.py ../work/backend/tests_independent/test_round2_wishes.py
+--- tests_independent_before/test_round2_wishes.py	2026-10-07 19:14:54.391294374 +0400
++++ ../work/backend/tests_independent/test_round2_wishes.py	2026-10-07 19:17:52.849396668 +0400
+@@ -46,6 +46,7 @@
+     place = rng.choice(["none", "hint", "carried"])
+     if place == "hint":
+         p.location_hint = rng.choice(PLACES)
++        p.near = rng.random() < 0.3   # round 7: near only ranks
+     elif place == "carried":
+         p.preferred_location_id = rng.choice(sorted(LOC))
+     if rng.random() < 0.6:
+@@ -126,7 +127,7 @@
+     assert not problems, (len(problems), problems[:4])
+ 
+ 
+-@pytest.mark.parametrize("what,value", [("location", "the Midtown one"), ("doctor", "Dr. Kenji Kim"),
++@pytest.mark.parametrize("what,value", [("location", "Midtown"), ("doctor", "Dr. Kenji Kim"),
+                                         ("location", "Richmond Care Center"), ("doctor", "Dr. Daniel Smith"),
+                                         ("doctor", "Dr. Garcia"), ("location", "Mission Bay")])
+ @pytest.mark.parametrize("kind", ["new", "returning-all"])
+@@ -148,7 +149,7 @@
+     card = BookingCard(caller=caller)
+     card.choices = Choices(specialty="Dermatology", visit_type_id="appt_027", provider_id="prov_001",
+                            location_id="loc_004", slot=NOW + timedelta(days=2))
+-    card.change_choice("location", "the Midtown one")
++    card.change_choice("location", "Midtown")  # round 7: a place name
+     r = find_options(catalog, schedule, caller, "appt_027", card.preferences, NOW)
+     assert r.options and all(o.location_id == "loc_005" for o in r.options)
+     conflicts = [n for n in r.notes if n.kind == "wish_conflict"]
+@@ -219,9 +220,9 @@
+ 
+ def test_carried_doctor_with_latest_doctor_set_directly(catalog, schedule):
+     """Spec 1: latest (set by change_choice OR SET DIRECTLY) is strongest of all.
+-    Carried Dr. Daniel Chen + said 'the Midtown one' + latest='doctor': the doctor should win.
++    Carried Dr. Daniel Chen + said 'Midtown' (round 7: a name) + latest='doctor': the doctor should win.
+     (Ambiguous spec corner: change_choice never produces this, but the spec allows setting it.)"""
+-    p = Preferences(preferred_provider_id="prov_001", location_hint="the Midtown one", latest="doctor")
++    p = Preferences(preferred_provider_id="prov_001", location_hint="Midtown", latest="doctor")
+     r = find_options(catalog, schedule, new_caller(), "appt_027", p, NOW)
+     assert r.options and all(o.provider_id == "prov_001" for o in r.options), \
+         ([(o.provider_name, o.location_name) for o in r.options], [str(n) for n in r.notes])
+@@ -250,7 +251,7 @@
+     caller = new_caller()
+     card = BookingCard(caller=caller, preferences=Preferences(doctor_name_heard="Dr. Daniel Chen"))
+     card.choices = Choices(specialty="Dermatology", visit_type_id="appt_027")
+-    assert card.change_choice("location", "the Midtown one") == BOOKING
++    assert card.change_choice("location", "Midtown") == BOOKING  # round 7: the name
+     assert card.preferences.latest == "location"
+     r = find_options(catalog, schedule, caller, "appt_027", card.preferences, NOW)
+     assert r.options and all(o.location_id == "loc_005" for o in r.options), \
+@@ -259,7 +260,7 @@
+ 
+ 
+ def test_latest_location_set_directly_beats_said_doctor(catalog, schedule):
+-    p = Preferences(doctor_name_heard="Dr. Garcia", location_hint="the Hayes Valley one", latest="location")
++    p = Preferences(doctor_name_heard="Dr. Garcia", location_hint="Hayes Valley", latest="location")  # round 7: the name
+     r = find_options(catalog, schedule, returning(), "appt_017", p, NOW)
+     assert r.options and all(o.location_id == "loc_005" for o in r.options), \
+         ([(o.provider_name, o.location_name) for o in r.options], [str(n) for n in r.notes])
+diff -ruN -x __pycache__ tests_independent_before/test_round3_other.py ../work/backend/tests_independent/test_round3_other.py
+--- tests_independent_before/test_round3_other.py	2026-10-07 19:14:54.391352204 +0400
++++ ../work/backend/tests_independent/test_round3_other.py	2026-10-07 19:15:34.060646541 +0400
+@@ -21,7 +21,7 @@
+ 
+ # ---------------------------------------------------------------- s2: notes are plain records
+ def _some_notes(catalog, schedule):
+-    prefs = [Preferences(doctor_name_heard="Dr. Garsha", location_hint="the Mission one", language="Klingon",
++    prefs = [Preferences(doctor_name_heard="Dr. Garsha", location_hint="Mission", language="Klingon",  # round 7: a name
+                          days=["Saturday"]),
+              Preferences(location_hint="Mars"), Preferences(time_of_day="evening"),
+              Preferences(doctor_name_heard="Dr. Maria Garcia"), Preferences(days=["20261013"])]
+@@ -50,7 +50,7 @@
+ 
+ def test_options_result_to_dict_is_json(catalog, schedule):
+     r = find_options(catalog, schedule, new_caller(), "appt_027",
+-                     Preferences(doctor_name_heard="Dr. Garsha", location_hint="near Downtown"), NOW)
++                     Preferences(doctor_name_heard="Dr. Garsha", location_hint="Downtown", near=True), NOW)
+     d = json.loads(json.dumps(r.to_dict()))
+     assert d["notes"] == [n.to_dict() for n in r.notes] and len(d["options"]) == len(r.options)
+ 
+@@ -277,7 +277,7 @@
+     bad = []
+     for kind, caller, is_new, refs in [("new", new_caller(), True, []), ("all", ALL, False, list(SPECIALTIES))]:
+         for vt in VT:
+-            r = find_options(catalog, schedule, caller, vt, Preferences(location_hint="near Downtown"), NOW)
++            r = find_options(catalog, schedule, caller, vt, Preferences(location_hint="Downtown", near=True), NOW)
+             if r.bookable != ref_bookable(is_new, refs, vt):
+                 bad.append((kind, vt, "bookable"))
+             for o in r.options:
+diff -ruN -x __pycache__ tests_independent_before/test_round3_places.py ../work/backend/tests_independent/test_round3_places.py
+--- tests_independent_before/test_round3_places.py	2026-10-07 19:14:54.391497382 +0400
++++ ../work/backend/tests_independent/test_round3_places.py	2026-10-07 19:16:41.287360592 +0400
+@@ -50,18 +50,20 @@
+     assert m.kind in ("none", "any") and not m.location_ids and m.point is None, (hint, m)
+ 
+ 
++# round 7: "on Main", "the one on Main" and "the one on Mission" are phrases; the AI passes
++# the street with its street word ("Main Street", "Mission Street").
+ @pytest.mark.parametrize("hint,ids", [
+     ("Mission Street", ["loc_002"]), ("Mission St", ["loc_002"]), ("Mission St.", ["loc_002"]),
+-    ("on Main", ["loc_000"]), ("the one on Main", ["loc_000"]), ("Main Street", ["loc_000"]),
+-    ("the one on Mission", ["loc_002"]),
++    ("Main St", ["loc_000"]), ("main street", ["loc_000"]), ("Main Street", ["loc_000"]),
++    ("MISSION STREET", ["loc_002"]),
+ ])
+ def test_streets_with_a_street_word_or_on(catalog, hint, ids):
+     m = catalog.resolve_place(hint)
+     assert m.location_ids == ids and m.kind == "location", (hint, m)
+ 
+ 
+-@pytest.mark.parametrize("hint,ids", [("Geary Blvd", {"loc_004", "loc_006"}), ("the one on Geary", {"loc_004", "loc_006"}),
+-                                      ("Market Street", {"loc_001", "loc_005"}), ("on Bryant", {"loc_003", "loc_007"})])
++@pytest.mark.parametrize("hint,ids", [("Geary Blvd", {"loc_004", "loc_006"}), ("Geary Street", {"loc_004", "loc_006"}),
++                                      ("Market Street", {"loc_001", "loc_005"}), ("Bryant St", {"loc_003", "loc_007"})])
+ def test_shared_streets_are_ambiguous(catalog, hint, ids):
+     m = catalog.resolve_place(hint)
+     assert m.kind == "ambiguous" and set(m.location_ids) == ids, (hint, m)
+@@ -74,48 +76,52 @@
+     assert m.kind == "none" and not m.location_ids, (hint, m)
+ 
+ 
+-@pytest.mark.parametrize("hint,lid", [("4874 Main St", "loc_000"), ("481 Mission St", "loc_002"),
+-                                      ("2099 Market St", "loc_005"), ("4732 Market Street", "loc_001"),
+-                                      ("near 481 Mission St", "loc_002"), ("4455 Geary Blvd", "loc_004")])
+-def test_a_full_address_from_the_catalog_is_recognised(catalog, hint, lid):
++@pytest.mark.parametrize("hint,lid,near", [("4874 Main St", "loc_000", False), ("481 Mission St", "loc_002", False),
++                                           ("2099 Market St", "loc_005", False), ("4732 Market Street", "loc_001", False),
++                                           ("481 Mission St", "loc_002", True), ("4455 Geary Blvd", "loc_004", False)])
++def test_a_full_address_from_the_catalog_is_recognised(catalog, hint, lid, near):
+     """My own realistic case: a caller reads the address off a letter. Spec: streets from our
+     addresses are matched when the caller says a street word, and the house number is the
+-    most precise thing they could say (it also settles shared streets)."""
+-    m = catalog.resolve_place(hint)
+-    assert m.location_ids == [lid], (hint, m)
++    most precise thing they could say (it also settles shared streets). Round 7: "near 481
++    Mission St" is the address with near=True."""
++    m = catalog.resolve_place(hint, near=near)
++    assert m.location_ids == [lid] and m.near is near, (hint, m)
+ 
+ 
+-@pytest.mark.parametrize("hint,ids", [("near Market Street", {"loc_001", "loc_005"}),
+-                                      ("near the Mission", {"loc_000", "loc_001"}),
+-                                      ("close to Geary Boulevard", {"loc_004", "loc_006"}),
+-                                      ("near Mission", {"loc_000", "loc_001"})])
++# round 7: "near Market Street" etc. -> the name with near=True
++@pytest.mark.parametrize("hint,ids", [("Market Street", {"loc_001", "loc_005"}),
++                                      ("the Mission", {"loc_000", "loc_001"}),
++                                      ("Geary Boulevard", {"loc_004", "loc_006"}),
++                                      ("Mission", {"loc_000", "loc_001"})])
+ def test_near_an_ambiguous_place_notes_but_does_not_narrow(catalog, schedule, hint, ids):
+-    """Spec: '"near" plus an ambiguous name gives a place_ambiguous note but does NOT narrow.'"""
+-    m = catalog.resolve_place(hint)
++    """Spec: 'An ambiguous name with near=True gives the note but doesn't narrow.'"""
++    m = catalog.resolve_place(hint, near=True)
+     assert m.kind == "ambiguous" and set(m.location_ids) == ids and m.near
+     for vt in ["appt_002", "appt_027", "appt_017"]:
+         base = find_options(catalog, schedule, ALL, vt, Preferences(), NOW)
+-        r = find_options(catalog, schedule, ALL, vt, Preferences(location_hint=hint), NOW)
++        r = find_options(catalog, schedule, ALL, vt, Preferences(location_hint=hint, near=True), NOW)
+         assert [n.kind for n in r.notes] == ["place_ambiguous"], [str(n) for n in r.notes]
+         assert opts(r) == opts(base), (vt, hint)
+ 
+ 
+ def test_the_one_on_geary_does_narrow_to_both(catalog, schedule):
+-    r = find_options(catalog, schedule, ALL, "appt_002", Preferences(location_hint="the one on Geary"), NOW)
++    r = find_options(catalog, schedule, ALL, "appt_002", Preferences(location_hint="Geary Street"), NOW)  # round 7
+     assert "place_ambiguous" in [n.kind for n in r.notes]
+     assert r.options and {o.location_id for o in r.options} <= {"loc_004", "loc_006"}
+ 
+ 
+-@pytest.mark.parametrize("hint,lid", [("on the way to Downtown", "loc_004"), ("on the way to the Midtown one", "loc_005"),
+-                                      ("on the way to Hayes Valley", "loc_005")])
++# round 7: "on the way to X" -> the name X with near=True (the phrase itself is not read)
++@pytest.mark.parametrize("hint,lid", [("Downtown", "loc_004"), ("Midtown", "loc_005"),
++                                      ("Hayes Valley", "loc_005")])
+ def test_on_the_way_to_is_near(catalog, hint, lid):
+-    m = catalog.resolve_place(hint)
+-    assert m.near and m.point is not None and (m.location_ids in ([lid], [])), (hint, m)
++    m = catalog.resolve_place(hint, near=True)
++    assert m.near and m.point is not None and m.location_ids == [lid], (hint, m)
++    assert catalog.resolve_place("on the way to " + hint).kind == "none"
+ 
+ 
+ @pytest.mark.parametrize("hint,lid", [("downtown SF", "loc_004"), ("Downtown San Francisco", "loc_004"),
+-                                      ("the Midtown one in SF", "loc_005"), ("SF Midtown", "loc_005"),
+-                                      ("mid town", "loc_005"), ("the mid town one", "loc_005"),
++                                      ("Midtown SF", "loc_005"), ("SF Midtown", "loc_005"),   # round 7: names only
++                                      ("mid town", "loc_005"), ("the mid town", "loc_005"),
+                                       ("Mission Bay San Francisco", "loc_000")])
+ def test_city_words_are_ignored_and_mid_town_fits(catalog, hint, lid):
+     m = catalog.resolve_place(hint)
+@@ -124,25 +130,30 @@
+ 
+ # ---------------------------------------------------------------- my own San Francisco phrasings
+ @pytest.mark.parametrize("hint,lid", [
+-    ("the one in the Marina", "loc_003"), ("Inner Richmond", "loc_007"), ("Outer Sunset", "loc_006"),
+-    ("the Civic Center one", "loc_005"), ("Union Square", "loc_004"), ("Mission Bay area", "loc_000"),
++    # round 7: the AI passes the name inside each phrase ("the one in the Marina" -> "the Marina")
++    ("the Marina", "loc_003"), ("Inner Richmond", "loc_007"), ("Outer Sunset", "loc_006"),
++    ("Civic Center", "loc_005"), ("Union Square", "loc_004"), ("Mission Bay", "loc_000"),
+     ("the Mission District", "loc_001"), ("Richmond District", "loc_007"), ("Sunset District", "loc_006"),
+-    ("Richmund", "loc_007"), ("Dowtown", "loc_004"), ("north beach area", "loc_002"),
+-    ("the clinic in the Marina", "loc_003"), ("downtown in San Francisco", "loc_004"),
++    ("Richmund", "loc_007"), ("Dowtown", "loc_004"), ("north beach", "loc_002"),
++    ("Marina", "loc_003"), ("downtown San Francisco", "loc_004"),
+ ])
+ def test_realistic_names_of_our_locations(catalog, hint, lid):
+     m = catalog.resolve_place(hint)
+     assert m.location_ids == [lid] and not m.near, (hint, m)
+ 
+ 
+-@pytest.mark.parametrize("hint,label", [("near Chinatown", "Chinatown"), ("SoMa", "SoMa"),
+-                                        ("Financial District", "Financial District"), ("the Embarcadero", "Embarcadero"),
+-                                        ("Fisherman's Wharf", "Fisherman's Wharf"), ("the Haight", "Haight-Ashbury"),
+-                                        ("close to the Castro", "Castro"), ("Pacific Heights", "Pacific Heights"),
+-                                        ("near Nob Hill", "Nob Hill"), ("Dogpatch", "Dogpatch"), ("Bay View", "Bayview"),
+-                                        ("the Presidio", "Presidio"), ("near Golden Gate Park", "Golden Gate Park")])
+-def test_realistic_landmarks(catalog, hint, label):
+-    m = catalog.resolve_place(hint)
++# round 7: "near X" / "close to X" -> X with near=True
++@pytest.mark.parametrize("hint,label,near", [("Chinatown", "Chinatown", True), ("SoMa", "SoMa", False),
++                                        ("Financial District", "Financial District", False),
++                                        ("the Embarcadero", "Embarcadero", False),
++                                        ("Fisherman's Wharf", "Fisherman's Wharf", False),
++                                        ("the Haight", "Haight-Ashbury", False),
++                                        ("the Castro", "Castro", True), ("Pacific Heights", "Pacific Heights", False),
++                                        ("Nob Hill", "Nob Hill", True), ("Dogpatch", "Dogpatch", False),
++                                        ("Bay View", "Bayview", False),
++                                        ("the Presidio", "Presidio", False), ("Golden Gate Park", "Golden Gate Park", True)])
++def test_realistic_landmarks(catalog, hint, label, near):
++    m = catalog.resolve_place(hint, near=near)
+     assert m.kind == "landmark" and m.label == label and m.near, (hint, m)
+ 
+ 
+@@ -156,7 +167,7 @@
+     assert not m.location_ids and m.kind in ("none", "any"), (hint, m)
+ 
+ 
+-@pytest.mark.parametrize("hint", ["the Midtown one", "Mission Bay", "the one on Main", "Union Square", "the Sunset one"])
++@pytest.mark.parametrize("hint", ["Midtown", "Mission Bay", "Main Street", "Union Square", "Sunset"])  # round 7: names
+ def test_named_place_restricts_options_when_possible(catalog, schedule, hint):
+     lid = catalog.resolve_place(hint).location_ids[0]
+     r = find_options(catalog, schedule, ALL, "appt_002", Preferences(location_hint=hint), NOW)
+diff -ruN -x __pycache__ tests_independent_before/test_round3_wishes.py ../work/backend/tests_independent/test_round3_wishes.py
+--- tests_independent_before/test_round3_wishes.py	2026-10-07 19:14:54.391541326 +0400
++++ ../work/backend/tests_independent/test_round3_wishes.py	2026-10-07 19:21:03.658472600 +0400
+@@ -324,7 +324,7 @@
+     card.turn_down_doctors(catalog, current=True)
+     assert set(card.preferences.not_provider_ids) == {first[0], o.provider_id}
+     card.change_choice("time", "Thursday")
+-    card.change_choice("location", "the Midtown one")
++    card.change_choice("location", "Midtown")   # round 7: a place name
+     assert set(card.preferences.not_provider_ids) == {first[0], o.provider_id}  # "for the rest of the call"
+     r = find_options(catalog, schedule, card.caller, vt, card.preferences, NOW)
+     assert r.options and not {x.provider_id for x in r.options} & {first[0], o.provider_id}
+diff -ruN -x __pycache__ tests_independent_before/test_round4_words.py ../work/backend/tests_independent/test_round4_words.py
+--- tests_independent_before/test_round4_words.py	2026-10-07 19:14:54.391675719 +0400
++++ ../work/backend/tests_independent/test_round4_words.py	2026-10-07 19:21:03.659353102 +0400
+@@ -169,12 +169,15 @@
+ 
+ 
+ # ---------------------------------------------------------------- places (change 3 and the list)
+-@pytest.mark.parametrize("hint", ["near Geary", "near Market", "close to Geary", "the one near Market", "near Bryant"])
++# Round 7 reverses round-4 change 3: a bare street name is never a street. "near Geary"
++# is now passed as "Geary Street" with near=True; bare "Geary" with near=True isn't recognised.
++@pytest.mark.parametrize("hint", ["Geary Street", "Market Street", "Geary Blvd", "Market St", "Bryant Street"])
+ def test_near_a_bare_street_is_recognised_and_ambiguous(catalog, schedule, hint):
+-    street = hint.split()[-1].lower()
+-    m = catalog.resolve_place(hint)
++    street = hint.split()[0].lower()
++    m = catalog.resolve_place(hint, near=True)
+     assert m.kind == "ambiguous" and set(m.location_ids) == STREETS[street] and m.near
+-    r = run(catalog, schedule, Preferences(location_hint=hint))
++    assert catalog.resolve_place(hint.split()[0], near=True).kind == "none"
++    r = run(catalog, schedule, Preferences(location_hint=hint, near=True))
+     base = run(catalog, schedule, Preferences())
+     assert [n.kind for n in r.notes] == ["place_ambiguous"]
+     assert [(o.provider_id, o.location_id, o.start) for o in r.options] == \
+@@ -186,30 +189,35 @@
+     assert catalog.resolve_place(hint).kind not in ("location", "ambiguous")
+ 
+ 
+-@pytest.mark.parametrize("hint,lid", [("near 4455 Geary", "loc_004"), ("near 4293 Geary Blvd", "loc_006"),
+-                                      ("944 Bryant St", "loc_003"), ("4671 Bryant Street", "loc_007"),
+-                                      ("near Main", "loc_000"), ("near Mission Street", "loc_002")])
+-def test_house_numbers_and_near_streets_pick_one_clinic(catalog, hint, lid):
+-    m = catalog.resolve_place(hint)
+-    assert m.kind == "location" and m.location_ids == [lid]
+-
+-
+-@pytest.mark.parametrize("hint", ["near Marin", "near Van Ness", "near Lombard", "near Union Street", "near St Mary's",
+-                                  "St Mary's Clinic", "near Sunset Boulevard", "nowhere", "near the bay", "Marin",
+-                                  "near Twin Peaks", "FiDi", "main", "the main one"])
+-def test_places_that_must_not_match(catalog, hint):
+-    m = catalog.resolve_place(hint)
++# round 7: "near 4455 Geary" -> ("4455 Geary Street", near=True); "near Main" -> ("Main Street", near=True)
++@pytest.mark.parametrize("hint,lid,near", [("4455 Geary Street", "loc_004", True), ("4293 Geary Blvd", "loc_006", True),
++                                           ("944 Bryant St", "loc_003", False), ("4671 Bryant Street", "loc_007", False),
++                                           ("Main Street", "loc_000", True), ("Mission Street", "loc_002", True)])
++def test_house_numbers_and_near_streets_pick_one_clinic(catalog, hint, lid, near):
++    m = catalog.resolve_place(hint, near=near)
++    assert m.kind == "location" and m.location_ids == [lid] and m.near is near
++
++
++# round 7: "near X" is now the name X with near=True; each must still not match
++@pytest.mark.parametrize("hint", ["Marin", "Van Ness", "Lombard", "Union Street", "St Mary's",
++                                  "St Mary's Clinic", "Sunset Boulevard", "nowhere", "the bay",
++                                  "Twin Peaks", "FiDi", "main", "the main one"])
++@pytest.mark.parametrize("near", [False, True])
++def test_places_that_must_not_match(catalog, hint, near):
++    m = catalog.resolve_place(hint, near=near)
+     assert m.kind == "none", (hint, m)
+ 
+ 
+-@pytest.mark.parametrize("hint", ["SF", "in SF", "San Francisco", "near SF"])
+-def test_city_words_alone_are_no_place_wish(catalog, schedule, hint):
+-    assert catalog.resolve_place(hint).kind == "any"
+-    assert not run(catalog, schedule, Preferences(location_hint=hint)).notes
++# round 7: "in SF" / "near SF" -> "SF" (near=True for the latter); linking words aren't read
++@pytest.mark.parametrize("hint,near", [("SF", False), ("San Francisco", False), ("SF", True), ("sf", False)])
++def test_city_words_alone_are_no_place_wish(catalog, schedule, hint, near):
++    assert catalog.resolve_place(hint, near=near).kind == "any"
++    assert not run(catalog, schedule, Preferences(location_hint=hint, near=near)).notes
+ 
+ 
+-@pytest.mark.parametrize("hint,lid", [("the Midtown one in SF", "loc_005"), ("Richmund", "loc_007"),
+-                                      ("Mision Bay", "loc_000"), ("the clinic in the Marina", "loc_003")])
++# round 7: linking words are no longer read; the AI passes "Midtown SF" / "the Marina"
++@pytest.mark.parametrize("hint,lid", [("Midtown SF", "loc_005"), ("Richmund", "loc_007"),
++                                      ("Mision Bay", "loc_000"), ("the Marina", "loc_003")])
+ def test_linking_words_and_long_misspellings(catalog, hint, lid):
+     m = catalog.resolve_place(hint)
+     assert m.kind == "location" and m.location_ids == [lid]
+diff -ruN -x __pycache__ tests_independent_before/test_round5_notes.py ../work/backend/tests_independent/test_round5_notes.py
+--- tests_independent_before/test_round5_notes.py	2026-10-07 19:14:54.391706859 +0400
++++ ../work/backend/tests_independent/test_round5_notes.py	2026-10-07 19:18:48.596155898 +0400
+@@ -24,7 +24,7 @@
+ from clinic import Preferences, Schedule, find_options
+ from conftest import NOW, new_caller, returning
+ from reference import LOC, PROV, SPECIALTIES, VT, ref_bookable, ref_pairs
+-from round6_reference import who_can_problems
++from round6_reference import capped_names_problems, who_can_problems
+ 
+ CALLERS = {"new": (True, []), "returning-none": (False, []), "returning-all": (False, list(SPECIALTIES))}
+ _SLOTS = {}
+@@ -67,8 +67,21 @@
+ 
+ 
+ def list_problems(names_text, want):
+-    """Problems with a joined list of names: wrong people, or not written 'A', 'A and B', 'A, B and C'."""
++    """Problems with a joined list of names: wrong people, or not written 'A', 'A and B', 'A, B and C'.
++    Round 7 s5: more than three names read three, then "and N more"; the count must add up."""
+     out = []
++    more = re.fullmatch(r"(?P<shown>.+) and (?P<n>\d+) more", names_text)
++    if len(want) > 3 or more:
++        if not more:
++            return [f"{len(want)} names but no 'and N more': {names_text!r}"]
++        shown = more.group("shown").split(", ")
++        if len(shown) != 3 or len(set(shown)) != 3:
++            out.append(f"'and N more' after {len(shown)} names, not 3: {names_text!r}")
++        if not set(shown) <= want or names_in(more.group("shown")) != set(shown):
++            out.append(f"names {shown} not all among {sorted(want)}")
++        if len(shown) + int(more.group("n")) != len(want):
++            out.append(f"count {len(shown)} + {more.group('n')} != {len(want)}")
++        return out
+     if names_in(names_text) != want:
+         out.append(f"names {sorted(names_in(names_text))} != {sorted(want)}")
+     parts = re.split(r", | and ", names_text)
+@@ -214,8 +227,12 @@
+                 if say != one:
+                     problems.append((where, "wording", say))
+                 continue
+-            if names_in(say) != want:
+-                problems.append((where, "names", sorted(want), say))
++            listed = re.search(r" are (?P<names>.+), whom you turned down", say)
++            if not listed:
++                problems.append((where, "wording", say))
++                continue
++            # round 7 s5: three names, then "and N more"; the count must add up
++            problems += [(where, p, say) for p in capped_names_problems(listed.group("names"), want)]
+             if re.search(r"The only doctor matching .* is [^,]+ and ", say) or "doctor matching" in say:
+                 problems.append((where, "singular grammar for several doctors", say))
+     assert tried
+diff -ruN -x __pycache__ tests_independent_before/test_round5_turn_down.py ../work/backend/tests_independent/test_round5_turn_down.py
+--- tests_independent_before/test_round5_turn_down.py	2026-10-07 19:14:54.391736380 +0400
++++ ../work/backend/tests_independent/test_round5_turn_down.py	2026-10-07 19:21:03.658924407 +0400
+@@ -129,9 +129,9 @@
+ 
+ 
+ def test_a_said_place_is_kept_and_a_carried_place_stays(catalog):
+-    card = card_for("new", SKIN, location_hint="the Midtown one")
++    card = card_for("new", SKIN, location_hint="Union Square", near=True)   # round 7: a name plus near
+     card.turn_down_doctors(catalog, provider_ids=[ids_named("Dr. Kenji Kim")[0]])
+-    assert card.preferences.location_hint == "the Midtown one"
++    assert (card.preferences.location_hint, card.preferences.near) == ("Union Square", True)
+     card = card_for("new", SKIN, preferred_location_id="loc_004", preferred_provider_id="prov_001")
+     card.turn_down_doctors(catalog, current=True)   # the carried-over doctor
+     p = card.preferences
+@@ -162,7 +162,7 @@
+ @pytest.mark.parametrize("label", list(REFUSALS))
+ def test_an_instruction_that_cannot_be_followed_is_refused_and_changes_nothing(catalog, label):
+     # A doctor was only NAMED (not chosen or carried), and nothing is on offer.
+-    card = card_for("new", SKIN, doctor_name_heard="Dr. Daniel Chen", location_hint="near Union Square",
++    card = card_for("new", SKIN, doctor_name_heard="Dr. Daniel Chen", location_hint="Union Square", near=True,
+                     days=["Thursday"], language="Arabic", not_provider_ids=["prov_027"], latest="time")
+     before = card.to_dict()
+     with pytest.raises(ValueError) as e:
+@@ -327,15 +327,16 @@
+     assert "Dr. Michael Sato" in not_list(card.summary(catalog))
+ 
+ 
+-@pytest.mark.parametrize("change", [("time", "Thursday"), ("time", "afternoon"), ("location", "the Richmond one"),
+-                                    ("location", "near Union Square"), ("language", "Arabic"), ("time", "any time")])
++# round 7: "the Richmond one" -> ("Richmond", near=False); "near Union Square" -> ("Union Square", near=True)
++@pytest.mark.parametrize("change", [("time", "Thursday"), ("time", "afternoon"), ("location", "Richmond"),
++                                    ("location", "Union Square", True), ("language", "Arabic"), ("time", "any time")])
+ def test_named_back_then_chosen_stays_back_after_any_other_change(catalog, schedule, change):
+     chen = ids_named("Dr. Daniel Chen")[0]
+     card = card_for("new", SKIN)
+     card.turn_down_doctors(catalog, provider_ids=[chen])
+     card.change_choice("doctor", "Dr. Daniel Chen")
+     choose(card, search(catalog, schedule, card).options[0])
+-    card.change_choice(*change)
++    card.change_choice(change[0], change[1], **({"near": True} if len(change) > 2 else {}))
+     card.change_choice("time", "Friday") if change[0] != "time" else None   # and one more change for good measure
+     r = search(catalog, schedule, card)
+     assert chen not in card.preferences.not_provider_ids
+diff -ruN -x __pycache__ tests_independent_before/test_round5_values.py ../work/backend/tests_independent/test_round5_values.py
+--- tests_independent_before/test_round5_values.py	2026-10-07 19:14:54.391767044 +0400
++++ ../work/backend/tests_independent/test_round5_values.py	2026-10-07 19:17:16.878983227 +0400
+@@ -222,16 +222,18 @@
+     return LOC[lid]["address"].split()[0]
+ 
+ 
+-@pytest.mark.parametrize("hint,street", [("near 9999 Geary", "geary"), ("9999 Geary Blvd", "geary"),
+-                                         ("the 9999 Geary Blvd one", "geary"), ("near 1 Geary Boulevard", "geary"),
+-                                         ("9999 Market St", "market"), ("9999 Bryant Street", "bryant"),
+-                                         ("4455 Market St", "market")])  # a number we have, but on another street
+-def test_a_house_number_we_do_not_have_means_somewhere_on_that_street(catalog, schedule, hint, street):
++# round 7: the AI passes the address with its street word, plus near ("near 9999 Geary" ->
++# "9999 Geary Street", near=True). Either way a number we don't have means "somewhere on that street".
++@pytest.mark.parametrize("hint,street,near", [("9999 Geary Street", "geary", True), ("9999 Geary Blvd", "geary", False),
++                                              ("9999 Geary Blvd", "geary", True), ("1 Geary Boulevard", "geary", True),
++                                              ("9999 Market St", "market", False), ("9999 Bryant Street", "bryant", False),
++                                              ("4455 Market St", "market", False)])  # a number we have, but on another street
++def test_a_house_number_we_do_not_have_means_somewhere_on_that_street(catalog, schedule, hint, street, near):
+     clinics = _on_street(street)
+     assert len(clinics) == 2  # from catalog.json addresses
+-    m = catalog.resolve_place(hint)
++    m = catalog.resolve_place(hint, near=near)
+     assert m.kind == "ambiguous" and sorted(m.location_ids) == clinics and m.near, (hint, m)
+-    r = run(catalog, schedule, Preferences(location_hint=hint))
++    r = run(catalog, schedule, Preferences(location_hint=hint, near=near))
+     base = run(catalog, schedule, Preferences())
+     assert kinds(r) == ["place_ambiguous"]
+     assert all(LOC[c]["name"] in r.notes[0].say for c in clinics)
+@@ -244,8 +246,9 @@
+     address = LOC[lid]["address"]                     # e.g. "4455 Geary Blvd"
+     m = catalog.resolve_place(address)
+     assert m.kind == "location" and m.location_ids == [lid] and not m.near, (address, m)
+-    m = catalog.resolve_place("near " + address)
++    m = catalog.resolve_place(address, near=True)       # round 7: "near <address>" -> near=True
+     assert m.kind == "location" and m.location_ids == [lid] and m.near, (address, m)
++    assert catalog.resolve_place("near " + address).kind == "none"   # the phrase isn't read
+ 
+ 
+ @pytest.mark.parametrize("hint", ["9999 Main St", "9999 Mission Street"])
+diff -ruN -x __pycache__ tests_independent_before/test_round6_notes.py ../work/backend/tests_independent/test_round6_notes.py
+--- tests_independent_before/test_round6_notes.py	2026-10-07 19:14:54.391797662 +0400
++++ ../work/backend/tests_independent/test_round6_notes.py	2026-10-07 19:20:31.383747661 +0400
+@@ -24,7 +24,7 @@
+ from clinic import Catalog, Preferences, Schedule, SlotTaken, find_options
+ from conftest import NOW, new_caller, returning
+ from reference import DATA, PROV, SPECIALTIES, VT, ref_bookable, ref_pairs
+-from round6_reference import who_can_problems
++from round6_reference import capped_names_problems, who_can_problems
+ 
+ RAW = json.loads((DATA / "catalog.json").read_text())
+ EXTRAS = json.loads((DATA / "location_extras.json").read_text())
+@@ -72,8 +72,9 @@
+     Preferences(), Preferences(doctor_name_heard="Dr. Chen"), Preferences(doctor_name_heard="Dr. Garsha"),
+     Preferences(doctor_name_heard="Dr. John Garcia"), Preferences(doctor_name_heard="Dr. Linda Nguyen"),
+     Preferences(doctor_name_heard="Dr. Zzyzx"), Preferences(location_hint="Mission"),
+-    Preferences(location_hint="near Geary"), Preferences(location_hint="Mars"),
+-    Preferences(location_hint="the Midtown one"), Preferences(days=["Saturday"]), Preferences(days=["2026-10-10"]),
++    Preferences(location_hint="Geary Street", near=True), Preferences(location_hint="Mars"),   # round 7: name + near
++    Preferences(location_hint="Midtown"), Preferences(days=["Saturday"]), Preferences(days=["2026-10-10"]),
++    Preferences(location_hint="Downtown", near=True), Preferences(location_hint="the Midtown one"),
+     Preferences(days=["today"], time_of_day="afternoon"), Preferences(language="Hindi"),
+     Preferences(language="Klingon"), Preferences(language="Vietnamese", location_hint="Mission Bay"),
+     Preferences(doctor_name_heard="Dr. Kenji Kim", location_hint="Richmond Care Center", days=["Monday"],
+@@ -200,12 +201,6 @@
+                        r"turned down\. Check whether the caller wants one of them after all\.$")
+ 
+ 
+-def _names(text):
+-    parts = re.split(r", | and ", text)
+-    ok = len(parts) == 1 or bool(re.fullmatch(r"(?:[^,]+, )*[^,]+ and [^,]+", text))
+-    return parts, ok
+-
+-
+ @pytest.mark.parametrize("kind", list(CALLERS))
+ def test_only_doctors_matching_note_whole_catalog(catalog, schedule, kind):
+     problems, seen_plural = [], 0
+@@ -230,9 +225,8 @@
+             if not m or m.group("said") != said:
+                 problems.append((where, "wording / singular-plural", conflicts[0]))
+                 continue
+-            got, ok = _names(m.group("names"))
+-            if sorted(got) != want or not ok:
+-                problems.append((where, f"names {got} != {want} or not 'A, B and C'", conflicts[0]))
++            # round 7 s5: three names, then "and N more"; the count must add up
++            problems += [(where, p, conflicts[0]) for p in capped_names_problems(m.group("names"), set(want))]
+             if not r.options or {o.provider_id for o in r.options} & set(family):
+                 problems.append((where, "turned-down doctor offered, or no options"))
+             seen_plural += len(want) > 1
+diff -ruN -x __pycache__ tests_independent_before/test_round6_values.py ../work/backend/tests_independent/test_round6_values.py
+--- tests_independent_before/test_round6_values.py	2026-10-07 19:14:54.391824370 +0400
++++ ../work/backend/tests_independent/test_round6_values.py	2026-10-07 19:20:31.385304893 +0400
+@@ -337,7 +337,7 @@
+ 
+ @pytest.mark.parametrize("word", SENTENCE_WORDS)
+ def test_every_sentence_word_in_a_place_value_is_refused(catalog, schedule, word):
+-    for value in _forms(word, "Downtown") + _forms(word, "the Midtown one") + _forms(word, "near Union Square"):
++    for value in _forms(word, "Downtown") + _forms(word, "Midtown Medical Group") + _forms(word, "Union Square"):
+         r = run(catalog, schedule, Preferences(location_hint=value))
+         assert refused(r), (value, said(r), [o.spoken for o in r.options])
+ 
+@@ -387,16 +387,19 @@
+ 
+ @pytest.mark.parametrize("place", PLACES)
+ def test_every_real_place_is_not_a_sentence(catalog, schedule, place):
+-    for value in (place, f"near {place}", f"the {place} one", f"close to {place}"):
+-        r = run(catalog, schedule, Preferences(location_hint=value))
++    # round 7: "near X" / "the X one" / "close to X" are passed as the name X plus near yes/no
++    for value, near in ((place, False), (place, True), (place.upper(), False), (f"the {place}", True)):
++        r = run(catalog, schedule, Preferences(location_hint=value, near=near))
+         assert "bad_input" not in kinds(r), (value, said(r))
+         assert "place_unknown" not in kinds(r), (value, said(r))
+ 
+ 
+ @pytest.mark.parametrize("address", sorted(l["address"] for l in LOC.values()))
+ def test_our_street_addresses_are_not_sentences(catalog, schedule, address):
+-    for value in (address, "near " + address, "on " + address.split()[1]):
+-        assert "bad_input" not in kinds(run(catalog, schedule, Preferences(location_hint=value))), value
++    street = " ".join(address.split()[1:])                      # "Geary Blvd"
++    for value, near in ((address, False), (address, True), (street, False), (street, True)):   # round 7: names + near
++        r = run(catalog, schedule, Preferences(location_hint=value, near=near))
++        assert "bad_input" not in kinds(r) and "place_unknown" not in kinds(r), (value, said(r))
+ 
+ 
+ @pytest.fixture(scope="module")
+diff -ruN -x __pycache__ tests_independent_before/test_round7_notes.py ../work/backend/tests_independent/test_round7_notes.py
+--- tests_independent_before/test_round7_notes.py	1970-01-01 04:00:00.000000000 +0400
++++ ../work/backend/tests_independent/test_round7_notes.py	2026-10-07 19:29:05.929061683 +0400
+@@ -0,0 +1,367 @@
++"""Round 7 (spec-changes-round-7.md), section 5: every list of doctors in a note reads at
++most three, then "and N more", with true names and a count that adds up.
++
++Covered here: the same-name note, the "Doctors with that surname" note, the "can't do this"
++reasons, and same-name labels (places joined with " / ") in a test catalog where two doctors
++share a name AND a specialty. ("Doctors who can", "no other doctor" and both "whom you
++turned down" notes are checked across the whole catalog in test_round5_notes.py and
++test_round6_notes.py, updated for round 7.)
++
++Expected answers come from catalog.json (read here directly) and the spec; the module's
++fake calendar is used only as the source of open times.
++"""
++
++import copy
++import json
++import re
++from collections import Counter
++
++import pytest
++
++from clinic import Catalog, Preferences, Schedule, find_options
++from conftest import NOW, new_caller, returning
++from reference import DATA, LOC, SPECIALTIES, VT, ref_bookable
++
++RAW = json.loads((DATA / "catalog.json").read_text())
++EXTRAS = json.loads((DATA / "location_extras.json").read_text())
++CALLERS = {"new": (True, []), "returning-none": (False, []), "returning-all": (False, list(SPECIALTIES))}
++SAME_NAME = re.compile(r"^There are (?P<n>\d+) doctors matching '(?P<heard>[^']+)' who offer (?P<vt>.+?): "
++                       r"(?P<items>.+)\. Ask the caller which one they mean\.$")
++GUESS = re.compile(r"^There's no doctor called (?P<heard>.+?)\. Doctors with that surname: (?P<items>.+)\. "
++                   r"Check with the caller\.$")
++CANT = re.compile(r"^No doctor matching '(?P<heard>[^']+)' can do this: (?P<parts>.+?)\."
++                  r"(?: Doctors who can: (?P<who>.+)\.)?$")
++REASONS = {
++    "offer": re.compile(r"^(?P<names>.+) (?:doesn't|don't) offer (?P<vt>.+)$"),
++    "new": re.compile(r"^(?P<names>.+) (?:isn't|aren't) taking new patients$"),
++    "equipment": re.compile(r"^(?P<names>.+) (?:doesn't|don't) work at a location with the (?P<cap>\S+) equipment$"),
++    "times": re.compile(r"^(?P<names>.+) (?:has|have) no open times for (?P<vt>.+) in the next 14 days$"),
++}
++LABEL = re.compile(r"^(?P<name>Dr\. [^(,]+?)(?: \((?P<spec>[^,()]+)(?:, (?P<places>[^()]+))?\))?$")
++
++
++def world(raw):
++    prov = {p["id"]: p for p in raw["providers"]}
++    loc = {l["id"]: l for l in raw["locations"]}
++    return prov, loc
++
++
++PROV, _ = world(RAW)
++
++
++def pairs_ok(prov, loc, is_new, vt):
++    """(doctor, location) pairs passing rules 1, 2, 3 and 5 (doctor half), from the raw data."""
++    cap = VT[vt].get("required_capability")
++    return {(p, l) for p, x in prov.items() if vt in x["appointment_type_ids"]
++            and not (is_new and not x["accepting_new_patients"])
++            for l in x["location_ids"] if not cap or cap in loc[l]["capabilities"]}
++
++
++def open_pairs(schedule, prov, loc, is_new, vt):
++    return {(p, l) for p, l in pairs_ok(prov, loc, is_new, vt)
++            if schedule.open_slots(p, l, VT[vt]["duration_min"], NOW)}
++
++
++def caller(kind):
++    is_new, refs = CALLERS[kind]
++    return new_caller() if is_new else returning(refs)
++
++
++def split_more(text, sep):
++    """'A, B, C and 4 more' / 'A; B; C; and 4 more' -> (['A', 'B', 'C'], 4). Without 'more':
++    'A, B and C' / 'A; B' -> (items, 0)."""
++    if sep == "; ":
++        items = text.split("; ")
++        m = re.fullmatch(r"and (\d+) more", items[-1])
++        return (items[:-1], int(m.group(1))) if m else (items, 0)
++    m = re.fullmatch(r"(?P<shown>.+) and (?P<n>\d+) more", text)
++    if m:
++        return m.group("shown").split(", "), int(m.group("n"))
++    parts = re.split(r", | and (?=Dr\. )", text)
++    return parts, 0
++
++
++def label_problems(items, prov, loc, candidates, want_places=None):
++    """Each item names a candidate doctor; no two items read the same; a label with places
++    names only that doctor's places (joined ' / ')."""
++    out = []
++    if len(set(items)) != len(items):
++        out.append(f"two items read the same: {items}")
++    for it in items:
++        m = LABEL.match(it)
++        if not m:
++            out.append(f"unreadable item {it!r}")
++            continue
++        fits = [p for p in candidates if prov[p]["name"] == m.group("name")
++                and (not m.group("spec") or prov[p]["specialty"] == m.group("spec"))]
++        if m.group("places"):
++            places = set(m.group("places").split(" / "))
++            fits = [p for p in fits if places <= {loc[l]["name"] for l in prov[p]["location_ids"]}]
++        if not fits:
++            out.append(f"{it!r} is not one of the doctors it should be")
++    return out
++
++
++# =============================================================== the same-name note, whole catalog
++SURNAMES = sorted(s for s, n in Counter(x["name"].split()[-1] for x in PROV.values()).items() if n > 1)
++SHARED_FULL = sorted(n for n, c in Counter(x["name"] for x in PROV.values()).items() if c > 1)
++HEARD = [f"Dr. {s}" for s in SURNAMES] + SHARED_FULL
++
++
++@pytest.mark.parametrize("kind", list(CALLERS))
++def test_same_name_note_whole_catalog(catalog, schedule, kind):
++    is_new, refs = CALLERS[kind]
++    _, loc = world(RAW)
++    problems, seen_cut = [], 0
++    for vt in VT:
++        if not ref_bookable(is_new, refs, vt):
++            continue
++        pairs = open_pairs(schedule, PROV, loc, is_new, vt)
++        for heard in HEARD:
++            bare = heard.replace("Dr. ", "")
++            fits = sorted({p for p, _ in pairs if (PROV[p]["name"].split()[-1] == bare if " " not in bare
++                                                   else PROV[p]["name"] == heard)})
++            r = find_options(catalog, schedule, caller(kind), vt, Preferences(doctor_name_heard=heard), NOW)
++            notes = [n.say for n in r.notes if n.kind == "doctors_same_name"]
++            where = (kind, VT[vt]["name"], heard)
++            if len(fits) < 2:
++                if notes:
++                    problems.append((where, "same-name note with fewer than two such doctors", notes))
++                continue
++            if len(notes) != 1:
++                problems.append((where, f"expected one same-name note for {len(fits)} doctors", [n.say for n in r.notes]))
++                continue
++            m = SAME_NAME.match(notes[0])
++            if not m or m.group("heard") != heard or m.group("vt") != VT[vt]["name"]:
++                problems.append((where, "wording", notes[0]))
++                continue
++            items, more = split_more(m.group("items"), "; ")
++            seen_cut += more > 0
++            if int(m.group("n")) != len(fits) or len(items) + more != len(fits):
++                problems.append((where, f"count: says {m.group('n')}, lists {len(items)} + {more}, really {len(fits)}",
++                                 notes[0]))
++            if len(items) > 3 or (more and len(items) != 3):
++                problems.append((where, f"{len(items)} doctors read out", notes[0]))
++            for it in items:
++                d = re.fullmatch(r"(?P<name>Dr\. .+?), (?P<title>\w+) \((?P<spec>[^()]+)\) at (?P<places>.+)", it)
++                ok = d and any(PROV[p]["name"] == d.group("name") and PROV[p]["title"] == d.group("title")
++                               and PROV[p]["specialty"] == d.group("spec")
++                               and set(d.group("places").split(" / ")) == {loc[l]["name"] for q, l in pairs if q == p}
++                               for p in fits)
++                if not ok:
++                    problems.append((where, f"item not true: {it!r}", notes[0]))
++            if len(set(items)) != len(items):
++                problems.append((where, "two items read the same", notes[0]))
++    assert not problems, (len(problems), problems[:4])
++    assert seen_cut, "fixture: some same-name note should be cut short (7 Dr. Chens)"
++
++
++# =============================================================== "Doctors with that surname"
++@pytest.mark.parametrize("surname", sorted({x["name"].split()[-1] for x in PROV.values()}))
++def test_doctors_with_that_surname_note(catalog, schedule, surname):
++    heard = f"Dr. Zebulon {surname}"
++    family = [p for p, x in PROV.items() if x["name"].split()[-1] == surname]
++    r = find_options(catalog, schedule, new_caller(), "appt_002", Preferences(doctor_name_heard=heard), NOW)
++    notes = [n.say for n in r.notes if n.kind == "doctor_name_guess"]
++    assert len(notes) == 1, [n.say for n in r.notes]
++    m = GUESS.match(notes[0])
++    assert m and m.group("heard") == heard, notes[0]
++    items, more = split_more(m.group("items"), ", ")
++    assert len(items) + more == len(family), (notes[0], len(family))
++    assert len(items) == min(3, len(family)), notes[0]
++    assert not label_problems(items, PROV, {l["id"]: l for l in RAW["locations"]}, family), \
++        label_problems(items, PROV, {l["id"]: l for l in RAW["locations"]}, family)
++
++
++# =============================================================== the "can't do this" reasons
++def reason_true(code, p, prov, loc, is_new, vt, pairs):
++    x, cap = prov[p], VT[vt].get("required_capability")
++    if code == "offer":
++        return vt not in x["appointment_type_ids"]
++    if code == "new":
++        return is_new and not x["accepting_new_patients"]
++    if code == "equipment":
++        return bool(cap) and not any(cap in loc[l]["capabilities"] for l in x["location_ids"])
++    return not any(q == p for q, _ in pairs)   # times: nothing open
++
++
++def cant_note_problems(note, heard, family, prov, loc, is_new, vt, pairs):
++    """The whole "No doctor matching ... can do this: ..." note: every group capped at three
++    names, each name's reason true, every matching doctor counted exactly once."""
++    m = CANT.match(note)
++    if not m or m.group("heard") != heard:
++        return [f"wording: {note}"]
++    out, total = [], 0
++    for part in m.group("parts").split("; "):
++        code = next((c for c, rx in REASONS.items() if rx.match(part)), None)
++        if code is None:
++            out.append(f"unknown reason in {part!r}")
++            continue
++        items, more = split_more(REASONS[code].match(part).group("names"), ", ")
++        total += len(items) + more
++        if len(items) > 3 or (more and len(items) != 3):
++            out.append(f"{len(items)} names read in {part!r}")
++        able = [p for p in family if reason_true(code, p, prov, loc, is_new, vt, pairs)]
++        out += label_problems(items, prov, loc, able)
++        group_size = len(items) + more
++        if group_size > len(able):
++            out.append(f"{group_size} doctors said to have reason {code}, only {len(able)} do")
++    if total != len(family):
++        out.append(f"count {total} != {len(family)} matching doctors")
++    return out
++
++
++@pytest.mark.parametrize("kind", list(CALLERS))
++def test_cant_do_this_reasons_whole_catalog(catalog, schedule, kind):
++    is_new, refs = CALLERS[kind]
++    _, loc = world(RAW)
++    problems, cut = [], 0
++    for vt in VT:
++        if not ref_bookable(is_new, refs, vt):
++            continue
++        pairs = open_pairs(schedule, PROV, loc, is_new, vt)
++        for surname in SURNAMES:
++            family = [p for p, x in PROV.items() if x["name"].split()[-1] == surname]
++            if any(p in family for p, _ in pairs):
++                continue      # someone with that name can: no "can't do this" note
++            heard = f"Dr. {surname}"
++            r = find_options(catalog, schedule, caller(kind), vt, Preferences(doctor_name_heard=heard), NOW)
++            notes = [n.say for n in r.notes if n.say.startswith("No doctor matching")]
++            if len(notes) != 1:
++                problems.append(((kind, vt, heard), "expected one note", [n.say for n in r.notes]))
++                continue
++            cut += " more " in notes[0]
++            problems += [((kind, VT[vt]["name"], heard), p, notes[0])
++                         for p in cant_note_problems(notes[0], heard, family, PROV, loc, is_new, vt, pairs)]
++    assert not problems, (len(problems), problems[:4])
++    assert cut, "fixture: some group should be cut short (7 Dr. Chens)"
++
++
++# =============================================================== same name AND same specialty
++def _twin_catalog(change_both=None):
++    """Two Dr. Daniel Chens in Dermatology: the real one (Downtown, Richmond) and a twin at
++    Sunset. `change_both` edits both records (e.g. neither takes new patients)."""
++    raw = copy.deepcopy(RAW)
++    i = next(i for i, p in enumerate(raw["providers"]) if p["id"] == "prov_001")
++    twin = copy.deepcopy(raw["providers"][i])
++    twin.update(id="prov_twin", location_ids=["loc_006"])
++    raw["providers"].insert(i + 1, twin)
++    for p in raw["providers"]:
++        if p["id"] in ("prov_001", "prov_twin") and change_both:
++            p.update(change_both)
++    cat = Catalog(raw, EXTRAS)
++    prov, loc = world(raw)
++    return cat, Schedule(cat), prov, loc
++
++
++def test_same_name_same_specialty_in_the_cant_do_this_reasons():
++    """Neither Dr. Daniel Chen takes new patients: the reason must not read
++    "Dr. Daniel Chen and Dr. Daniel Chen aren't taking new patients" (s5: same-name
++    doctors get their places added, every one of them, even sharing a specialty)."""
++    cat, sch, prov, loc = _twin_catalog({"accepting_new_patients": False})
++    r = find_options(cat, sch, new_caller(), "appt_027", Preferences(doctor_name_heard="Dr. Daniel Chen"), NOW)
++    note = next(n.say for n in r.notes if n.say.startswith("No doctor matching"))
++    pairs = open_pairs(sch, prov, loc, True, "appt_027")
++    assert not cant_note_problems(note, "Dr. Daniel Chen", ["prov_001", "prov_twin"], prov, loc, True, "appt_027",
++                                  pairs), (cant_note_problems(note, "Dr. Daniel Chen", ["prov_001", "prov_twin"], prov,
++                                                              loc, True, "appt_027", pairs), note)
++
++
++def test_same_name_same_specialty_in_the_surname_note():
++    """A misheard first name: the "Doctors with that surname" list must tell the twins apart."""
++    cat, sch, prov, loc = _twin_catalog()
++    r = find_options(cat, sch, new_caller(), "appt_027", Preferences(doctor_name_heard="Dr. Zebulon Chen"), NOW)
++    note = next(n.say for n in r.notes if n.kind == "doctor_name_guess")
++    items, more = split_more(GUESS.match(note).group("items"), ", ")
++    family = [p for p, x in prov.items() if x["name"].endswith(" Chen")]
++    assert len(items) + more == len(family)
++    shown_twins = [it for it in items if it.startswith("Dr. Daniel Chen")]
++    if len(shown_twins) > 1:
++        assert len(set(shown_twins)) == len(shown_twins), note
++
++
++def test_same_name_same_specialty_in_the_same_name_note():
++    cat, sch, prov, loc = _twin_catalog()
++    r = find_options(cat, sch, new_caller(), "appt_027", Preferences(doctor_name_heard="Dr. Daniel Chen"), NOW)
++    note = next(n.say for n in r.notes if n.kind == "doctors_same_name")
++    items, more = split_more(SAME_NAME.match(note).group("items"), "; ")
++    assert len(items) == 2 and len(set(items)) == 2 and more == 0, note
++    assert any(it.endswith("at Downtown Health Center / Richmond Care Center") for it in items), note
++    assert any(it.endswith("at Sunset Community Clinic") for it in items), note
++
++
++@pytest.mark.parametrize("where", ["no_other_doctor", "doctors_who_can"])
++def test_same_name_same_specialty_labels_use_a_slash(where):
++    cat, sch, prov, loc = _twin_catalog()
++    if where == "no_other_doctor":
++        able = sorted({p for p, _ in open_pairs(sch, prov, loc, True, "appt_027")})
++        r = find_options(cat, sch, new_caller(), "appt_027", Preferences(not_provider_ids=able), NOW)
++        text = next(n.say for n in r.notes if n.kind == "no_other_doctor")
++    else:
++        r = find_options(cat, sch, new_caller(), "appt_027", Preferences(doctor_name_heard="Dr. Linda Nguyen"), NOW)
++        text = next(n.say for n in r.notes if "Doctors who can: " in n.say)
++    chens = re.findall(r"Dr\. Daniel Chen \(Dermatology[^)]*\)", text)
++    for c in chens:
++        assert c in ("Dr. Daniel Chen (Dermatology, Downtown Health Center / Richmond Care Center)",
++                     "Dr. Daniel Chen (Dermatology, Sunset Community Clinic)"), text
++    assert len(set(chens)) == len(chens), text
++    assert " and Richmond" not in text, text
++
++
++# =============================================================== a big test catalog: every list capped
++@pytest.fixture(scope="module")
++def crowd():
++    """The real catalog plus 20 Dr. Okafors in Dermatology (12 not taking new patients),
++    spread over our 8 locations."""
++    raw = copy.deepcopy(RAW)
++    derm = next(p for p in raw["providers"] if p["id"] == "prov_001")
++    firsts = ["Ada", "Bola", "Chidi", "Dayo", "Ebere", "Femi", "Gozie", "Ike", "Jide", "Kemi", "Lola", "Musa",
++              "Ngozi", "Obi", "Pelu", "Remi", "Sade", "Tunde", "Uche", "Wale"]
++    for i, f in enumerate(firsts):
++        d = copy.deepcopy(derm)
++        d.update(id=f"prov_ok{i:02d}", name=f"Dr. {f} Okafor", accepting_new_patients=i >= 12,
++                 location_ids=[sorted(LOC)[i % 8]])
++        raw["providers"].append(d)
++    cat = Catalog(raw, EXTRAS)
++    prov, loc = world(raw)
++    return cat, Schedule(cat), prov, loc
++
++
++def _names_read(say, heard=""):
++    return say.replace(heard, "").count("Dr. ")
++
++
++@pytest.mark.parametrize("prefs", [
++    {"doctor_name_heard": "Dr. Okafor"},                        # same-name note
++    {"doctor_name_heard": "Dr. Zebulon Okafor"},                # "Doctors with that surname"
++    {"doctor_name_heard": "Dr. Okafr"},                         # a close spelling
++    {"doctor_name_heard": "Dr. Wei Lee"},                       # "Doctors who can"
++    {"not_provider_ids": "ALL"},                                # no other doctor
++    {"doctor_name_heard": "Dr. Okafor", "not_provider_ids": "OKAFORS"},   # whom you turned down (doctor)
++    {"location_hint": "Sunset", "not_provider_ids": "AT_SUNSET"},         # whom you turned down (place)
++])
++def test_every_doctor_list_reads_at_most_three_on_a_big_catalog(crowd, prefs):
++    cat, sch, prov, loc = crowd
++    prefs = dict(prefs)
++    able = sorted({p for p, _ in open_pairs(sch, prov, loc, True, "appt_027")})
++    okafors = [p for p in able if prov[p]["name"].endswith("Okafor")]
++    at_sunset = sorted({p for p, l in open_pairs(sch, prov, loc, True, "appt_027") if l == "loc_006"})
++    prefs["not_provider_ids"] = {"ALL": able, "OKAFORS": okafors, "AT_SUNSET": at_sunset}.get(
++        prefs.get("not_provider_ids"), [])
++    r = find_options(cat, sch, new_caller(), "appt_027", Preferences(**prefs), NOW)
++    assert r.notes, "fixture: a note with a list was expected"
++    for n in r.notes:
++        assert _names_read(n.say, prefs.get("doctor_name_heard", "")) <= 3, (n.kind, n.say)
++
++
++def test_the_cant_do_this_reasons_on_a_big_catalog(crowd):
++    """Dr. Okafor (20 doctors, all Dermatology) for an Annual Physical, which none of them
++    offers: one "don't offer" group, read three then "and 17 more", every reason true."""
++    cat, sch, prov, loc = crowd
++    okafors = [p for p, x in prov.items() if x["name"].endswith("Okafor")]
++    r = find_options(cat, sch, new_caller(), "appt_002", Preferences(doctor_name_heard="Dr. Okafor"), NOW)
++    note = next(n.say for n in r.notes if n.say.startswith("No doctor matching"))
++    pairs = open_pairs(sch, prov, loc, True, "appt_002")
++    assert not cant_note_problems(note, "Dr. Okafor", okafors, prov, loc, True, "appt_002", pairs), \
++        (cant_note_problems(note, "Dr. Okafor", okafors, prov, loc, True, "appt_002", pairs), note)
++    assert "and 17 more" in note and _names_read(note, "Dr. Okafor") <= 6, note   # 3 + up to 3 "Doctors who can"
+diff -ruN -x __pycache__ tests_independent_before/test_round7_places.py ../work/backend/tests_independent/test_round7_places.py
+--- tests_independent_before/test_round7_places.py	1970-01-01 04:00:00.000000000 +0400
++++ ../work/backend/tests_independent/test_round7_places.py	2026-10-07 19:35:06.146763470 +0400
+@@ -0,0 +1,374 @@
++"""Round 7 (spec-changes-round-7.md), section 1: a place is a NAME plus near yes/no.
++
++- near=False: that place only (restrict). near=True: rank by distance, don't restrict.
++- A landmark is always "near". An ambiguous name with near=True gives the note but
++  doesn't narrow. A house number we don't have means "somewhere on that street".
++- Phrases are no longer read: each listed phrase form is "not recognised" (place_unknown).
++- A bare street name (no street word) is not a street.
++- near with any other kind of change is refused, changing nothing.
++- When a chosen place is carried over after another change, near goes back to False.
++- The card summary shows "place: near Downtown" when near is set.
++
++Expected answers come from the spec text, catalog.json and location_extras.json (read
++here directly); the module's fake calendar is used only as the source of open times.
++"""
++
++import json
++import math
++
++import pytest
++
++from clinic import BookingCard, Choices, Preferences, find_options
++from conftest import NOW, new_caller, returning
++from reference import DATA, LOC, SPECIALTIES, VT, ref_bookable, ref_pairs
++
++EXTRAS = json.loads((DATA / "location_extras.json").read_text())
++ALL = returning(list(SPECIALTIES))
++UNKNOWN_NOTE = ("I don't recognise the place '{}'. Pass just a place name: a neighbourhood, a street or one of "
++                "our location names.")
++
++# ---- every name of each of our locations, straight from the data files
++LOCATION_NAMES = sorted({(LOC[lid]["name"], lid) for lid in LOC}
++                        | {(x["neighbourhood"], lid) for lid, x in EXTRAS["locations"].items() if x["neighbourhood"]}
++                        | {(a, lid) for lid, x in EXTRAS["locations"].items() for a in x["also_called"]})
++_location_words = {n.lower() for n, _ in LOCATION_NAMES}
++LANDMARKS_ONLY = sorted(n for n in EXTRAS["landmarks"] if n.lower() not in _location_words)
++
++
++def street_of(address):
++    return address.split()[1]           # "4455 Geary Blvd" -> "Geary"
++
++
++STREETS = {}
++for _lid, _l in LOC.items():
++    STREETS.setdefault(street_of(_l["address"]), set()).add(_lid)
++
++
++def miles(a, b):
++    lat1, lon1, lat2, lon2 = map(math.radians, (*a, *b))
++    h = math.sin((lat2 - lat1) / 2) ** 2 + math.cos(lat1) * math.cos(lat2) * math.sin((lon2 - lon1) / 2) ** 2
++    return 3958.8 * 2 * math.asin(math.sqrt(h))
++
++
++def loc_point(lid):
++    x = EXTRAS["locations"][lid]
++    return (x["lat"], x["lon"])
++
++
++_SLOTS = {}
++
++
++def open_pairs(schedule, vt):
++    """(doctor, location) pairs a returning patient with every referral can book, with an open time."""
++    if vt not in _SLOTS:
++        _SLOTS[vt] = {(p, l) for p, l in ref_pairs(False, vt)
++                      if schedule.open_slots(p, l, VT[vt]["duration_min"], NOW)}
++    return _SLOTS[vt]
++
++
++def visit_type_at(schedule, lid, few=False):
++    """A visit type that can be booked at `lid` AND at two or more other locations, so that
++    restricting to `lid` and not restricting give visibly different answers. few=True: one
++    where fewer than 3 doctor/location pairs are at `lid`, so 3 options can't all be there."""
++    for vt in sorted(VT):
++        if not ref_bookable(False, list(SPECIALTIES), vt):
++            continue
++        pairs = open_pairs(schedule, vt)
++        locs = {l for _, l in pairs}
++        if lid in locs and len(locs - {lid}) >= 2 and (not few or sum(l == lid for _, l in pairs) < 3):
++            return vt
++    raise AssertionError(f"fixture: no visit type for {lid}")
++
++
++def search(catalog, schedule, vt, **prefs):
++    return find_options(catalog, schedule, ALL, vt, Preferences(**prefs), NOW)
++
++
++def ranking_problems(r, point, pairs):
++    """near: options ranked by distance from `point`, chosen from ALL valid pairs (not
++    restricted): no offered pair is farther than a pair left out (0.1 mile rounding allowed)."""
++    out = []
++    d = [miles(point, loc_point(o.location_id)) for o in r.options]
++    if any(b < a - 0.05 for a, b in zip(d, d[1:])):
++        out.append(f"not sorted by distance: {[round(x, 2) for x in d]}")
++    offered = {(o.provider_id, o.location_id) for o in r.options}
++    left_out = [miles(point, loc_point(l)) for p, l in pairs if (p, l) not in offered]
++    if left_out and d and max(d) > min(left_out) + 0.1:
++        out.append(f"a closer pair was left out ({min(left_out):.2f} < {max(d):.2f})")
++    if len(pairs) >= 3 and len(offered) < 3:
++        out.append("the same doctor/location repeated although other pairs exist")
++    return out
++
++
++# =============================================================== names of our locations
++@pytest.mark.parametrize("name,lid", LOCATION_NAMES)
++def test_every_location_name_with_near_false_restricts(catalog, schedule, name, lid):
++    m = catalog.resolve_place(name, near=False)
++    assert (m.kind, m.location_ids, m.near) == ("location", [lid], False), (name, m)
++    vt = visit_type_at(schedule, lid)
++    r = search(catalog, schedule, vt, location_hint=name)
++    assert r.options and not r.notes, (name, [n.say for n in r.notes])
++    assert {o.location_id for o in r.options} == {lid}, (name, [o.location_name for o in r.options])
++
++
++@pytest.mark.parametrize("name,lid", LOCATION_NAMES)
++def test_every_location_name_with_near_true_ranks_and_does_not_restrict(catalog, schedule, name, lid):
++    m = catalog.resolve_place(name, near=True)
++    assert (m.kind, m.location_ids, m.near) == ("location", [lid], True), (name, m)
++    assert m.point == pytest.approx(loc_point(lid))
++    vt = visit_type_at(schedule, lid, few=True)
++    r = search(catalog, schedule, vt, location_hint=name, near=True)
++    assert r.options and not r.notes, (name, [n.say for n in r.notes])
++    pairs = open_pairs(schedule, vt)
++    assert r.options[0].location_id == lid      # the place itself is closest
++    assert not ranking_problems(r, loc_point(lid), pairs), (name, ranking_problems(r, loc_point(lid), pairs))
++    assert {o.location_id for o in r.options} != {lid}, "near must not restrict to that place"
++    restricted = search(catalog, schedule, vt, location_hint=name, near=False)
++    assert {o.location_id for o in restricted.options} == {lid}   # the same name without near does
++
++
++@pytest.mark.parametrize("name", LANDMARKS_ONLY)
++@pytest.mark.parametrize("near", [False, True])
++def test_every_landmark_is_always_near(catalog, schedule, name, near):
++    m = catalog.resolve_place(name, near=near)
++    assert (m.kind, m.location_ids, m.near) == ("landmark", [], True), (name, m)
++    point = tuple(EXTRAS["landmarks"][name])
++    assert m.point == pytest.approx(point)
++    vt = "appt_002"
++    r = search(catalog, schedule, vt, location_hint=name, near=near)
++    assert r.options and not r.notes, (name, [n.say for n in r.notes])
++    assert not ranking_problems(r, point, open_pairs(schedule, vt)), (name, ranking_problems(r, point, open_pairs(schedule, vt)))
++
++
++@pytest.mark.parametrize("name,lid", [("Richmund", "loc_007"), ("mid town", "loc_005"), ("Marina District", "loc_003"),
++                                      ("Downtown SF", "loc_004"), ("Mission Bay Health Center", "loc_000"),
++                                      ("Richmond District", "loc_007"), ("HAYES VALLEY", "loc_005"),
++                                      ("Midtown San Francisco", "loc_005"), ("Mision Bay", "loc_000")])
++@pytest.mark.parametrize("near", [False, True])
++def test_names_are_still_matched_forgivingly(catalog, name, lid, near):
++    """s1: spelling, spaces, "District", city words, generic name words."""
++    m = catalog.resolve_place(name, near=near)
++    assert (m.kind, m.location_ids, m.near) == ("location", [lid], near), (name, m)
++
++
++@pytest.mark.parametrize("name", ["Marin", "Sunse", "Sunst", "Nort", "Bay", "Valley", "Rich"])
++@pytest.mark.parametrize("near", [False, True])
++def test_short_words_must_match_exactly(catalog, name, near):
++    assert catalog.resolve_place(name, near=near).kind == "none", name
++
++
++@pytest.mark.parametrize("name,ids", [("Mission", {"loc_000", "loc_001"}), ("North", {"loc_002", "loc_003"}),
++                                      ("the Mission", {"loc_000", "loc_001"}),
++                                      ("Geary Street", STREETS["Geary"]), ("Market Street", STREETS["Market"]),
++                                      ("Bryant Street", STREETS["Bryant"])])
++def test_a_name_several_places_share_is_ambiguous_and_narrows_without_near(catalog, schedule, name, ids):
++    m = catalog.resolve_place(name)
++    assert m.kind == "ambiguous" and set(m.location_ids) == ids and not m.near, (name, m)
++    r = search(catalog, schedule, "appt_002", location_hint=name)
++    amb = [n.say for n in r.notes if n.kind == "place_ambiguous"]
++    assert len(amb) == 1 and all(LOC[l]["name"] in amb[0] for l in ids), [n.say for n in r.notes]
++    assert r.options and {o.location_id for o in r.options} <= ids
++
++
++@pytest.mark.parametrize("name,ids", [("Mission", {"loc_000", "loc_001"}), ("North", {"loc_002", "loc_003"}),
++                                      ("Geary Street", STREETS["Geary"]), ("Market St", STREETS["Market"]),
++                                      ("Bryant Street", STREETS["Bryant"])])
++def test_a_shared_name_with_near_gives_the_note_but_does_not_narrow(catalog, schedule, name, ids):
++    m = catalog.resolve_place(name, near=True)
++    assert m.kind == "ambiguous" and set(m.location_ids) == ids and m.near, (name, m)
++    for vt in ["appt_002", "appt_027"]:
++        base = search(catalog, schedule, vt)
++        r = search(catalog, schedule, vt, location_hint=name, near=True)
++        assert [n.kind for n in r.notes] == ["place_ambiguous"], [n.say for n in r.notes]
++        assert [(o.provider_id, o.location_id, o.start) for o in r.options] == \
++               [(o.provider_id, o.location_id, o.start) for o in base.options]
++
++
++# =============================================================== streets and house numbers
++STREET_FORMS = ["{s} Street", "{s} St", "{s} st.", "{s} Boulevard", "{s} Blvd", "{s} Avenue", "{s} Road"]
++
++
++@pytest.mark.parametrize("street", sorted(STREETS))
++@pytest.mark.parametrize("form", STREET_FORMS)
++@pytest.mark.parametrize("near", [False, True])
++def test_a_street_with_a_street_word_is_one_of_ours(catalog, street, form, near):
++    m = catalog.resolve_place(form.format(s=street), near=near)
++    want = STREETS[street]
++    assert set(m.location_ids) == want and m.near is near, (form.format(s=street), m)
++    assert m.kind == ("location" if len(want) == 1 else "ambiguous")
++
++
++@pytest.mark.parametrize("street", sorted(STREETS) + ["main", "GEARY"])
++@pytest.mark.parametrize("near", [False, True])
++def test_a_bare_street_name_is_not_a_street(catalog, schedule, street, near):
++    """s1: "A bare street name without a street word ('Geary', 'main') is not a street."
++    ("Mission" alone is a location name shared by two clinics, so it's ambiguous instead.)"""
++    m = catalog.resolve_place(street, near=near)
++    if street == "Mission":
++        assert m.kind == "ambiguous" and set(m.location_ids) == {"loc_000", "loc_001"}
++        return
++    assert m.kind == "none" and not m.location_ids, (street, m)
++    r = search(catalog, schedule, "appt_002", location_hint=street, near=near)
++    assert [(n.kind, n.say) for n in r.notes] == [("place_unknown", UNKNOWN_NOTE.format(street))]
++
++
++@pytest.mark.parametrize("lid", sorted(LOC))
++@pytest.mark.parametrize("near", [False, True])
++def test_a_house_number_we_have_picks_that_clinic(catalog, schedule, lid, near):
++    address = LOC[lid]["address"]
++    number, street = address.split()[0], street_of(address)
++    for said in (address, f"{number} {street} Street", f"{number} {street.lower()} st"):
++        m = catalog.resolve_place(said, near=near)
++        assert (m.kind, m.location_ids, m.near) == ("location", [lid], near), (said, m)
++    if not near:
++        vt = visit_type_at(schedule, lid)
++        r = search(catalog, schedule, vt, location_hint=address)
++        assert r.options and {o.location_id for o in r.options} == {lid} and not r.notes
++
++
++@pytest.mark.parametrize("street", sorted(s for s in STREETS if len(STREETS[s]) > 1))
++@pytest.mark.parametrize("near", [False, True])
++def test_a_house_number_we_do_not_have_is_somewhere_on_that_street(catalog, schedule, street, near):
++    """s1: "ambiguous, near, no narrowing", whatever near the AI passed."""
++    said = f"9999 {street} Street"
++    m = catalog.resolve_place(said, near=near)
++    assert m.kind == "ambiguous" and set(m.location_ids) == STREETS[street] and m.near is True, m
++    base = search(catalog, schedule, "appt_002")
++    r = search(catalog, schedule, "appt_002", location_hint=said, near=near)
++    assert [n.kind for n in r.notes] == ["place_ambiguous"]
++    assert [(o.provider_id, o.location_id, o.start) for o in r.options] == \
++           [(o.provider_id, o.location_id, o.start) for o in base.options]
++
++
++@pytest.mark.parametrize("street", sorted(s for s in STREETS if len(STREETS[s]) == 1))
++def test_a_house_number_we_do_not_have_on_a_one_clinic_street_does_not_restrict(catalog, schedule, street):
++    """My reading of s1: "somewhere on that street" never restricts to our clinic there."""
++    (lid,) = STREETS[street]
++    m = catalog.resolve_place(f"9999 {street} Street")
++    assert m.near is True and m.location_ids == [lid], m
++    vt = visit_type_at(schedule, lid)
++    r = search(catalog, schedule, vt, location_hint=f"9999 {street} Street")
++    assert not ranking_problems(r, loc_point(lid), open_pairs(schedule, vt))
++
++
++# =============================================================== phrases are no longer read
++PHRASE_FORMS = [
++    "near {x}", "closer to {x}", "close to {x}", "next to {x}", "around {x}", "by {x}", "on the way to {x}",
++    "the {x} one", "somewhere {x}", "somewhere near {x}",
++    "{x} area", "{x} side", "{x} neighbourhood", "{x} neighborhood", "{x} location", "{x} clinic", "{x} office",
++    "in {x}", "at {x}", "to {x}", "from {x}", "a {x}", "{x} one", "{x} place", "the one in {x}",
++]
++PHRASE_NAMES = ["Downtown", "Midtown", "Hayes Valley", "Union Square", "Chinatown", "Richmond"]
++
++
++@pytest.mark.parametrize("form", PHRASE_FORMS)
++@pytest.mark.parametrize("name", PHRASE_NAMES)
++def test_each_listed_phrase_form_is_not_recognised(catalog, schedule, form, name):
++    said = form.format(x=name)
++    for near in (False, True):
++        m = catalog.resolve_place(said, near=near)
++        assert m.kind == "none" and not m.location_ids and m.point is None, (said, near, m)
++    r = search(catalog, schedule, "appt_002", location_hint=said)
++    assert [(n.kind, n.say) for n in r.notes] == [("place_unknown", UNKNOWN_NOTE.format(said))]
++    base = search(catalog, schedule, "appt_002")
++    assert [(o.provider_id, o.start) for o in r.options] == [(o.provider_id, o.start) for o in base.options]
++
++
++@pytest.mark.parametrize("said", ["the one on Geary", "on Geary", "the one on Main Street", "on Mission Street",
++                                  "the one on Market"])
++def test_on_a_street_is_not_read(catalog, said):
++    """s1: "the one on X", "on X" are no longer read. (The AI passes "Geary Street".)"""
++    assert catalog.resolve_place(said).kind == "none", said
++
++
++@pytest.mark.parametrize("name", ["Downtown", "Union Square"])
++def test_not_far_from_is_not_used_as_a_place(catalog, schedule, name):
++    """s1 lists "not far from…" as not recognised; the round-6 sentence guard (still in force,
++    s4) refuses any place value with "not". Either way it must not become a place wish: the
++    search is refused (bad_input) and nothing is narrowed. See the report: spec gap."""
++    said = f"not far from {name}"
++    assert catalog.resolve_place(said).kind == "none"
++    r = search(catalog, schedule, "appt_002", location_hint=said)
++    assert not r.options and [n.kind for n in r.notes] == ["bad_input"]
++
++
++# =============================================================== the card
++@pytest.mark.parametrize("what,value", [("doctor", "Dr. Daniel Chen"), ("time", "Thursday"), ("language", "Spanish"),
++                                        ("visit_type", "knee MRI"), ("doctor", ""), ("time", "")])
++def test_near_with_any_other_kind_of_change_is_refused_and_changes_nothing(catalog, what, value):
++    card = BookingCard(caller=new_caller(), preferences=Preferences(location_hint="Midtown", near=True,
++                                                                    days=["Monday"], language="Hindi"))
++    card.choices = Choices(specialty="Dermatology", visit_type_id="appt_027", provider_id="prov_001",
++                           location_id="loc_004", slot=NOW.replace(day=8, hour=10))
++    before = card.to_dict()
++    with pytest.raises(ValueError):
++        card.change_choice(what, value, near=True)
++    assert card.to_dict() == before
++    with pytest.raises(ValueError):
++        card.change_choice("time", days=["Friday"], near=True)
++    assert card.to_dict() == before
++
++
++def _chosen_card(near):
++    card = BookingCard(caller=new_caller())
++    card.choices = Choices(specialty="Dermatology", visit_type_id="appt_027")
++    card.change_choice("location", "Downtown", near=near)
++    card.choices.provider_id, card.choices.location_id, card.choices.slot = "prov_001", "loc_004", NOW.replace(day=8, hour=10)
++    return card
++
++
++@pytest.mark.parametrize("change", [("time", "Thursday"), ("doctor", "Dr. Kenji Kim"), ("language", "Spanish"),
++                                    ("visit_type", "mole check"), ("turn_down", None)])
++def test_near_goes_back_to_false_when_the_chosen_place_is_carried_over(catalog, change):
++    card = _chosen_card(near=True)
++    assert card.preferences.near is True
++    if change[0] == "turn_down":
++        card.turn_down_doctors(catalog, current=True)
++    else:
++        card.change_choice(*change)
++    p = card.preferences
++    assert (p.preferred_location_id, p.location_hint, p.near) == ("loc_004", "", False), p
++    assert "near" not in card.summary(catalog)
++
++
++def test_a_said_place_keeps_near_when_nothing_was_chosen(catalog):
++    """Only a CHOSEN place is carried over (and loses near); a said place stays as said."""
++    card = BookingCard(caller=new_caller())
++    card.choices = Choices(specialty="Dermatology", visit_type_id="appt_027")
++    card.change_choice("location", "Union Square", near=True)
++    card.change_choice("time", "Thursday")
++    p = card.preferences
++    assert (p.location_hint, p.near, p.preferred_location_id) == ("Union Square", True, "")
++    assert "place: near Union Square" in card.summary(catalog)
++
++
++def test_a_new_location_change_sets_near_afresh(catalog):
++    card = BookingCard(caller=new_caller())
++    card.change_choice("location", "Downtown", near=True)
++    card.change_choice("location", "Midtown")
++    assert (card.preferences.location_hint, card.preferences.near) == ("Midtown", False)
++
++
++@pytest.mark.parametrize("value", ["", "   ", "anywhere", "no preference", "I don't mind", "Anywhere"])
++def test_near_with_no_place_is_no_wish(catalog, value):
++    card = BookingCard(caller=new_caller())
++    card.change_choice("location", value, near=True)
++    assert (card.preferences.location_hint, card.preferences.near) == ("", False)
++    assert "place" not in card.summary(catalog)
++
++
++@pytest.mark.parametrize("name,near,shown", [("Downtown", True, "place: near Downtown"),
++                                             ("Downtown", False, "place: Downtown"),
++                                             ("Union Square", True, "place: near Union Square"),
++                                             ("Geary Street", True, "place: near Geary Street")])
++def test_the_summary_shows_near(catalog, name, near, shown):
++    card = BookingCard(caller=new_caller())
++    card.change_choice("location", name, near=near)
++    line = next(l for l in card.summary(catalog).splitlines() if l.startswith("Caller asked for"))
++    assert shown in line and line.count("near") == int(near), line
++
++
++def test_a_carried_place_reads_as_its_name_without_near(catalog):
++    card = _chosen_card(near=True)
++    card.change_choice("time", "Friday")
++    assert "place: Downtown Health Center" in card.summary(catalog)
+diff -ruN -x __pycache__ tests_independent_before/test_round7_values.py ../work/backend/tests_independent/test_round7_values.py
+--- tests_independent_before/test_round7_values.py	1970-01-01 04:00:00.000000000 +0400
++++ ../work/backend/tests_independent/test_round7_values.py	2026-10-07 19:27:41.369870697 +0400
+@@ -0,0 +1,331 @@
++"""Round 7 (spec-changes-round-7.md), sections 2, 3, 4 and 6: plain values.
++
++- s2 languages: one name, nothing guessed (the accept / refuse table).
++- s3 "no preference" words are stored as "" (doctor, place, language), never shown.
++- s4 exact names for what can be changed (change_choice) and asked about (answer_question),
++  and answer_question's sentence guard.
++- s6 the weekday word table, and repeated ids reported once (catalog and patients).
++
++Expected answers come from the spec text and the raw data files.
++"""
++
++import copy
++import json
++
++import pytest
++
++from clinic import BookingCard, Catalog, CatalogError, Choices, PatientDirectory, Preferences, answer_question, \
++    find_options
++from conftest import NOW, new_caller, returning
++from reference import DATA, LOC, PROV, SPECIALTIES, VT, ref_pairs
++
++RAW = json.loads((DATA / "catalog.json").read_text())
++EXTRAS = json.loads((DATA / "location_extras.json").read_text())
++PATIENTS = json.loads((DATA / "patients.json").read_text())["patients"]
++PHYSICAL = "appt_002"
++OUR_LANGS = sorted({l for x in PROV.values() for l in x["languages"]})
++ALL = returning(list(SPECIALTIES))
++
++
++def run(catalog, schedule, prefs, vt=PHYSICAL, caller=None):
++    return find_options(catalog, schedule, caller or new_caller(), vt, prefs, NOW)
++
++
++def kinds(r):
++    return [n.kind for n in r.notes]
++
++
++def refused(r):
++    return not r.options and kinds(r) == ["bad_input"]
++
++
++def full_card():
++    card = BookingCard(caller=new_caller(), preferences=Preferences(doctor_name_heard="Dr. Kenji Kim",
++                                                                    location_hint="Downtown", near=True,
++                                                                    days=["Thursday"], time_of_day="morning",
++                                                                    language="Spanish"))
++    card.choices = Choices(specialty="Dermatology", visit_type_id="appt_027")
++    return card
++
++
++# =============================================================== s2: languages
++@pytest.mark.parametrize("lang", OUR_LANGS)
++@pytest.mark.parametrize("form", [str, str.lower, str.upper, lambda s: f"  {s}  "])
++def test_a_language_in_our_records_in_any_case(catalog, schedule, lang, form):
++    r = run(catalog, schedule, Preferences(language=form(lang)), caller=ALL)
++    assert "bad_input" not in kinds(r), [n.say for n in r.notes]
++    speakers = {p for p, x in PROV.items() if lang in x["languages"]}
++    if any(p in speakers for p, _ in ref_pairs(False, PHYSICAL)):
++        assert r.options and all(o.provider_id in speakers for o in r.options), (lang, [o.provider_name for o in r.options])
++        assert not r.notes
++    for n in r.notes:   # the canonical name is used, never the caller's casing
++        assert form(lang).strip() == lang or form(lang).strip() not in n.say
++
++
++@pytest.mark.parametrize("said", ["Mandarin Chinese", "mandarin chinese", "Chinese Mandarin", "CHINESE MANDARIN",
++                                  "Mandarin  Chinese"])
++def test_the_listed_other_name_for_mandarin(catalog, schedule, said):
++    r = run(catalog, schedule, Preferences(language=said), caller=ALL)
++    speakers = {p for p, x in PROV.items() if "Mandarin" in x["languages"]}
++    assert r.options and all(o.provider_id in speakers for o in r.options) and not r.notes, [n.say for n in r.notes]
++
++
++@pytest.mark.parametrize("said,shown", [("Klingon", "Klingon"), ("Haitian Creole", "Haitian Creole"), ("ASL", "ASL"),
++                                        ("Chinese", "Chinese"), ("klingon", "Klingon"), ("Cantonese", "Cantonese"),
++                                        ("French", "French"), ("haitian creole", "Haitian Creole")])
++def test_a_name_we_have_no_record_of_is_kept_as_said(catalog, schedule, said, shown):
++    r = run(catalog, schedule, Preferences(language=said))
++    base = run(catalog, schedule, Preferences())
++    want = f"None of our doctors is listed as speaking {shown}. Our doctors speak " \
++           f"{', '.join(OUR_LANGS[:-1])} and {OUR_LANGS[-1]}."
++    assert [(n.kind, n.say) for n in r.notes] == [("wish_impossible", want)]
++    assert [(o.provider_id, o.start) for o in r.options] == [(o.provider_id, o.start) for o in base.options]
++
++
++@pytest.mark.parametrize("said", [
++    # a language we have mixed with other words
++    "Spanish French", "French Spanish", "Spanish only", "only Spanish", "Cantonese Mandarin", "Spanish Klingon",
++    "English Spanish", "Mandarin Cantonese", "spanish ideally", "Spanish speaking",
++    # more than two words
++    "Haitian Creole French", "Old Church Slavonic", "Mandarin Chinese please", "the Spanish language",
++    # sentences (round 6)
++    "not Spanish", "no Spanish", "anyone but Spanish", "Spanish please", "any language", "someone Spanish",
++    # not letters
++    "Spanish-speaking", "Spanish/English", "Spanish, French", "Hindi?", "123",
++])
++def test_anything_else_is_refused(catalog, schedule, said):
++    r = run(catalog, schedule, Preferences(language=said))
++    assert refused(r), (said, [(n.kind, n.say) for n in r.notes], len(r.options))
++    assert r.notes[0].say == (f"I couldn't use the language '{said}'. Pass one language name, like 'Spanish', "
++                              "or leave it empty for no language wish.")
++
++
++@pytest.mark.parametrize("said", ["", "  ", "any", "I don't mind", "no preference", "whatever", "Any", "doesn't matter"])
++def test_no_preference_means_no_language_wish(catalog, schedule, said):
++    r = run(catalog, schedule, Preferences(language=said))
++    base = run(catalog, schedule, Preferences())
++    assert not r.notes and [(o.provider_id, o.start) for o in r.options] == [(o.provider_id, o.start) for o in base.options]
++
++
++def test_language_change_through_the_card_is_checked_the_same_way(catalog, schedule):
++    card = full_card()
++    card.change_choice("language", "Spanish only")
++    assert card.preferences.language == "Spanish only"     # stored as said; the search refuses it
++    assert refused(run(catalog, schedule, card.preferences, vt="appt_027"))
++    card.change_choice("language", "Mandarin Chinese")
++    r = run(catalog, schedule, card.preferences, vt="appt_027")
++    assert "bad_input" not in kinds(r)
++
++
++# =============================================================== s3: no preference stored as ""
++NO_PREF_WORDS = ["any", "Any", "anyone", "anywhere", "I don't mind", "dont mind", "no preference", "No Preference",
++                 "whatever", "whenever", "doesn't matter", "  anywhere  ", "anything"]
++
++
++@pytest.mark.parametrize("word", NO_PREF_WORDS)
++@pytest.mark.parametrize("what,field", [("doctor", "doctor_name_heard"), ("location", "location_hint"),
++                                        ("language", "language")])
++def test_no_preference_words_are_stored_as_empty(catalog, word, what, field):
++    card = full_card()
++    card.change_choice(what, word)
++    assert getattr(card.preferences, field) == "", (what, word)
++    label = {"doctor": "doctor:", "location": "place:", "language": "language:"}[what]
++    assert label not in card.summary(catalog), card.summary(catalog)   # never shown
++
++
++@pytest.mark.parametrize("word", ["any day", "Any Day", "any", "whenever", "I don't mind"])
++def test_a_no_preference_day_as_new_value_clears_the_day(catalog, word):
++    card = full_card()
++    card.change_choice("time", word)
++    p = card.preferences
++    assert p.days == [] and p.time_of_day == "morning"   # only the day is cleared
++    assert "days:" not in card.summary(catalog)
++
++
++@pytest.mark.parametrize("word", ["any", "any time", "whenever", "no preference"])
++def test_a_no_preference_time_of_day_clears_only_the_time_of_day(catalog, word):
++    card = full_card()
++    card.change_choice("time", time_of_day=word)
++    p = card.preferences
++    assert p.time_of_day == "" and p.days == ["Thursday"]
++
++
++# =============================================================== s4: exact names
++@pytest.mark.parametrize("what,field,value", [
++    ("doctor", "doctor_name_heard", "Dr. Daniel Chen"), ("Doctor", "doctor_name_heard", "Dr. Daniel Chen"),
++    (" DOCTOR ", "doctor_name_heard", "Dr. Daniel Chen"), ("location", "location_hint", "Midtown"),
++    ("Location", "location_hint", "Midtown"), ("language", "language", "Hindi"), ("LANGUAGE", "language", "Hindi"),
++    ("time", "days", ["Friday"]), ("Time", "days", ["Friday"]),
++    ("visit_type", "visit_description", "knee MRI"), ("Visit Type", "visit_description", "knee MRI"),
++    ("VISIT_TYPE", "visit_description", "knee MRI"), ("visit type", "visit_description", "knee MRI"),
++])
++def test_the_five_names_are_accepted_case_and_spaces_ignored(what, field, value):
++    card = full_card()
++    card.change_choice(what, value if not isinstance(value, list) else value[0])
++    assert getattr(card.preferences, field) == value
++
++
++@pytest.mark.parametrize("what", ["provider", "place", "clinic", "slot", "reason", "service", "day", "date", "visit",
++                                  "appointment_type", "appointment", "doctors", "locations", "", "name", None])
++def test_synonyms_are_refused_and_change_nothing(what):
++    card = full_card()
++    before = card.to_dict()
++    with pytest.raises(ValueError) as e:
++        card.change_choice(what, "x")
++    assert "visit_type, doctor, location, time or language" in str(e.value)
++    assert card.to_dict() == before
++
++
++@pytest.mark.parametrize("about,name", [("location", "Midtown"), ("Location", "Midtown"), (" LOCATION ", "Midtown"),
++                                        ("doctor", "Dr. Wei Lee"), ("Doctor", "Dr. Wei Lee"),
++                                        ("visit_type", "knee MRI"), ("Visit_Type", "knee MRI"),
++                                        ("visit type", "knee MRI"), ("Visit Type", "knee MRI")])
++def test_answer_question_takes_the_three_names_case_and_spaces_ignored(catalog, about, name):
++    """s4: "`about` must be location, doctor or visit_type (case and spaces ignored)" - the same
++    words s4 uses for change_choice, where "Visit Type" is accepted."""
++    r = answer_question(catalog, about, name)
++    assert r["found"] is True, (about, r)
++
++
++@pytest.mark.parametrize("about", ["provider", "clinic", "place", "office", "visit", "appointment", "service",
++                                   "appointment_type", "weather", "doctors", "", None])
++def test_answer_question_refuses_anything_else(catalog, about):
++    r = answer_question(catalog, about, "Midtown")
++    assert r["found"] is False
++    if about:
++        assert r["message"] == "Pass about as location, doctor or visit_type."
++
++
++SENTENCE_WORDS = ["not", "but", "except", "without", "another", "other", "else", "someone", "somebody",
++                  "anyone", "anybody", "different", "instead", "please"]
++
++
++@pytest.mark.parametrize("word", SENTENCE_WORDS)
++@pytest.mark.parametrize("about,name", [("doctor", "Dr. Chen"), ("doctor", "Dr. Daniel Chen"),
++                                        ("location", "Downtown"), ("location", "Union Square")])
++def test_answer_question_refuses_a_sentence_as_a_name(catalog, word, about, name):
++    for value in (f"{word} {name}", f"{name} {word}", f"{word.upper()} {name}!", f"{name}, {word}"):
++        r = answer_question(catalog, about, value)
++        assert r["found"] is False and "results" not in r, (value, r)
++        assert r["message"] == f"'{value}' isn't a {about} name. Pass just the name.", r["message"]
++
++
++@pytest.mark.parametrize("value", ["not Dr. Chen", "another doctor", "anywhere but Downtown", "No, not Dr. Chen",
++                                   "someone else", "the other one", "Dr. Chen please"])
++def test_answer_question_spec_examples(catalog, value):
++    for about in ("doctor", "location"):
++        r = answer_question(catalog, about, value)
++        assert r["found"] is False and r["message"].endswith("Pass just the name."), (about, value, r)
++
++
++@pytest.mark.parametrize("name", sorted({x["name"] for x in PROV.values()}))
++def test_answer_question_every_real_doctor_name_is_not_a_sentence(catalog, name):
++    r = answer_question(catalog, "doctor", name)
++    assert r["found"] is True and any(x["name"].startswith(name) for x in r["results"])
++
++
++@pytest.mark.parametrize("name", sorted({l["name"] for l in LOC.values()} | set(EXTRAS["landmarks"])))
++def test_answer_question_every_real_place_is_not_a_sentence(catalog, name):
++    assert answer_question(catalog, "location", name)["found"] is True, name
++
++
++def test_answer_question_does_not_read_place_phrases(catalog):
++    """s1 applies here too: answer_question resolves place NAMES only."""
++    for phrase in ("near Downtown", "the Midtown one", "on Geary", "Union Square area"):
++        assert answer_question(catalog, "location", phrase)["found"] is False, phrase
++
++
++# =============================================================== s6: weekday words
++WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
++SHORT = {"mon": 0, "tue": 1, "tues": 1, "wed": 2, "thu": 3, "thur": 3, "thurs": 3, "fri": 4, "sat": 5, "sun": 6}
++ACCEPTED = [(w, i) for i, w in enumerate(WEEKDAYS)] + [(w + "s", i) for i, w in enumerate(WEEKDAYS)] + \
++           [(w.lower() + "s", i) for i, w in enumerate(WEEKDAYS)] + [(w.upper() + "S", i) for i, w in enumerate(WEEKDAYS)] + \
++           list(SHORT.items()) + [(s.upper(), i) for s, i in SHORT.items()] + [(s.capitalize(), i) for s, i in SHORT.items()]
++REFUSED = ["thus", "frid", "wednes", "mond", "monda", "tu", "th", "we", "fr", "sa", "su", "satur", "sund", "weds",
++           "tuesd", "thursd", "thurss", "mondayss", "frday", "thrusday", "wensday", "mon.day", "m"]
++
++
++def _skin_slots(schedule):
++    return [(p, l, t) for p, l in sorted(ref_pairs(True, "appt_027"))
++            for t in schedule.open_slots(p, l, VT["appt_027"]["duration_min"], NOW)]
++
++
++@pytest.mark.parametrize("word,weekday", ACCEPTED)
++def test_every_accepted_weekday_word(catalog, schedule, word, weekday):
++    r = run(catalog, schedule, Preferences(days=[word]), vt="appt_027")
++    assert "bad_input" not in kinds(r), (word, [n.say for n in r.notes])
++    if any(t.weekday() == weekday for _, _, t in _skin_slots(schedule)):
++        assert r.options and all(o.start.weekday() == weekday for o in r.options)
++    else:
++        assert r.options and kinds(r) == ["wish_impossible"] and WEEKDAYS[weekday] in r.notes[0].say
++
++
++@pytest.mark.parametrize("word", REFUSED)
++def test_every_other_weekday_word_is_refused(catalog, schedule, word):
++    r = run(catalog, schedule, Preferences(days=[word]), vt="appt_027")
++    assert refused(r), (word, [n.say for n in r.notes], [o.spoken for o in r.options])
++    card = full_card()
++    card.change_choice("time", word)
++    assert refused(run(catalog, schedule, card.preferences, vt="appt_027")), word
++
++
++# =============================================================== s6: repeated ids
++def _catalog_problems(raw):
++    with pytest.raises(CatalogError) as e:
++        Catalog(raw, EXTRAS)
++    return str(e.value)
++
++
++@pytest.mark.parametrize("section", ["locations", "providers", "appointment_types"])
++@pytest.mark.parametrize("copies", [2, 3, 5])
++def test_a_repeated_catalog_id_is_reported_once(section, copies):
++    raw = copy.deepcopy(RAW)
++    first = raw[section][0]
++    raw[section] += [copy.deepcopy(first) for _ in range(copies - 1)]
++    text = _catalog_problems(raw)
++    assert text.count(first["id"] + " appears more than once") == 1, text
++
++
++@pytest.mark.parametrize("section", ["locations", "providers", "appointment_types"])
++def test_two_different_repeated_ids_are_each_reported_once(section):
++    raw = copy.deepcopy(RAW)
++    a, b = raw[section][0], raw[section][1]
++    raw[section] += [copy.deepcopy(a), copy.deepcopy(a), copy.deepcopy(b), copy.deepcopy(b), copy.deepcopy(b)]
++    text = _catalog_problems(raw)
++    assert text.count("appears more than once") == 2, text
++    assert text.count(a["id"] + " appears") == 1 and text.count(b["id"] + " appears") == 1
++
++
++@pytest.mark.parametrize("variant", [" {}", "{} ", "  {}  ", "\t{}"])
++def test_catalog_ids_are_compared_without_surrounding_spaces(variant):
++    raw = copy.deepcopy(RAW)
++    twin = copy.deepcopy(raw["appointment_types"][0])
++    twin["id"] = variant.format(twin["id"])
++    raw["appointment_types"].append(twin)
++    text = _catalog_problems(raw)
++    assert text.count("appears more than once") == 1, text
++
++
++def _patient_problems(records):
++    with pytest.raises(CatalogError) as e:
++        PatientDirectory(records)
++    return str(e.value)
++
++
++@pytest.mark.parametrize("copies", [2, 3, 6])
++def test_a_repeated_patient_id_is_reported_once(copies):
++    recs = copy.deepcopy(PATIENTS) + [dict(copy.deepcopy(PATIENTS[0]), name=f"Other Person{i}") for i in range(copies - 1)]
++    text = _patient_problems(recs)
++    assert text.count("appears more than once") == 1, text
++
++
++@pytest.mark.parametrize("variant", [" {}", "{} ", "  {}  "])
++def test_patient_ids_are_compared_without_surrounding_spaces(variant):
++    twin = dict(copy.deepcopy(PATIENTS[1]), id=variant.format(PATIENTS[1]["id"]))
++    text = _patient_problems(copy.deepcopy(PATIENTS) + [twin])
++    assert text.count("appears more than once") == 1, text
++
++
++def test_the_real_files_still_load():
++    Catalog(RAW, EXTRAS)
++    PatientDirectory(PATIENTS)

@@ -169,12 +169,15 @@ def test_unknown_language_is_kept_as_said(catalog, schedule):
 
 
 # ---------------------------------------------------------------- places (change 3 and the list)
-@pytest.mark.parametrize("hint", ["near Geary", "near Market", "close to Geary", "the one near Market", "near Bryant"])
+# Round 7 reverses round-4 change 3: a bare street name is never a street. "near Geary"
+# is now passed as "Geary Street" with near=True; bare "Geary" with near=True isn't recognised.
+@pytest.mark.parametrize("hint", ["Geary Street", "Market Street", "Geary Blvd", "Market St", "Bryant Street"])
 def test_near_a_bare_street_is_recognised_and_ambiguous(catalog, schedule, hint):
-    street = hint.split()[-1].lower()
-    m = catalog.resolve_place(hint)
+    street = hint.split()[0].lower()
+    m = catalog.resolve_place(hint, near=True)
     assert m.kind == "ambiguous" and set(m.location_ids) == STREETS[street] and m.near
-    r = run(catalog, schedule, Preferences(location_hint=hint))
+    assert catalog.resolve_place(hint.split()[0], near=True).kind == "none"
+    r = run(catalog, schedule, Preferences(location_hint=hint, near=True))
     base = run(catalog, schedule, Preferences())
     assert [n.kind for n in r.notes] == ["place_ambiguous"]
     assert [(o.provider_id, o.location_id, o.start) for o in r.options] == \
@@ -186,30 +189,35 @@ def test_a_bare_street_name_without_near_is_not_a_street(catalog, hint):
     assert catalog.resolve_place(hint).kind not in ("location", "ambiguous")
 
 
-@pytest.mark.parametrize("hint,lid", [("near 4455 Geary", "loc_004"), ("near 4293 Geary Blvd", "loc_006"),
-                                      ("944 Bryant St", "loc_003"), ("4671 Bryant Street", "loc_007"),
-                                      ("near Main", "loc_000"), ("near Mission Street", "loc_002")])
-def test_house_numbers_and_near_streets_pick_one_clinic(catalog, hint, lid):
-    m = catalog.resolve_place(hint)
-    assert m.kind == "location" and m.location_ids == [lid]
+# round 7: "near 4455 Geary" -> ("4455 Geary Street", near=True); "near Main" -> ("Main Street", near=True)
+@pytest.mark.parametrize("hint,lid,near", [("4455 Geary Street", "loc_004", True), ("4293 Geary Blvd", "loc_006", True),
+                                           ("944 Bryant St", "loc_003", False), ("4671 Bryant Street", "loc_007", False),
+                                           ("Main Street", "loc_000", True), ("Mission Street", "loc_002", True)])
+def test_house_numbers_and_near_streets_pick_one_clinic(catalog, hint, lid, near):
+    m = catalog.resolve_place(hint, near=near)
+    assert m.kind == "location" and m.location_ids == [lid] and m.near is near
 
 
-@pytest.mark.parametrize("hint", ["near Marin", "near Van Ness", "near Lombard", "near Union Street", "near St Mary's",
-                                  "St Mary's Clinic", "near Sunset Boulevard", "nowhere", "near the bay", "Marin",
-                                  "near Twin Peaks", "FiDi", "main", "the main one"])
-def test_places_that_must_not_match(catalog, hint):
-    m = catalog.resolve_place(hint)
+# round 7: "near X" is now the name X with near=True; each must still not match
+@pytest.mark.parametrize("hint", ["Marin", "Van Ness", "Lombard", "Union Street", "St Mary's",
+                                  "St Mary's Clinic", "Sunset Boulevard", "nowhere", "the bay",
+                                  "Twin Peaks", "FiDi", "main", "the main one"])
+@pytest.mark.parametrize("near", [False, True])
+def test_places_that_must_not_match(catalog, hint, near):
+    m = catalog.resolve_place(hint, near=near)
     assert m.kind == "none", (hint, m)
 
 
-@pytest.mark.parametrize("hint", ["SF", "in SF", "San Francisco", "near SF"])
-def test_city_words_alone_are_no_place_wish(catalog, schedule, hint):
-    assert catalog.resolve_place(hint).kind == "any"
-    assert not run(catalog, schedule, Preferences(location_hint=hint)).notes
+# round 7: "in SF" / "near SF" -> "SF" (near=True for the latter); linking words aren't read
+@pytest.mark.parametrize("hint,near", [("SF", False), ("San Francisco", False), ("SF", True), ("sf", False)])
+def test_city_words_alone_are_no_place_wish(catalog, schedule, hint, near):
+    assert catalog.resolve_place(hint, near=near).kind == "any"
+    assert not run(catalog, schedule, Preferences(location_hint=hint, near=near)).notes
 
 
-@pytest.mark.parametrize("hint,lid", [("the Midtown one in SF", "loc_005"), ("Richmund", "loc_007"),
-                                      ("Mision Bay", "loc_000"), ("the clinic in the Marina", "loc_003")])
+# round 7: linking words are no longer read; the AI passes "Midtown SF" / "the Marina"
+@pytest.mark.parametrize("hint,lid", [("Midtown SF", "loc_005"), ("Richmund", "loc_007"),
+                                      ("Mision Bay", "loc_000"), ("the Marina", "loc_003")])
 def test_linking_words_and_long_misspellings(catalog, hint, lid):
     m = catalog.resolve_place(hint)
     assert m.kind == "location" and m.location_ids == [lid]

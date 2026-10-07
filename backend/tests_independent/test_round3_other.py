@@ -21,7 +21,7 @@ KINDS = {"not_bookable", "bad_input", "doctor_not_found", "doctor_name_guess", "
 
 # ---------------------------------------------------------------- s2: notes are plain records
 def _some_notes(catalog, schedule):
-    prefs = [Preferences(doctor_name_heard="Dr. Garsha", location_hint="the Mission one", language="Klingon",
+    prefs = [Preferences(doctor_name_heard="Dr. Garsha", location_hint="Mission", language="Klingon",  # round 7: a name
                          days=["Saturday"]),
              Preferences(location_hint="Mars"), Preferences(time_of_day="evening"),
              Preferences(doctor_name_heard="Dr. Maria Garcia"), Preferences(days=["20261013"])]
@@ -50,7 +50,7 @@ def test_note_is_a_record_not_a_string(catalog, schedule):
 
 def test_options_result_to_dict_is_json(catalog, schedule):
     r = find_options(catalog, schedule, new_caller(), "appt_027",
-                     Preferences(doctor_name_heard="Dr. Garsha", location_hint="near Downtown"), NOW)
+                     Preferences(doctor_name_heard="Dr. Garsha", location_hint="Downtown", near=True), NOW)
     d = json.loads(json.dumps(r.to_dict()))
     assert d["notes"] == [n.to_dict() for n in r.notes] and len(d["options"]) == len(r.options)
 
@@ -277,7 +277,7 @@ def test_regression_no_option_breaks_a_rule_whole_catalog(catalog, schedule):
     bad = []
     for kind, caller, is_new, refs in [("new", new_caller(), True, []), ("all", ALL, False, list(SPECIALTIES))]:
         for vt in VT:
-            r = find_options(catalog, schedule, caller, vt, Preferences(location_hint="near Downtown"), NOW)
+            r = find_options(catalog, schedule, caller, vt, Preferences(location_hint="Downtown", near=True), NOW)
             if r.bookable != ref_bookable(is_new, refs, vt):
                 bad.append((kind, vt, "bookable"))
             for o in r.options:

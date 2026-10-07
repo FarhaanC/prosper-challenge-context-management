@@ -46,7 +46,48 @@ def who_can_problems(names_text, able_ids, prov=None):
         if len(same_name) > 1 and not m.group("places"):
             out.append(f"same-name doctor without locations: {m.group(0)}")
         if m.group("places"):
-            places = set(re.split(r", | and ", m.group("places")))
+            places = set(m.group("places").split(" / "))   # round 7 s5: places joined with " / "
             if not any(places <= {LOC[l]["name"] for l in PROV[p]["location_ids"]} for p in fits):
                 out.append(f"wrong locations in {m.group(0)}")
+    return out
+
+
+# Round 7 s5: every list of doctors in a note reads at most three names, then "and N more".
+NAMES = sorted({x["name"] for x in PROV_FILE.values()}, key=len, reverse=True)
+
+
+def names_in(text):
+    """Doctor names written in a piece of text (longest first, so no name hides inside another)."""
+    found = set()
+    for n in NAMES:
+        if n in text:
+            found.add(n)
+            text = text.replace(n, "#")
+    return found
+
+
+def capped_names_problems(names_text, want):
+    """A list of plain doctor names ("A", "A and B", "A, B and C", or "A, B, C and N more"):
+    the people shown must be among `want` (a set of names), at most three are read, and the
+    count must add up to len(want)."""
+    out = []
+    more = re.fullmatch(r"(?P<shown>.+) and (?P<n>\d+) more", names_text)
+    if more:
+        shown = more.group("shown").split(", ")
+        total = len(shown) + int(more.group("n"))
+        if len(shown) != 3:
+            out.append(f"'and N more' after {len(shown)} names, not 3: {names_text!r}")
+    else:
+        shown = re.split(r", | and ", names_text)
+        total = len(shown)
+        if len(shown) > 1 and not re.fullmatch(r"(?:[^,]+, )*[^,]+ and [^,]+", names_text):
+            out.append(f"list not written as 'A, B and C': {names_text!r}")
+    if len(shown) > 3:
+        out.append(f"{len(shown)} names read out: {names_text!r}")
+    if len(set(shown)) != len(shown):
+        out.append(f"a name read twice: {names_text!r}")
+    if not set(shown) <= set(want) or names_in(", ".join(shown)) != set(shown):
+        out.append(f"names {shown} not all among {sorted(want)}")
+    if total != len(want):
+        out.append(f"count {total} != {len(want)}")
     return out

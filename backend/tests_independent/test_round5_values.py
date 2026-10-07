@@ -222,16 +222,18 @@ def _number_we_have(lid):
     return LOC[lid]["address"].split()[0]
 
 
-@pytest.mark.parametrize("hint,street", [("near 9999 Geary", "geary"), ("9999 Geary Blvd", "geary"),
-                                         ("the 9999 Geary Blvd one", "geary"), ("near 1 Geary Boulevard", "geary"),
-                                         ("9999 Market St", "market"), ("9999 Bryant Street", "bryant"),
-                                         ("4455 Market St", "market")])  # a number we have, but on another street
-def test_a_house_number_we_do_not_have_means_somewhere_on_that_street(catalog, schedule, hint, street):
+# round 7: the AI passes the address with its street word, plus near ("near 9999 Geary" ->
+# "9999 Geary Street", near=True). Either way a number we don't have means "somewhere on that street".
+@pytest.mark.parametrize("hint,street,near", [("9999 Geary Street", "geary", True), ("9999 Geary Blvd", "geary", False),
+                                              ("9999 Geary Blvd", "geary", True), ("1 Geary Boulevard", "geary", True),
+                                              ("9999 Market St", "market", False), ("9999 Bryant Street", "bryant", False),
+                                              ("4455 Market St", "market", False)])  # a number we have, but on another street
+def test_a_house_number_we_do_not_have_means_somewhere_on_that_street(catalog, schedule, hint, street, near):
     clinics = _on_street(street)
     assert len(clinics) == 2  # from catalog.json addresses
-    m = catalog.resolve_place(hint)
+    m = catalog.resolve_place(hint, near=near)
     assert m.kind == "ambiguous" and sorted(m.location_ids) == clinics and m.near, (hint, m)
-    r = run(catalog, schedule, Preferences(location_hint=hint))
+    r = run(catalog, schedule, Preferences(location_hint=hint, near=near))
     base = run(catalog, schedule, Preferences())
     assert kinds(r) == ["place_ambiguous"]
     assert all(LOC[c]["name"] in r.notes[0].say for c in clinics)
@@ -244,8 +246,9 @@ def test_a_house_number_we_have_picks_that_clinic(catalog, lid):
     address = LOC[lid]["address"]                     # e.g. "4455 Geary Blvd"
     m = catalog.resolve_place(address)
     assert m.kind == "location" and m.location_ids == [lid] and not m.near, (address, m)
-    m = catalog.resolve_place("near " + address)
+    m = catalog.resolve_place(address, near=True)       # round 7: "near <address>" -> near=True
     assert m.kind == "location" and m.location_ids == [lid] and m.near, (address, m)
+    assert catalog.resolve_place("near " + address).kind == "none"   # the phrase isn't read
 
 
 @pytest.mark.parametrize("hint", ["9999 Main St", "9999 Mission Street"])

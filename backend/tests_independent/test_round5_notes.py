@@ -24,7 +24,7 @@ import pytest
 from clinic import Preferences, Schedule, find_options
 from conftest import NOW, new_caller, returning
 from reference import LOC, PROV, SPECIALTIES, VT, ref_bookable, ref_pairs
-from round6_reference import who_can_problems
+from round6_reference import capped_names_problems, who_can_problems
 
 CALLERS = {"new": (True, []), "returning-none": (False, []), "returning-all": (False, list(SPECIALTIES))}
 _SLOTS = {}
@@ -67,8 +67,21 @@ def names_in(text):
 
 
 def list_problems(names_text, want):
-    """Problems with a joined list of names: wrong people, or not written 'A', 'A and B', 'A, B and C'."""
+    """Problems with a joined list of names: wrong people, or not written 'A', 'A and B', 'A, B and C'.
+    Round 7 s5: more than three names read three, then "and N more"; the count must add up."""
     out = []
+    more = re.fullmatch(r"(?P<shown>.+) and (?P<n>\d+) more", names_text)
+    if len(want) > 3 or more:
+        if not more:
+            return [f"{len(want)} names but no 'and N more': {names_text!r}"]
+        shown = more.group("shown").split(", ")
+        if len(shown) != 3 or len(set(shown)) != 3:
+            out.append(f"'and N more' after {len(shown)} names, not 3: {names_text!r}")
+        if not set(shown) <= want or names_in(more.group("shown")) != set(shown):
+            out.append(f"names {shown} not all among {sorted(want)}")
+        if len(shown) + int(more.group("n")) != len(want):
+            out.append(f"count {len(shown)} + {more.group('n')} != {len(want)}")
+        return out
     if names_in(names_text) != want:
         out.append(f"names {sorted(names_in(names_text))} != {sorted(want)}")
     parts = re.split(r", | and ", names_text)
@@ -214,8 +227,12 @@ def test_only_doctor_matching_note_whole_catalog(catalog, schedule, kind):
                 if say != one:
                     problems.append((where, "wording", say))
                 continue
-            if names_in(say) != want:
-                problems.append((where, "names", sorted(want), say))
+            listed = re.search(r" are (?P<names>.+), whom you turned down", say)
+            if not listed:
+                problems.append((where, "wording", say))
+                continue
+            # round 7 s5: three names, then "and N more"; the count must add up
+            problems += [(where, p, say) for p in capped_names_problems(listed.group("names"), want)]
             if re.search(r"The only doctor matching .* is [^,]+ and ", say) or "doctor matching" in say:
                 problems.append((where, "singular grammar for several doctors", say))
     assert tried

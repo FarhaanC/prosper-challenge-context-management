@@ -129,9 +129,9 @@ def test_turning_down_adds_to_the_list(catalog, schedule):
 
 
 def test_a_said_place_is_kept_and_a_carried_place_stays(catalog):
-    card = card_for("new", SKIN, location_hint="the Midtown one")
+    card = card_for("new", SKIN, location_hint="Union Square", near=True)   # round 7: a name plus near
     card.turn_down_doctors(catalog, provider_ids=[ids_named("Dr. Kenji Kim")[0]])
-    assert card.preferences.location_hint == "the Midtown one"
+    assert (card.preferences.location_hint, card.preferences.near) == ("Union Square", True)
     card = card_for("new", SKIN, preferred_location_id="loc_004", preferred_provider_id="prov_001")
     card.turn_down_doctors(catalog, current=True)   # the carried-over doctor
     p = card.preferences
@@ -162,7 +162,7 @@ REFUSALS = {
 @pytest.mark.parametrize("label", list(REFUSALS))
 def test_an_instruction_that_cannot_be_followed_is_refused_and_changes_nothing(catalog, label):
     # A doctor was only NAMED (not chosen or carried), and nothing is on offer.
-    card = card_for("new", SKIN, doctor_name_heard="Dr. Daniel Chen", location_hint="near Union Square",
+    card = card_for("new", SKIN, doctor_name_heard="Dr. Daniel Chen", location_hint="Union Square", near=True,
                     days=["Thursday"], language="Arabic", not_provider_ids=["prov_027"], latest="time")
     before = card.to_dict()
     with pytest.raises(ValueError) as e:
@@ -327,15 +327,16 @@ def test_same_name_pair_turned_down_and_the_surname_said(catalog, schedule):
     assert "Dr. Michael Sato" in not_list(card.summary(catalog))
 
 
-@pytest.mark.parametrize("change", [("time", "Thursday"), ("time", "afternoon"), ("location", "the Richmond one"),
-                                    ("location", "near Union Square"), ("language", "Arabic"), ("time", "any time")])
+# round 7: "the Richmond one" -> ("Richmond", near=False); "near Union Square" -> ("Union Square", near=True)
+@pytest.mark.parametrize("change", [("time", "Thursday"), ("time", "afternoon"), ("location", "Richmond"),
+                                    ("location", "Union Square", True), ("language", "Arabic"), ("time", "any time")])
 def test_named_back_then_chosen_stays_back_after_any_other_change(catalog, schedule, change):
     chen = ids_named("Dr. Daniel Chen")[0]
     card = card_for("new", SKIN)
     card.turn_down_doctors(catalog, provider_ids=[chen])
     card.change_choice("doctor", "Dr. Daniel Chen")
     choose(card, search(catalog, schedule, card).options[0])
-    card.change_choice(*change)
+    card.change_choice(change[0], change[1], **({"near": True} if len(change) > 2 else {}))
     card.change_choice("time", "Friday") if change[0] != "time" else None   # and one more change for good measure
     r = search(catalog, schedule, card)
     assert chen not in card.preferences.not_provider_ids

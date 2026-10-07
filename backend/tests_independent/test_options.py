@@ -207,13 +207,13 @@ def test_language_note_is_true_when_doctor_wish_also_set(catalog, schedule):
 
 
 def test_named_place_note_is_true_when_doctor_wish_also_set(catalog, schedule):
-    # Dr. Daniel Chen (Downtown, Richmond) + "the Midtown one": another valid doctor does skin
+    # Dr. Daniel Chen (Downtown, Richmond) + "the Midtown one" (round 7: "Midtown", near=False): another valid doctor does skin
     # screening at Midtown, so the place is set aside as a CLASH with the stronger said doctor.
     # Round 3: rewritten to check behaviour instead of searching for an old sentence.
     slots = ref_slots(schedule, True, "appt_027")
     assert any(l == "loc_005" for _, l, _ in slots) and "loc_005" not in PROV["prov_001"]["location_ids"]
     r = run(catalog, schedule, new_caller(), "appt_027", doctor_name_heard="Dr. Daniel Chen",
-            location_hint="the Midtown one")
+            location_hint="Midtown")
     assert r.options and all(o.provider_id == "prov_001" for o in r.options)
     assert "wish_impossible" not in [n.kind for n in r.notes], [str(n) for n in r.notes]
     clash = [n.say for n in r.notes if n.kind == "wish_conflict"]
@@ -275,7 +275,7 @@ def test_knee_mri_with_old_garcia_wish(catalog, schedule, directory):
 
 def test_knee_mri_near_downtown(catalog, schedule, directory):
     james = directory.lookup("James Wilson", "1984-03-12").caller
-    r = run(catalog, schedule, james, "appt_065", location_hint="near Downtown")
+    r = run(catalog, schedule, james, "appt_065", location_hint="Downtown", near=True)  # round 7: name + near
     assert r.options[0].location_id == "loc_004"
     assert {o.location_id for o in r.options} == {"loc_004", "loc_005"}  # near ranks, does not exclude
     assert not any("recognise" in n.say for n in r.notes)
@@ -283,26 +283,27 @@ def test_knee_mri_near_downtown(catalog, schedule, directory):
 
 def test_knee_mri_closer_to_downtown_baseline_phrase(catalog, schedule, directory):
     james = directory.lookup("James Wilson", "1984-03-12").caller
-    r = run(catalog, schedule, james, "appt_065", location_hint="closer to downtown")
+    # round 7: the AI turns "closer to downtown" into the name plus near=True
+    r = run(catalog, schedule, james, "appt_065", location_hint="downtown", near=True)
     assert r.options[0].location_id == "loc_004"
     assert not any("recognise" in n.say for n in r.notes), r.notes
 
 
 def test_knee_mri_the_midtown_one(catalog, schedule, directory):
     james = directory.lookup("James Wilson", "1984-03-12").caller
-    r = run(catalog, schedule, james, "appt_065", location_hint="the Midtown one")
+    r = run(catalog, schedule, james, "appt_065", location_hint="Midtown")  # "the Midtown one" -> name, near=False
     assert r.options and all((o.provider_id, o.location_id) == ("prov_015", "loc_005") for o in r.options)
 
 
 def test_knee_mri_the_sunset_one_not_possible(catalog, schedule, directory):
     james = directory.lookup("James Wilson", "1984-03-12").caller
-    r = run(catalog, schedule, james, "appt_065", location_hint="the Sunset one")
+    r = run(catalog, schedule, james, "appt_065", location_hint="Sunset")  # "the Sunset one"
     assert r.options  # closest alternatives
     assert any("Sunset" in n.say for n in r.notes)
 
 
 def test_ambiguous_place_note(catalog, schedule):
-    r = run(catalog, schedule, new_caller(), "appt_027", location_hint="the Mission one")
+    r = run(catalog, schedule, new_caller(), "appt_027", location_hint="Mission")  # "the Mission one"
     text = " ".join(n.say for n in r.notes)
     assert "Mission Bay" in text and "Mission District" in text
 
@@ -319,7 +320,7 @@ def test_blank_place_hint_is_no_wish(catalog, schedule):
 
 def test_near_landmark_ranks_by_distance(catalog, schedule):
     caller = new_caller()
-    r = run(catalog, schedule, caller, "appt_027", location_hint="near Chinatown")
+    r = run(catalog, schedule, caller, "appt_027", location_hint="Chinatown", near=True)  # "near Chinatown"
     pt = tuple(EXTRAS["landmarks"]["Chinatown"])
     d = [miles(pt, loc_pt(o.location_id)) for o in r.options]
     assert d == sorted(d)

@@ -55,15 +55,17 @@ from reference import LOC, PROV, VT, ref_pairs
 
 WEEKDAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
 
-# Place phrases that NAME one of our locations (restrict), from catalog.json names
-# and the spec's examples. Near-phrases are not wishes (they only rank).
+# Place NAMES that pick one of our locations (restrict when near is False), from
+# catalog.json names and the spec's examples. Round 7: the AI passes a name plus near
+# yes/no; phrases ("the Midtown one") are no longer read, so only names are listed.
+# With near=True a name only ranks, so it is not a wish.
 RESTRICT_PHRASES = {}
 for _lid, _l in LOC.items():
     RESTRICT_PHRASES[_l["name"].lower()] = _lid
 RESTRICT_PHRASES.update({
-    "the midtown one": "loc_005", "the hayes valley one": "loc_005", "the downtown one": "loc_004",
-    "the marina district": "loc_003", "richmond district": "loc_007", "the sunset one": "loc_006",
-    "the north beach one": "loc_002", "mission bay": "loc_000", "the mission district one": "loc_001",
+    "midtown": "loc_005", "hayes valley": "loc_005", "downtown": "loc_004",
+    "the marina district": "loc_003", "richmond district": "loc_007", "sunset": "loc_006",
+    "north beach": "loc_002", "mission bay": "loc_000", "mission district": "loc_001",
 })
 
 
@@ -102,8 +104,10 @@ NO_PREF = {"idontmind", "dontmind", "nopreference", "any", "anyday", "anytime", 
 # Round 6 s3: words no name has.
 SENTENCE_WORDS = {"not", "but", "except", "without", "another", "other", "else", "someone", "somebody",
                   "anyone", "anybody", "different", "instead", "please"}
-SHORT_DAYS = {w[:3]: w for w in WEEKDAYS} | {w[:4]: w for w in WEEKDAYS} | {"thurs": "thursday", "tues": "tuesday",
-                                                                              "weds": "wednesday"}
+# Round 7 s6: exactly these short forms, plus full names and their plurals ("thursdays").
+SHORT_DAYS = {"mon": "monday", "tue": "tuesday", "tues": "tuesday", "wed": "wednesday", "thu": "thursday",
+              "thur": "thursday", "thurs": "thursday", "fri": "friday", "sat": "saturday", "sun": "sunday"} | \
+             {w + "s": w for w in WEEKDAYS}
 
 
 def no_pref(text):
@@ -167,7 +171,7 @@ def interpret(prefs):
         wishes.append(("doctor", False, lambda p, l, s, ids=ids: p in ids, kw))
     if prefs.location_hint.strip() and not no_pref(prefs.location_hint):
         lid = RESTRICT_PHRASES.get(prefs.location_hint.strip().lower())
-        if lid:
+        if lid and not getattr(prefs, "near", False):
             wishes.append(("place", False, lambda p, l, s, lid=lid: l == lid, LOC[lid]["name"]))
     days = days_given
     tod = tod_given

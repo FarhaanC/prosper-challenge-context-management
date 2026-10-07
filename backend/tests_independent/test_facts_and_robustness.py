@@ -61,9 +61,15 @@ def test_doctor_facts_first_name_grace(catalog):
     assert any("Grace Rodriguez" in x["name"] for x in r.get("results", [])), r
 
 
-@pytest.mark.parametrize("about", ["Doctor", " DOCTOR ", "provider"])
+@pytest.mark.parametrize("about", ["Doctor", " DOCTOR "])
 def test_doctor_about_casing(catalog, about):
     assert answer_question(catalog, about, "Dr. Wei Lee")["found"]
+
+
+# round 7 s4: synonyms such as "provider" are refused with a how-to message
+def test_doctor_about_synonym_is_refused(catalog):
+    r = answer_question(catalog, "provider", "Dr. Wei Lee")
+    assert r["found"] is False and r["message"] == "Pass about as location, doctor or visit_type."
 
 
 # ---------------------------------------------------------------- visit types

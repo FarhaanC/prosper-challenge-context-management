@@ -1,0 +1,503 @@
+........................................................................ [  2%]
+........................................................................ [  4%]
+........................................................................ [  6%]
+........................................................................ [  9%]
+........................................................................ [ 11%]
+........................................................................ [ 13%]
+........................................................................ [ 16%]
+........................................................................ [ 18%]
+........................................................................ [ 20%]
+........................................................................ [ 23%]
+........................................................................ [ 25%]
+........................................................................ [ 27%]
+........................................................................ [ 30%]
+........................................................................ [ 32%]
+........................................................................ [ 34%]
+........................................................................ [ 37%]
+........................................................................ [ 39%]
+........................................................................ [ 41%]
+........................................................................ [ 44%]
+........................................................................ [ 46%]
+........................................................................ [ 48%]
+........................................................................ [ 51%]
+........................................................................ [ 53%]
+........................................................................ [ 55%]
+........................................................................ [ 57%]
+........................................................................ [ 60%]
+........................................................................ [ 62%]
+........................................................................ [ 64%]
+........................................................................ [ 67%]
+........................................................................ [ 69%]
+.................FF..................................................... [ 71%]
+........................................................................ [ 74%]
+........................................................................ [ 76%]
+.........................................................FFF............ [ 78%]
+..........FFF......................FFF......................FFF......... [ 81%]
+.............FFF......................FFF............................... [ 83%]
+........................................................................ [ 85%]
+........................................................................ [ 88%]
+.......................FF............................................... [ 90%]
+........................................................................ [ 92%]
+........................................................................ [ 95%]
+........................................................................ [ 97%]
+........................................................................ [ 99%]
+........                                                                 [100%]
+=================================== FAILURES ===================================
+__________ test_same_name_same_specialty_in_the_cant_do_this_reasons ___________
+
+    def test_same_name_same_specialty_in_the_cant_do_this_reasons():
+        """Neither Dr. Daniel Chen takes new patients: the reason must not read
+        "Dr. Daniel Chen and Dr. Daniel Chen aren't taking new patients" (s5: same-name
+        doctors get their places added, every one of them, even sharing a specialty)."""
+        cat, sch, prov, loc = _twin_catalog({"accepting_new_patients": False})
+        r = find_options(cat, sch, new_caller(), "appt_027", Preferences(doctor_name_heard="Dr. Daniel Chen"), NOW)
+        note = next(n.say for n in r.notes if n.say.startswith("No doctor matching"))
+        pairs = open_pairs(sch, prov, loc, True, "appt_027")
+>       assert not cant_note_problems(note, "Dr. Daniel Chen", ["prov_001", "prov_twin"], prov, loc, True, "appt_027",
+                                      pairs), (cant_note_problems(note, "Dr. Daniel Chen", ["prov_001", "prov_twin"], prov,
+                                                                  loc, True, "appt_027", pairs), note)
+E       AssertionError: (["two items read the same: ['Dr. Daniel Chen', 'Dr. Daniel Chen']"], "No doctor matching 'Dr. Daniel Chen' can do thi...iel Chen aren't taking new patients. Doctors who can: Dr. Kenji Kim (Dermatology) and Dr. Daniel Smith (Dermatology).")
+E       assert not ["two items read the same: ['Dr. Daniel Chen', 'Dr. Daniel Chen']"]
+E        +  where ["two items read the same: ['Dr. Daniel Chen', 'Dr. Daniel Chen']"] = cant_note_problems("No doctor matching 'Dr. Daniel Chen' can do this: Dr. Daniel Chen and Dr. Daniel Chen aren't taking new patients. Doctors who can: Dr. Kenji Kim (Dermatology) and Dr. Daniel Smith (Dermatology).", 'Dr. Daniel Chen', ['prov_001', 'prov_twin'], {'prov_000': {'id': 'prov_000', 'name': 'Dr. David Chen', 'title': 'MD', 'specialty': 'Cardiology', ...}, 'prov_001': ..., ...}, 'prov_002': {'id': 'prov_002', 'name': 'Dr. Maria Garcia', 'title': 'MD', 'specialty': 'Pediatrics', ...}, ...}, {'loc_000': {'id': 'loc_000', 'name': 'Mission Bay Health Center', 'address': '4874 Main St', 'city': 'San Francisco',...: {'id': 'loc_003', 'name': 'North Gate Health Center', 'address': '944 Bryant St', 'city': 'San Francisco', ...}, ...}, True, 'appt_027', {('prov_027', 'loc_002'), ('prov_027', 'loc_004'), ('prov_027', 'loc_005'), ('prov_027', 'loc_006'), ('prov_035', 'loc_001'), ('prov_035', 'loc_007')})
+
+tests_independent/test_round7_notes.py:265: AssertionError
+______________ test_same_name_same_specialty_in_the_surname_note _______________
+
+    def test_same_name_same_specialty_in_the_surname_note():
+        """A misheard first name: the "Doctors with that surname" list must tell the twins apart."""
+        cat, sch, prov, loc = _twin_catalog()
+        r = find_options(cat, sch, new_caller(), "appt_027", Preferences(doctor_name_heard="Dr. Zebulon Chen"), NOW)
+        note = next(n.say for n in r.notes if n.kind == "doctor_name_guess")
+        items, more = split_more(GUESS.match(note).group("items"), ", ")
+        family = [p for p, x in prov.items() if x["name"].endswith(" Chen")]
+        assert len(items) + more == len(family)
+        shown_twins = [it for it in items if it.startswith("Dr. Daniel Chen")]
+        if len(shown_twins) > 1:
+>           assert len(set(shown_twins)) == len(shown_twins), note
+E           AssertionError: There's no doctor called Dr. Zebulon Chen. Doctors with that surname: Dr. David Chen (Cardiology), Dr. Daniel Chen (Dermatology), Dr. Daniel Chen (Dermatology) and 5 more. Check with the caller.
+E           assert 1 == 2
+E            +  where 1 = len({'Dr. Daniel Chen (Dermatology)'})
+E            +    where {'Dr. Daniel Chen (Dermatology)'} = set(['Dr. Daniel Chen (Dermatology)', 'Dr. Daniel Chen (Dermatology)'])
+E            +  and   2 = len(['Dr. Daniel Chen (Dermatology)', 'Dr. Daniel Chen (Dermatology)'])
+
+tests_independent/test_round7_notes.py:280: AssertionError
+____ test_each_listed_phrase_form_is_not_recognised[Downtown-{x} location] _____
+
+catalog = <clinic.catalog.Catalog object at 0x7fa8af383530>
+schedule = <clinic.slots.Schedule object at 0x7fa8ae4c85f0>
+form = '{x} location', name = 'Downtown'
+
+    @pytest.mark.parametrize("form", PHRASE_FORMS)
+    @pytest.mark.parametrize("name", PHRASE_NAMES)
+    def test_each_listed_phrase_form_is_not_recognised(catalog, schedule, form, name):
+        said = form.format(x=name)
+        for near in (False, True):
+            m = catalog.resolve_place(said, near=near)
+>           assert m.kind == "none" and not m.location_ids and m.point is None, (said, near, m)
+E           AssertionError: ('Downtown location', False, PlaceMatch(kind='location', label='Downtown Health Center', location_ids=['loc_004'], point=(37.7875, -122.408), near=False))
+E           assert ('location' == 'none'
+E             
+E             - none
+E             + location)
+
+tests_independent/test_round7_places.py:270: AssertionError
+_____ test_each_listed_phrase_form_is_not_recognised[Downtown-{x} clinic] ______
+
+catalog = <clinic.catalog.Catalog object at 0x7fa8af383530>
+schedule = <clinic.slots.Schedule object at 0x7fa8acf8d550>, form = '{x} clinic'
+name = 'Downtown'
+
+    @pytest.mark.parametrize("form", PHRASE_FORMS)
+    @pytest.mark.parametrize("name", PHRASE_NAMES)
+    def test_each_listed_phrase_form_is_not_recognised(catalog, schedule, form, name):
+        said = form.format(x=name)
+        for near in (False, True):
+            m = catalog.resolve_place(said, near=near)
+>           assert m.kind == "none" and not m.location_ids and m.point is None, (said, near, m)
+E           AssertionError: ('Downtown clinic', False, PlaceMatch(kind='location', label='Downtown Health Center', location_ids=['loc_004'], point=(37.7875, -122.408), near=False))
+E           assert ('location' == 'none'
+E             
+E             - none
+E             + location)
+
+tests_independent/test_round7_places.py:270: AssertionError
+_____ test_each_listed_phrase_form_is_not_recognised[Downtown-{x} office] ______
+
+catalog = <clinic.catalog.Catalog object at 0x7fa8af383530>
+schedule = <clinic.slots.Schedule object at 0x7fa8acf8d7f0>, form = '{x} office'
+name = 'Downtown'
+
+    @pytest.mark.parametrize("form", PHRASE_FORMS)
+    @pytest.mark.parametrize("name", PHRASE_NAMES)
+    def test_each_listed_phrase_form_is_not_recognised(catalog, schedule, form, name):
+        said = form.format(x=name)
+        for near in (False, True):
+            m = catalog.resolve_place(said, near=near)
+>           assert m.kind == "none" and not m.location_ids and m.point is None, (said, near, m)
+E           AssertionError: ('Downtown office', False, PlaceMatch(kind='location', label='Downtown Health Center', location_ids=['loc_004'], point=(37.7875, -122.408), near=False))
+E           assert ('location' == 'none'
+E             
+E             - none
+E             + location)
+
+tests_independent/test_round7_places.py:270: AssertionError
+_____ test_each_listed_phrase_form_is_not_recognised[Midtown-{x} location] _____
+
+catalog = <clinic.catalog.Catalog object at 0x7fa8af383530>
+schedule = <clinic.slots.Schedule object at 0x7fa8acf8e2d0>
+form = '{x} location', name = 'Midtown'
+
+    @pytest.mark.parametrize("form", PHRASE_FORMS)
+    @pytest.mark.parametrize("name", PHRASE_NAMES)
+    def test_each_listed_phrase_form_is_not_recognised(catalog, schedule, form, name):
+        said = form.format(x=name)
+        for near in (False, True):
+            m = catalog.resolve_place(said, near=near)
+>           assert m.kind == "none" and not m.location_ids and m.point is None, (said, near, m)
+E           AssertionError: ('Midtown location', False, PlaceMatch(kind='location', label='Midtown Medical Group', location_ids=['loc_005'], point=(37.7765, -122.4241), near=False))
+E           assert ('location' == 'none'
+E             
+E             - none
+E             + location)
+
+tests_independent/test_round7_places.py:270: AssertionError
+______ test_each_listed_phrase_form_is_not_recognised[Midtown-{x} clinic] ______
+
+catalog = <clinic.catalog.Catalog object at 0x7fa8af383530>
+schedule = <clinic.slots.Schedule object at 0x7fa8acf8ea50>, form = '{x} clinic'
+name = 'Midtown'
+
+    @pytest.mark.parametrize("form", PHRASE_FORMS)
+    @pytest.mark.parametrize("name", PHRASE_NAMES)
+    def test_each_listed_phrase_form_is_not_recognised(catalog, schedule, form, name):
+        said = form.format(x=name)
+        for near in (False, True):
+            m = catalog.resolve_place(said, near=near)
+>           assert m.kind == "none" and not m.location_ids and m.point is None, (said, near, m)
+E           AssertionError: ('Midtown clinic', False, PlaceMatch(kind='location', label='Midtown Medical Group', location_ids=['loc_005'], point=(37.7765, -122.4241), near=False))
+E           assert ('location' == 'none'
+E             
+E             - none
+E             + location)
+
+tests_independent/test_round7_places.py:270: AssertionError
+______ test_each_listed_phrase_form_is_not_recognised[Midtown-{x} office] ______
+
+catalog = <clinic.catalog.Catalog object at 0x7fa8af383530>
+schedule = <clinic.slots.Schedule object at 0x7fa8acf8f110>, form = '{x} office'
+name = 'Midtown'
+
+    @pytest.mark.parametrize("form", PHRASE_FORMS)
+    @pytest.mark.parametrize("name", PHRASE_NAMES)
+    def test_each_listed_phrase_form_is_not_recognised(catalog, schedule, form, name):
+        said = form.format(x=name)
+        for near in (False, True):
+            m = catalog.resolve_place(said, near=near)
+>           assert m.kind == "none" and not m.location_ids and m.point is None, (said, near, m)
+E           AssertionError: ('Midtown office', False, PlaceMatch(kind='location', label='Midtown Medical Group', location_ids=['loc_005'], point=(37.7765, -122.4241), near=False))
+E           assert ('location' == 'none'
+E             
+E             - none
+E             + location)
+
+tests_independent/test_round7_places.py:270: AssertionError
+__ test_each_listed_phrase_form_is_not_recognised[Hayes Valley-{x} location] ___
+
+catalog = <clinic.catalog.Catalog object at 0x7fa8af383530>
+schedule = <clinic.slots.Schedule object at 0x7fa8acf8f5f0>
+form = '{x} location', name = 'Hayes Valley'
+
+    @pytest.mark.parametrize("form", PHRASE_FORMS)
+    @pytest.mark.parametrize("name", PHRASE_NAMES)
+    def test_each_listed_phrase_form_is_not_recognised(catalog, schedule, form, name):
+        said = form.format(x=name)
+        for near in (False, True):
+            m = catalog.resolve_place(said, near=near)
+>           assert m.kind == "none" and not m.location_ids and m.point is None, (said, near, m)
+E           AssertionError: ('Hayes Valley location', False, PlaceMatch(kind='location', label='Midtown Medical Group', location_ids=['loc_005'], point=(37.7765, -122.4241), near=False))
+E           assert ('location' == 'none'
+E             
+E             - none
+E             + location)
+
+tests_independent/test_round7_places.py:270: AssertionError
+___ test_each_listed_phrase_form_is_not_recognised[Hayes Valley-{x} clinic] ____
+
+catalog = <clinic.catalog.Catalog object at 0x7fa8af383530>
+schedule = <clinic.slots.Schedule object at 0x7fa8acf8fc50>, form = '{x} clinic'
+name = 'Hayes Valley'
+
+    @pytest.mark.parametrize("form", PHRASE_FORMS)
+    @pytest.mark.parametrize("name", PHRASE_NAMES)
+    def test_each_listed_phrase_form_is_not_recognised(catalog, schedule, form, name):
+        said = form.format(x=name)
+        for near in (False, True):
+            m = catalog.resolve_place(said, near=near)
+>           assert m.kind == "none" and not m.location_ids and m.point is None, (said, near, m)
+E           AssertionError: ('Hayes Valley clinic', False, PlaceMatch(kind='location', label='Midtown Medical Group', location_ids=['loc_005'], point=(37.7765, -122.4241), near=False))
+E           assert ('location' == 'none'
+E             
+E             - none
+E             + location)
+
+tests_independent/test_round7_places.py:270: AssertionError
+___ test_each_listed_phrase_form_is_not_recognised[Hayes Valley-{x} office] ____
+
+catalog = <clinic.catalog.Catalog object at 0x7fa8af383530>
+schedule = <clinic.slots.Schedule object at 0x7fa8ace80110>, form = '{x} office'
+name = 'Hayes Valley'
+
+    @pytest.mark.parametrize("form", PHRASE_FORMS)
+    @pytest.mark.parametrize("name", PHRASE_NAMES)
+    def test_each_listed_phrase_form_is_not_recognised(catalog, schedule, form, name):
+        said = form.format(x=name)
+        for near in (False, True):
+            m = catalog.resolve_place(said, near=near)
+>           assert m.kind == "none" and not m.location_ids and m.point is None, (said, near, m)
+E           AssertionError: ('Hayes Valley office', False, PlaceMatch(kind='location', label='Midtown Medical Group', location_ids=['loc_005'], point=(37.7765, -122.4241), near=False))
+E           assert ('location' == 'none'
+E             
+E             - none
+E             + location)
+
+tests_independent/test_round7_places.py:270: AssertionError
+__ test_each_listed_phrase_form_is_not_recognised[Union Square-{x} location] ___
+
+catalog = <clinic.catalog.Catalog object at 0x7fa8af383530>
+schedule = <clinic.slots.Schedule object at 0x7fa8ace80530>
+form = '{x} location', name = 'Union Square'
+
+    @pytest.mark.parametrize("form", PHRASE_FORMS)
+    @pytest.mark.parametrize("name", PHRASE_NAMES)
+    def test_each_listed_phrase_form_is_not_recognised(catalog, schedule, form, name):
+        said = form.format(x=name)
+        for near in (False, True):
+            m = catalog.resolve_place(said, near=near)
+>           assert m.kind == "none" and not m.location_ids and m.point is None, (said, near, m)
+E           AssertionError: ('Union Square location', False, PlaceMatch(kind='location', label='Downtown Health Center', location_ids=['loc_004'], point=(37.7875, -122.408), near=False))
+E           assert ('location' == 'none'
+E             
+E             - none
+E             + location)
+
+tests_independent/test_round7_places.py:270: AssertionError
+___ test_each_listed_phrase_form_is_not_recognised[Union Square-{x} clinic] ____
+
+catalog = <clinic.catalog.Catalog object at 0x7fa8af383530>
+schedule = <clinic.slots.Schedule object at 0x7fa8ace80890>, form = '{x} clinic'
+name = 'Union Square'
+
+    @pytest.mark.parametrize("form", PHRASE_FORMS)
+    @pytest.mark.parametrize("name", PHRASE_NAMES)
+    def test_each_listed_phrase_form_is_not_recognised(catalog, schedule, form, name):
+        said = form.format(x=name)
+        for near in (False, True):
+            m = catalog.resolve_place(said, near=near)
+>           assert m.kind == "none" and not m.location_ids and m.point is None, (said, near, m)
+E           AssertionError: ('Union Square clinic', False, PlaceMatch(kind='location', label='Downtown Health Center', location_ids=['loc_004'], point=(37.7875, -122.408), near=False))
+E           assert ('location' == 'none'
+E             
+E             - none
+E             + location)
+
+tests_independent/test_round7_places.py:270: AssertionError
+___ test_each_listed_phrase_form_is_not_recognised[Union Square-{x} office] ____
+
+catalog = <clinic.catalog.Catalog object at 0x7fa8af383530>
+schedule = <clinic.slots.Schedule object at 0x7fa8acf8f590>, form = '{x} office'
+name = 'Union Square'
+
+    @pytest.mark.parametrize("form", PHRASE_FORMS)
+    @pytest.mark.parametrize("name", PHRASE_NAMES)
+    def test_each_listed_phrase_form_is_not_recognised(catalog, schedule, form, name):
+        said = form.format(x=name)
+        for near in (False, True):
+            m = catalog.resolve_place(said, near=near)
+>           assert m.kind == "none" and not m.location_ids and m.point is None, (said, near, m)
+E           AssertionError: ('Union Square office', False, PlaceMatch(kind='location', label='Downtown Health Center', location_ids=['loc_004'], point=(37.7875, -122.408), near=False))
+E           assert ('location' == 'none'
+E             
+E             - none
+E             + location)
+
+tests_independent/test_round7_places.py:270: AssertionError
+____ test_each_listed_phrase_form_is_not_recognised[Chinatown-{x} location] ____
+
+catalog = <clinic.catalog.Catalog object at 0x7fa8af383530>
+schedule = <clinic.slots.Schedule object at 0x7fa8acf8ebd0>
+form = '{x} location', name = 'Chinatown'
+
+    @pytest.mark.parametrize("form", PHRASE_FORMS)
+    @pytest.mark.parametrize("name", PHRASE_NAMES)
+    def test_each_listed_phrase_form_is_not_recognised(catalog, schedule, form, name):
+        said = form.format(x=name)
+        for near in (False, True):
+            m = catalog.resolve_place(said, near=near)
+>           assert m.kind == "none" and not m.location_ids and m.point is None, (said, near, m)
+E           AssertionError: ('Chinatown location', False, PlaceMatch(kind='landmark', label='Chinatown', location_ids=[], point=(37.7941, -122.4078), near=True))
+E           assert ('landmark' == 'none'
+E             
+E             - none
+E             + landmark)
+
+tests_independent/test_round7_places.py:270: AssertionError
+_____ test_each_listed_phrase_form_is_not_recognised[Chinatown-{x} clinic] _____
+
+catalog = <clinic.catalog.Catalog object at 0x7fa8af383530>
+schedule = <clinic.slots.Schedule object at 0x7fa8acf8e510>, form = '{x} clinic'
+name = 'Chinatown'
+
+    @pytest.mark.parametrize("form", PHRASE_FORMS)
+    @pytest.mark.parametrize("name", PHRASE_NAMES)
+    def test_each_listed_phrase_form_is_not_recognised(catalog, schedule, form, name):
+        said = form.format(x=name)
+        for near in (False, True):
+            m = catalog.resolve_place(said, near=near)
+>           assert m.kind == "none" and not m.location_ids and m.point is None, (said, near, m)
+E           AssertionError: ('Chinatown clinic', False, PlaceMatch(kind='landmark', label='Chinatown', location_ids=[], point=(37.7941, -122.4078), near=True))
+E           assert ('landmark' == 'none'
+E             
+E             - none
+E             + landmark)
+
+tests_independent/test_round7_places.py:270: AssertionError
+_____ test_each_listed_phrase_form_is_not_recognised[Chinatown-{x} office] _____
+
+catalog = <clinic.catalog.Catalog object at 0x7fa8af383530>
+schedule = <clinic.slots.Schedule object at 0x7fa8acf8d550>, form = '{x} office'
+name = 'Chinatown'
+
+    @pytest.mark.parametrize("form", PHRASE_FORMS)
+    @pytest.mark.parametrize("name", PHRASE_NAMES)
+    def test_each_listed_phrase_form_is_not_recognised(catalog, schedule, form, name):
+        said = form.format(x=name)
+        for near in (False, True):
+            m = catalog.resolve_place(said, near=near)
+>           assert m.kind == "none" and not m.location_ids and m.point is None, (said, near, m)
+E           AssertionError: ('Chinatown office', False, PlaceMatch(kind='landmark', label='Chinatown', location_ids=[], point=(37.7941, -122.4078), near=True))
+E           assert ('landmark' == 'none'
+E             
+E             - none
+E             + landmark)
+
+tests_independent/test_round7_places.py:270: AssertionError
+____ test_each_listed_phrase_form_is_not_recognised[Richmond-{x} location] _____
+
+catalog = <clinic.catalog.Catalog object at 0x7fa8af383530>
+schedule = <clinic.slots.Schedule object at 0x7fa8ace80fb0>
+form = '{x} location', name = 'Richmond'
+
+    @pytest.mark.parametrize("form", PHRASE_FORMS)
+    @pytest.mark.parametrize("name", PHRASE_NAMES)
+    def test_each_listed_phrase_form_is_not_recognised(catalog, schedule, form, name):
+        said = form.format(x=name)
+        for near in (False, True):
+            m = catalog.resolve_place(said, near=near)
+>           assert m.kind == "none" and not m.location_ids and m.point is None, (said, near, m)
+E           AssertionError: ('Richmond location', False, PlaceMatch(kind='location', label='Richmond Care Center', location_ids=['loc_007'], point=(37.78, -122.483), near=False))
+E           assert ('location' == 'none'
+E             
+E             - none
+E             + location)
+
+tests_independent/test_round7_places.py:270: AssertionError
+_____ test_each_listed_phrase_form_is_not_recognised[Richmond-{x} clinic] ______
+
+catalog = <clinic.catalog.Catalog object at 0x7fa8af383530>
+schedule = <clinic.slots.Schedule object at 0x7fa8ace811f0>, form = '{x} clinic'
+name = 'Richmond'
+
+    @pytest.mark.parametrize("form", PHRASE_FORMS)
+    @pytest.mark.parametrize("name", PHRASE_NAMES)
+    def test_each_listed_phrase_form_is_not_recognised(catalog, schedule, form, name):
+        said = form.format(x=name)
+        for near in (False, True):
+            m = catalog.resolve_place(said, near=near)
+>           assert m.kind == "none" and not m.location_ids and m.point is None, (said, near, m)
+E           AssertionError: ('Richmond clinic', False, PlaceMatch(kind='location', label='Richmond Care Center', location_ids=['loc_007'], point=(37.78, -122.483), near=False))
+E           assert ('location' == 'none'
+E             
+E             - none
+E             + location)
+
+tests_independent/test_round7_places.py:270: AssertionError
+_____ test_each_listed_phrase_form_is_not_recognised[Richmond-{x} office] ______
+
+catalog = <clinic.catalog.Catalog object at 0x7fa8af383530>
+schedule = <clinic.slots.Schedule object at 0x7fa8ace81550>, form = '{x} office'
+name = 'Richmond'
+
+    @pytest.mark.parametrize("form", PHRASE_FORMS)
+    @pytest.mark.parametrize("name", PHRASE_NAMES)
+    def test_each_listed_phrase_form_is_not_recognised(catalog, schedule, form, name):
+        said = form.format(x=name)
+        for near in (False, True):
+            m = catalog.resolve_place(said, near=near)
+>           assert m.kind == "none" and not m.location_ids and m.point is None, (said, near, m)
+E           AssertionError: ('Richmond office', False, PlaceMatch(kind='location', label='Richmond Care Center', location_ids=['loc_007'], point=(37.78, -122.483), near=False))
+E           assert ('location' == 'none'
+E             
+E             - none
+E             + location)
+
+tests_independent/test_round7_places.py:270: AssertionError
+_ test_answer_question_takes_the_three_names_case_and_spaces_ignored[visit type-knee MRI] _
+
+catalog = <clinic.catalog.Catalog object at 0x7fa8af383530>
+about = 'visit type', name = 'knee MRI'
+
+    @pytest.mark.parametrize("about,name", [("location", "Midtown"), ("Location", "Midtown"), (" LOCATION ", "Midtown"),
+                                            ("doctor", "Dr. Wei Lee"), ("Doctor", "Dr. Wei Lee"),
+                                            ("visit_type", "knee MRI"), ("Visit_Type", "knee MRI"),
+                                            ("visit type", "knee MRI"), ("Visit Type", "knee MRI")])
+    def test_answer_question_takes_the_three_names_case_and_spaces_ignored(catalog, about, name):
+        """s4: "`about` must be location, doctor or visit_type (case and spaces ignored)" - the same
+        words s4 uses for change_choice, where "Visit Type" is accepted."""
+        r = answer_question(catalog, about, name)
+>       assert r["found"] is True, (about, r)
+E       AssertionError: ('visit type', {'found': False, 'message': 'Pass about as location, doctor or visit_type.'})
+E       assert False is True
+
+tests_independent/test_round7_values.py:187: AssertionError
+_ test_answer_question_takes_the_three_names_case_and_spaces_ignored[Visit Type-knee MRI] _
+
+catalog = <clinic.catalog.Catalog object at 0x7fa8af383530>
+about = 'Visit Type', name = 'knee MRI'
+
+    @pytest.mark.parametrize("about,name", [("location", "Midtown"), ("Location", "Midtown"), (" LOCATION ", "Midtown"),
+                                            ("doctor", "Dr. Wei Lee"), ("Doctor", "Dr. Wei Lee"),
+                                            ("visit_type", "knee MRI"), ("Visit_Type", "knee MRI"),
+                                            ("visit type", "knee MRI"), ("Visit Type", "knee MRI")])
+    def test_answer_question_takes_the_three_names_case_and_spaces_ignored(catalog, about, name):
+        """s4: "`about` must be location, doctor or visit_type (case and spaces ignored)" - the same
+        words s4 uses for change_choice, where "Visit Type" is accepted."""
+        r = answer_question(catalog, about, name)
+>       assert r["found"] is True, (about, r)
+E       AssertionError: ('Visit Type', {'found': False, 'message': 'Pass about as location, doctor or visit_type.'})
+E       assert False is True
+
+tests_independent/test_round7_values.py:187: AssertionError
+=========================== short test summary info ============================
+FAILED tests_independent/test_round7_notes.py::test_same_name_same_specialty_in_the_cant_do_this_reasons
+FAILED tests_independent/test_round7_notes.py::test_same_name_same_specialty_in_the_surname_note
+FAILED tests_independent/test_round7_places.py::test_each_listed_phrase_form_is_not_recognised[Downtown-{x} location]
+FAILED tests_independent/test_round7_places.py::test_each_listed_phrase_form_is_not_recognised[Downtown-{x} clinic]
+FAILED tests_independent/test_round7_places.py::test_each_listed_phrase_form_is_not_recognised[Downtown-{x} office]
+FAILED tests_independent/test_round7_places.py::test_each_listed_phrase_form_is_not_recognised[Midtown-{x} location]
+FAILED tests_independent/test_round7_places.py::test_each_listed_phrase_form_is_not_recognised[Midtown-{x} clinic]
+FAILED tests_independent/test_round7_places.py::test_each_listed_phrase_form_is_not_recognised[Midtown-{x} office]
+FAILED tests_independent/test_round7_places.py::test_each_listed_phrase_form_is_not_recognised[Hayes Valley-{x} location]
+FAILED tests_independent/test_round7_places.py::test_each_listed_phrase_form_is_not_recognised[Hayes Valley-{x} clinic]
+FAILED tests_independent/test_round7_places.py::test_each_listed_phrase_form_is_not_recognised[Hayes Valley-{x} office]
+FAILED tests_independent/test_round7_places.py::test_each_listed_phrase_form_is_not_recognised[Union Square-{x} location]
+FAILED tests_independent/test_round7_places.py::test_each_listed_phrase_form_is_not_recognised[Union Square-{x} clinic]
+FAILED tests_independent/test_round7_places.py::test_each_listed_phrase_form_is_not_recognised[Union Square-{x} office]
+FAILED tests_independent/test_round7_places.py::test_each_listed_phrase_form_is_not_recognised[Chinatown-{x} location]
+FAILED tests_independent/test_round7_places.py::test_each_listed_phrase_form_is_not_recognised[Chinatown-{x} clinic]
+FAILED tests_independent/test_round7_places.py::test_each_listed_phrase_form_is_not_recognised[Chinatown-{x} office]
+FAILED tests_independent/test_round7_places.py::test_each_listed_phrase_form_is_not_recognised[Richmond-{x} location]
+FAILED tests_independent/test_round7_places.py::test_each_listed_phrase_form_is_not_recognised[Richmond-{x} clinic]
+FAILED tests_independent/test_round7_places.py::test_each_listed_phrase_form_is_not_recognised[Richmond-{x} office]
+FAILED tests_independent/test_round7_values.py::test_answer_question_takes_the_three_names_case_and_spaces_ignored[visit type-knee MRI]
+FAILED tests_independent/test_round7_values.py::test_answer_question_takes_the_three_names_case_and_spaces_ignored[Visit Type-knee MRI]
+22 failed, 3082 passed in 172.90s (0:02:52)

@@ -47,7 +47,7 @@ def test_visit_type_change_carries_doctor_and_place_as_wishes_and_clears_choices
     assert c.preferences.preferred_provider_id == "prov_001" and c.preferences.preferred_location_id == "loc_004"
 
 
-@pytest.mark.parametrize("what,value", [("doctor", "Dr. Kenji Kim"), ("location", "the Midtown one"),
+@pytest.mark.parametrize("what,value", [("doctor", "Dr. Kenji Kim"), ("location", "Midtown"),   # round 7: a name
                                         ("time", "Monday")])
 def test_at_most_one_doctor_and_one_place_wish(what, value):
     c = full_card()
@@ -315,7 +315,7 @@ def test_answer_question_exact_single_doctor(catalog):
 
 
 def test_answer_question_location_and_unknowns(catalog):
-    a = answer_question(catalog, "location", "the Midtown one")
+    a = answer_question(catalog, "location", "Midtown")   # round 7: a name, not "the Midtown one"
     assert a["results"][0]["name"] == "Midtown Medical Group" and "2099 Market St" in a["results"][0]["address"]
     assert answer_question(catalog, "doctor", "Dr. Zzyzx")["found"] is False
     assert answer_question(catalog, "weather", "today")["found"] is False

@@ -337,7 +337,7 @@ def test_every_sentence_word_in_a_doctor_value_is_refused(catalog, schedule, wor
 
 @pytest.mark.parametrize("word", SENTENCE_WORDS)
 def test_every_sentence_word_in_a_place_value_is_refused(catalog, schedule, word):
-    for value in _forms(word, "Downtown") + _forms(word, "the Midtown one") + _forms(word, "near Union Square"):
+    for value in _forms(word, "Downtown") + _forms(word, "Midtown Medical Group") + _forms(word, "Union Square"):
         r = run(catalog, schedule, Preferences(location_hint=value))
         assert refused(r), (value, said(r), [o.spoken for o in r.options])
 
@@ -387,16 +387,19 @@ PLACES = sorted({l["name"] for l in LOC.values()} | set(EXTRAS["landmarks"])
 
 @pytest.mark.parametrize("place", PLACES)
 def test_every_real_place_is_not_a_sentence(catalog, schedule, place):
-    for value in (place, f"near {place}", f"the {place} one", f"close to {place}"):
-        r = run(catalog, schedule, Preferences(location_hint=value))
+    # round 7: "near X" / "the X one" / "close to X" are passed as the name X plus near yes/no
+    for value, near in ((place, False), (place, True), (place.upper(), False), (f"the {place}", True)):
+        r = run(catalog, schedule, Preferences(location_hint=value, near=near))
         assert "bad_input" not in kinds(r), (value, said(r))
         assert "place_unknown" not in kinds(r), (value, said(r))
 
 
 @pytest.mark.parametrize("address", sorted(l["address"] for l in LOC.values()))
 def test_our_street_addresses_are_not_sentences(catalog, schedule, address):
-    for value in (address, "near " + address, "on " + address.split()[1]):
-        assert "bad_input" not in kinds(run(catalog, schedule, Preferences(location_hint=value))), value
+    street = " ".join(address.split()[1:])                      # "Geary Blvd"
+    for value, near in ((address, False), (address, True), (street, False), (street, True)):   # round 7: names + near
+        r = run(catalog, schedule, Preferences(location_hint=value, near=near))
+        assert "bad_input" not in kinds(r) and "place_unknown" not in kinds(r), (value, said(r))
 
 
 @pytest.fixture(scope="module")

@@ -324,7 +324,7 @@ def test_someone_else_twice_and_kept_through_other_changes(catalog, schedule):
     card.turn_down_doctors(catalog, current=True)
     assert set(card.preferences.not_provider_ids) == {first[0], o.provider_id}
     card.change_choice("time", "Thursday")
-    card.change_choice("location", "the Midtown one")
+    card.change_choice("location", "Midtown")   # round 7: a place name
     assert set(card.preferences.not_provider_ids) == {first[0], o.provider_id}  # "for the rest of the call"
     r = find_options(catalog, schedule, card.caller, vt, card.preferences, NOW)
     assert r.options and not {x.provider_id for x in r.options} & {first[0], o.provider_id}

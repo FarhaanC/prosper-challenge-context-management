@@ -44,12 +44,12 @@ def test_change_doctor(what):
 
 def test_change_location():
     c = full_card()
-    stage = c.change_choice("location", "the Midtown one")
+    stage = c.change_choice("location", "Midtown")   # round 7: a place name, not "the Midtown one"
     assert stage == BOOKING
     ch = c.choices
     assert ch.visit_type_id == "appt_027"
     assert (ch.provider_id, ch.location_id, ch.slot) == ("", "", None)
-    assert c.preferences.location_hint == "the Midtown one"
+    assert c.preferences.location_hint == "Midtown" and c.preferences.near is False
     assert c.preferences.preferred_provider_id == "prov_001"  # old doctor kept as a wish
     assert c.preferences.preferred_location_id != "loc_004"
 
@@ -113,7 +113,7 @@ def test_location_change_to_place_old_doctor_does_not_work(catalog, schedule):
     Midtown has valid dermatologists (Dr. Kenji Kim). Expected: Midtown options."""
     caller = new_caller()
     c = full_card(caller)
-    c.change_choice("location", "the Midtown one")
+    c.change_choice("location", "Midtown")   # round 7: the name; "the Midtown one" is a phrase
     r = find_options(catalog, schedule, caller, "appt_027", c.preferences, NOW)
     assert r.options and all(o.location_id == "loc_005" for o in r.options), \
         ([(o.provider_name, o.location_name) for o in r.options], r.notes)

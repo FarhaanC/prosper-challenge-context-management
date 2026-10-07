@@ -24,7 +24,7 @@ import pytest
 from clinic import Catalog, Preferences, Schedule, SlotTaken, find_options
 from conftest import NOW, new_caller, returning
 from reference import DATA, PROV, SPECIALTIES, VT, ref_bookable, ref_pairs
-from round6_reference import who_can_problems
+from round6_reference import capped_names_problems, who_can_problems
 
 RAW = json.loads((DATA / "catalog.json").read_text())
 EXTRAS = json.loads((DATA / "location_extras.json").read_text())
@@ -72,8 +72,9 @@ BATTERY = [
     Preferences(), Preferences(doctor_name_heard="Dr. Chen"), Preferences(doctor_name_heard="Dr. Garsha"),
     Preferences(doctor_name_heard="Dr. John Garcia"), Preferences(doctor_name_heard="Dr. Linda Nguyen"),
     Preferences(doctor_name_heard="Dr. Zzyzx"), Preferences(location_hint="Mission"),
-    Preferences(location_hint="near Geary"), Preferences(location_hint="Mars"),
-    Preferences(location_hint="the Midtown one"), Preferences(days=["Saturday"]), Preferences(days=["2026-10-10"]),
+    Preferences(location_hint="Geary Street", near=True), Preferences(location_hint="Mars"),   # round 7: name + near
+    Preferences(location_hint="Midtown"), Preferences(days=["Saturday"]), Preferences(days=["2026-10-10"]),
+    Preferences(location_hint="Downtown", near=True), Preferences(location_hint="the Midtown one"),
     Preferences(days=["today"], time_of_day="afternoon"), Preferences(language="Hindi"),
     Preferences(language="Klingon"), Preferences(language="Vietnamese", location_hint="Mission Bay"),
     Preferences(doctor_name_heard="Dr. Kenji Kim", location_hint="Richmond Care Center", days=["Monday"],
@@ -200,12 +201,6 @@ ONLY_MANY = re.compile(r"^The only doctors matching '(?P<said>[^']+)' who can do
                        r"turned down\. Check whether the caller wants one of them after all\.$")
 
 
-def _names(text):
-    parts = re.split(r", | and ", text)
-    ok = len(parts) == 1 or bool(re.fullmatch(r"(?:[^,]+, )*[^,]+ and [^,]+", text))
-    return parts, ok
-
-
 @pytest.mark.parametrize("kind", list(CALLERS))
 def test_only_doctors_matching_note_whole_catalog(catalog, schedule, kind):
     problems, seen_plural = [], 0
@@ -230,9 +225,8 @@ def test_only_doctors_matching_note_whole_catalog(catalog, schedule, kind):
             if not m or m.group("said") != said:
                 problems.append((where, "wording / singular-plural", conflicts[0]))
                 continue
-            got, ok = _names(m.group("names"))
-            if sorted(got) != want or not ok:
-                problems.append((where, f"names {got} != {want} or not 'A, B and C'", conflicts[0]))
+            # round 7 s5: three names, then "and N more"; the count must add up
+            problems += [(where, p, conflicts[0]) for p in capped_names_problems(m.group("names"), set(want))]
             if not r.options or {o.provider_id for o in r.options} & set(family):
                 problems.append((where, "turned-down doctor offered, or no options"))
             seen_plural += len(want) > 1

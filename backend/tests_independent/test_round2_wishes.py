@@ -46,6 +46,7 @@ def random_prefs(rng):
     place = rng.choice(["none", "hint", "carried"])
     if place == "hint":
         p.location_hint = rng.choice(PLACES)
+        p.near = rng.random() < 0.3   # round 7: near only ranks
     elif place == "carried":
         p.preferred_location_id = rng.choice(sorted(LOC))
     if rng.random() < 0.6:
@@ -126,7 +127,7 @@ def test_carried_doctor_and_place_after_time_change_whole_catalog(catalog, sched
     assert not problems, (len(problems), problems[:4])
 
 
-@pytest.mark.parametrize("what,value", [("location", "the Midtown one"), ("doctor", "Dr. Kenji Kim"),
+@pytest.mark.parametrize("what,value", [("location", "Midtown"), ("doctor", "Dr. Kenji Kim"),
                                         ("location", "Richmond Care Center"), ("doctor", "Dr. Daniel Smith"),
                                         ("doctor", "Dr. Garcia"), ("location", "Mission Bay")])
 @pytest.mark.parametrize("kind", ["new", "returning-all"])
@@ -148,7 +149,7 @@ def test_spec_example_conflict_note_wording(catalog, schedule):
     card = BookingCard(caller=caller)
     card.choices = Choices(specialty="Dermatology", visit_type_id="appt_027", provider_id="prov_001",
                            location_id="loc_004", slot=NOW + timedelta(days=2))
-    card.change_choice("location", "the Midtown one")
+    card.change_choice("location", "Midtown")  # round 7: a place name
     r = find_options(catalog, schedule, caller, "appt_027", card.preferences, NOW)
     assert r.options and all(o.location_id == "loc_005" for o in r.options)
     conflicts = [n for n in r.notes if n.kind == "wish_conflict"]
@@ -219,9 +220,9 @@ def test_place_impossible_note_does_not_claim_closest_when_soonest(catalog, sche
 
 def test_carried_doctor_with_latest_doctor_set_directly(catalog, schedule):
     """Spec 1: latest (set by change_choice OR SET DIRECTLY) is strongest of all.
-    Carried Dr. Daniel Chen + said 'the Midtown one' + latest='doctor': the doctor should win.
+    Carried Dr. Daniel Chen + said 'Midtown' (round 7: a name) + latest='doctor': the doctor should win.
     (Ambiguous spec corner: change_choice never produces this, but the spec allows setting it.)"""
-    p = Preferences(preferred_provider_id="prov_001", location_hint="the Midtown one", latest="doctor")
+    p = Preferences(preferred_provider_id="prov_001", location_hint="Midtown", latest="doctor")
     r = find_options(catalog, schedule, new_caller(), "appt_027", p, NOW)
     assert r.options and all(o.provider_id == "prov_001" for o in r.options), \
         ([(o.provider_name, o.location_name) for o in r.options], [str(n) for n in r.notes])
@@ -250,7 +251,7 @@ def test_location_change_beats_a_said_doctor(catalog, schedule):
     caller = new_caller()
     card = BookingCard(caller=caller, preferences=Preferences(doctor_name_heard="Dr. Daniel Chen"))
     card.choices = Choices(specialty="Dermatology", visit_type_id="appt_027")
-    assert card.change_choice("location", "the Midtown one") == BOOKING
+    assert card.change_choice("location", "Midtown") == BOOKING  # round 7: the name
     assert card.preferences.latest == "location"
     r = find_options(catalog, schedule, caller, "appt_027", card.preferences, NOW)
     assert r.options and all(o.location_id == "loc_005" for o in r.options), \
@@ -259,7 +260,7 @@ def test_location_change_beats_a_said_doctor(catalog, schedule):
 
 
 def test_latest_location_set_directly_beats_said_doctor(catalog, schedule):
-    p = Preferences(doctor_name_heard="Dr. Garcia", location_hint="the Hayes Valley one", latest="location")
+    p = Preferences(doctor_name_heard="Dr. Garcia", location_hint="Hayes Valley", latest="location")  # round 7: the name
     r = find_options(catalog, schedule, returning(), "appt_017", p, NOW)
     assert r.options and all(o.location_id == "loc_005" for o in r.options), \
         ([(o.provider_name, o.location_name) for o in r.options], [str(n) for n in r.notes])
