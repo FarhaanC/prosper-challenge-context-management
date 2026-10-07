@@ -132,3 +132,16 @@ def test_r4_broken_patient_records_are_refused_together():
         ])
     msg = str(e.value)
     assert "#0 isn't a record" in msg and "p1: referrals_on_file" in msg and "p2 is missing date_of_birth" in msg
+
+
+def test_r5_birthdays_must_be_real_dates_and_ids_unique():
+    from clinic import CatalogError
+    with pytest.raises(CatalogError) as e:
+        PatientDirectory([
+            {"id": "p1", "name": "Ann Lee", "date_of_birth": "12/03/1984"},   # could never be found
+            {"id": "p2", "name": "Bo Chan", "date_of_birth": "1990-02-30"},   # no such day
+            {"id": "p2", "name": "Cy Diaz", "date_of_birth": "1990-01-01"},
+        ])
+    msg = str(e.value)
+    assert "p1: date_of_birth '12/03/1984'" in msg and "p2: date_of_birth '1990-02-30'" in msg
+    assert "Patient id p2 appears more than once" in msg

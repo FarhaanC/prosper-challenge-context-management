@@ -26,6 +26,7 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass, field
+from datetime import date
 from pathlib import Path
 from typing import Optional
 
@@ -33,6 +34,17 @@ from .catalog import DATA_DIR, CatalogError
 from .fuzzy import letters_apart, name_tokens, normalize, person_match
 
 DATE_FORMAT = re.compile(r"\d{4}-\d{2}-\d{2}")
+
+
+def _is_iso_date(text: str) -> bool:
+    """A real date written YYYY-MM-DD ("1984-03-12"; not "12/03/1984" or "1984-02-30")."""
+    if not DATE_FORMAT.fullmatch(text):
+        return False
+    try:
+        date.fromisoformat(text)
+        return True
+    except ValueError:
+        return False
 # Spelling similarity per spoken name word: "Kahn" finds Khan (0.75) and "Willson"
 # finds Wilson, but "Tyler" doesn't find Taylor (0.73) and "Kim" doesn't find Khan.
 PATIENT_NAME_SPELLING = 0.75
@@ -85,16 +97,23 @@ class PatientDirectory:
         """Checks every record first and lists every problem at once, like the catalog."""
         if not isinstance(records, list):
             raise CatalogError("The patient data should be a list of patient records.")
-        problems = []
+        problems, seen = [], set()
         for i, r in enumerate(records):
             if not isinstance(r, dict):
                 problems.append(f"Patient entry #{i} isn't a record.")
                 continue
             label = r.get("id") if isinstance(r.get("id"), str) and r.get("id").strip() else f"#{i}"
+            if label in seen:
+                problems.append(f"Patient id {label} appears more than once.")
+            seen.add(label)
             missing = [k for k in ("id", "name", "date_of_birth") if not r.get(k)]
             if missing:
                 problems.append(f"Patient {label} is missing {', '.join(missing)}.")
             wrong = [k for k in ("id", "name", "date_of_birth") if r.get(k) and not isinstance(r[k], str)]
+            dob = r.get("date_of_birth")
+            if isinstance(dob, str) and dob and not _is_iso_date(dob):
+                problems.append(f"Patient {label}: date_of_birth {dob!r} should be a real date written YYYY-MM-DD "
+                                "(otherwise the patient could never be found).")
             refs = r.get("referrals_on_file", [])
             if not (isinstance(refs, list) and all(isinstance(x, str) for x in refs)):
                 wrong.append("referrals_on_file")  # text here would be read letter by letter

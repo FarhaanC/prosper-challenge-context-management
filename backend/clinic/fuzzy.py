@@ -43,17 +43,23 @@ TITLE_WORDS = {"dr", "doctor", "doc", "mr", "mrs", "ms", "miss", "mx",
                "jr", "junior", "sr", "senior", "ii", "iii", "iv"}
 
 # Ways of saying "no preference", written with spaces and apostrophes removed
-# (compare with `squash(text)`). Shared by day, time, place and doctor wishes.
-# This is the only list: "any day" (which clears the day but keeps a time of day)
-# is kept separate in ANY_DAY, and the two never overlap, so the order they're
-# checked in can't change the answer.
+# (compare with `squash(text)`). The one list, shared by every kind of wish: the
+# value counts as empty, the same as "". That is the only reading the code does of
+# these words; it never works out anything else from them.
 NO_PREFERENCE = {
-    "any", "anything", "anytime", "anywhere", "anyone", "anybody",
+    "any", "anything", "anytime", "anywhere", "anyone", "anybody", "anyday", "anydate",
     "nopreference", "dontmind", "idontmind", "doesntmatter", "itdoesntmatter", "whatever",
     "whenever", "wherever", "whoever", "either", "eitherisfine", "notfussed", "none", "no",
     "anyisfine", "anyofthem", "anywhereisfine", "anywhereisok", "anytimeisfine", "anytimeworks",
+    "anydayisfine", "anydayworks",
 }
-ANY_DAY = {"anyday", "anydate", "anydayisfine", "anydayworks"}
+
+# Words that show a value is a sentence or an instruction, not a name: "not Dr. Chen",
+# "another doctor", "anyone but Dr. Kim", "Dr. Chen please". The AI is asked to pass
+# bare names; this list only catches its mistakes, so they're refused instead of being
+# matched to a doctor or language by spelling. It is never used to work out what was meant.
+NOT_NAME_WORDS = {"not", "but", "except", "without", "another", "other", "else", "someone", "somebody",
+                  "anyone", "anybody", "different", "instead", "please"}
 
 
 @lru_cache(maxsize=50_000)  # the same catalog names are compared on every search
@@ -80,9 +86,9 @@ def means_no_preference(text) -> bool:
     return squash(text) in NO_PREFERENCE
 
 
-def means_any_day(text) -> bool:
-    """"Any day" clears the day wish only; a time of day ("mornings") is kept."""
-    return squash(text) in ANY_DAY
+def looks_like_a_sentence(text) -> bool:
+    """True if the value has a word no name has ("not Dr. Chen"). See NOT_NAME_WORDS."""
+    return bool(set(normalize(text).split()) & NOT_NAME_WORDS)
 
 
 def name_tokens(text) -> list:

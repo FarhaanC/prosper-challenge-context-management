@@ -117,8 +117,9 @@ def test_language_conflict_is_described_truthfully(catalog, schedule, new_caller
 
 def test_unmet_language_keeps_options(catalog, schedule, new_caller):
     r = find_options(catalog, schedule, new_caller, SKIN_CANCER_SCREENING, Preferences(language="Klingon"), NOW)
-    assert r.options and [n.say for n in r.notes] == [
-        "None of the doctors available to you for Skin Cancer Screening speaks Klingon."]
+    assert r.options and [n.say for n in r.notes] == [  # round 5: a language not in our records says so
+        "None of our doctors is listed as speaking Klingon. "
+        "Our doctors speak Arabic, English, Hindi, Mandarin, Portuguese, Spanish and Vietnamese."]
 
 
 def test_ambiguous_place_asks(catalog, schedule, new_caller):
@@ -185,17 +186,17 @@ def test_r2_1_location_change_beats_a_doctor_the_caller_only_named(catalog, sche
 def test_r2_2_time_of_day_change_keeps_the_day(catalog, schedule, new_caller):
     card = _card_with(new_caller, DANIEL_CHEN_DERM, RICHMOND)
     card.change_choice("time", "Thursday")
-    card.change_choice("time", "afternoon")
+    card.change_choice("time", time_of_day="afternoon")   # round 5: plain fields; the day is kept
     assert (card.preferences.days, card.preferences.time_of_day) == (["Thursday"], "afternoon")
     r = find_options(catalog, schedule, new_caller, SKIN_CANCER_SCREENING, card.preferences, NOW)
     assert r.options and all(o.start.strftime("%A") == "Thursday" and o.start.hour >= 12 for o in r.options)
-    card.change_choice("time", "any time")
+    card.change_choice("time", days=[], time_of_day="")
     assert (card.preferences.days, card.preferences.time_of_day) == ([], "")
 
 
 def test_r2_2_thursday_morning_in_one_go(new_caller):
     card = _card_with(new_caller, DANIEL_CHEN_DERM, RICHMOND)
-    card.change_choice("time", "Thursday morning")
+    card.change_choice("time", days=["Thursday"], time_of_day="morning")
     assert (card.preferences.days, card.preferences.time_of_day) == (["Thursday"], "morning")
 
 
@@ -314,14 +315,25 @@ def test_r3_3_surname_list_says_how_many_more(catalog, schedule, new_caller):
     assert "and 4 more" in guess.say
 
 
-def test_r3_4_everyday_time_phrases(new_caller):
+def test_r5_time_is_plain_values_the_ai_fills_in(catalog, schedule, new_caller):
+    # Round 5 (Farhaan's decision): the AI turns "this afternoon" into plain values.
     card = _card_with(new_caller, DANIEL_CHEN_DERM, RICHMOND)
-    card.change_choice("time", "this afternoon")
+    card.change_choice("time", days=["today"], time_of_day="afternoon")          # "this afternoon"
     assert (card.preferences.days, card.preferences.time_of_day) == (["today"], "afternoon")
-    card.change_choice("time", "Thursday or Friday, morning please")
-    assert (card.preferences.days, card.preferences.time_of_day) == (["Thursday", "Friday"], "morning")
-    card.change_choice("time", "I don't mind")
+    card.change_choice("time", days=["Thursday", "Friday"], time_of_day="morning")  # "Thursday or Friday morning"
+    r = find_options(catalog, schedule, new_caller, SKIN_CANCER_SCREENING, card.preferences, NOW)
+    assert r.options and all(o.start.strftime("%A") in ("Thursday", "Friday") and o.start.hour < 12
+                             for o in r.options)
+    card.change_choice("time", days=["I don't mind"], time_of_day="any")          # no-preference words count as ""
     assert (card.preferences.days, card.preferences.time_of_day) == ([], "")
+
+
+@pytest.mark.parametrize("days", [["this afternoon"], ["Thursday morning"], ["Thursday or Friday"],
+                                  ["next Thursday"], ["Thursday works"]])
+def test_r5_time_phrases_are_refused_with_how_to_pass_them(catalog, schedule, new_caller, days):
+    r = find_options(catalog, schedule, new_caller, SKIN_CANCER_SCREENING, Preferences(days=days), NOW)
+    assert not r.options and [n.kind for n in r.notes] == [BAD_INPUT]
+    assert "Pass each day on its own" in r.notes[0].say
 
 
 def test_r3_9_two_word_language_and_grammar(catalog, schedule, new_caller):
@@ -363,12 +375,24 @@ def test_r4_an_unclear_turn_down_is_refused_and_changes_nothing(catalog, new_cal
     assert card.to_dict() == before
 
 
-def test_r4_phrases_are_never_read_as_instructions(catalog, schedule, new_caller):
+@pytest.mark.parametrize("said", ["someone else", "not Dr. Daniel Chen", "No, not Dr. Chen", "anyone but Dr. Chen",
+                                  "another doctor", "the other one", "Dr. Chen please"])
+def test_r5_phrases_are_never_read_as_instructions(catalog, schedule, new_caller, said):
+    # The AI's mistake: a sentence passed as a name. Round 5 check, must-fix 2: matching it
+    # by spelling turned "not Dr. Chen" into a wish FOR Dr. Chen, and "another" into Dr. Andre.
     card = _card_with(new_caller, DANIEL_CHEN_DERM, RICHMOND)
-    card.change_choice("doctor", "someone else")   # the AI's mistake: this isn't a name
-    assert card.preferences.not_provider_ids == []
+    card.turn_down_doctors(catalog, current=True)
+    card.change_choice("doctor", said)
+    assert card.preferences.not_provider_ids == [DANIEL_CHEN_DERM]   # nobody brought back by it either
     r = _offer(catalog, schedule, card)
-    assert "doctor_not_found" in [n.kind for n in r.notes]   # visible, not guessed at
+    assert not r.options and [n.kind for n in r.notes] == [BAD_INPUT]
+    assert "To turn doctors down, use turn_down_doctors" in r.notes[0].say
+
+
+def test_r5_a_place_sentence_is_refused_too(catalog, schedule, new_caller):
+    r = find_options(catalog, schedule, new_caller, SKIN_CANCER_SCREENING,
+                     Preferences(location_hint="anywhere but Downtown"), NOW)
+    assert not r.options and [n.kind for n in r.notes] == [BAD_INPUT]
 
 
 def test_r4_turning_down_the_doctors_on_offer(catalog, schedule, new_caller):
@@ -434,7 +458,7 @@ def test_r4_no_other_doctor_names_only_doctors_who_can(catalog, schedule):
     card.turn_down_doctors(catalog, provider_ids=nguyens)   # "not Dr. Nguyen"
     r = find_options(catalog, schedule, caller, WELL_WOMAN_EXAM, card.preferences, NOW)
     assert [n.say for n in r.notes] == [
-        "No other doctor can do Annual Well-Woman Exam for you; Dr. Linda Nguyen is the only option."]
+        "No other doctor can do Annual Well-Woman Exam for you; Dr. Linda Nguyen (OB/GYN) is the only option."]
 
 
 def test_r4_no_other_doctor_plural(catalog, schedule, new_caller):
@@ -443,10 +467,11 @@ def test_r4_no_other_doctor_plural(catalog, schedule, new_caller):
                      Preferences(not_provider_ids=everyone), NOW)
     assert [n.say for n in r.notes] == [
         "No other doctor can do Skin Cancer Screening for you; "
-        "Dr. Daniel Chen, Dr. Daniel Smith and Dr. Kenji Kim are the only options."]
+        "Dr. Daniel Chen (Dermatology), Dr. Kenji Kim (Dermatology) and Dr. Daniel Smith (Dermatology) "
+        "are the only options."]
 
 
-@pytest.mark.parametrize("value", ["any language", "not Spanish", "no Spanish please", "don't mind"])
+@pytest.mark.parametrize("value", ["any language", "not Spanish", "no Spanish please", "Spanish English"])
 def test_r4_language_must_be_one_language_name(catalog, schedule, new_caller, value):
     card = _dermatology_card(new_caller)
     card.change_choice("language", value)
@@ -456,13 +481,93 @@ def test_r4_language_must_be_one_language_name(catalog, schedule, new_caller, va
     assert card.preferences.language == "" and not _offer(catalog, schedule, card).notes
 
 
-def test_r4_morning_or_afternoon_is_refused_not_guessed(catalog, schedule, new_caller):
-    card = _dermatology_card(new_caller)
-    card.change_choice("time", "Thursday morning or Friday afternoon")
-    r = _offer(catalog, schedule, card)
-    assert [n.kind for n in r.notes] == [BAD_INPUT] and "one day at a time" in r.notes[0].say
+@pytest.mark.parametrize("days, time_of_day", [
+    (["Thursday", "Friday"], "morning or afternoon"),   # round 4 check, finding 6
+    (["Thursday morning", "Friday afternoon"], ""),     # round 5 check, should-fix 3
+    (["Thursday afternoon"], "morning"),
+])
+def test_r4_morning_or_afternoon_is_refused_not_guessed(catalog, schedule, new_caller, days, time_of_day):
+    r = find_options(catalog, schedule, new_caller, SKIN_CANCER_SCREENING,
+                     Preferences(days=days, time_of_day=time_of_day), NOW)
+    assert not r.options and r.notes and all(n.kind == BAD_INPUT for n in r.notes)
 
 
 def test_r4_a_named_date_is_not_followed_by_the_booking_window(catalog, schedule, new_caller):
     r = find_options(catalog, schedule, new_caller, SKIN_CANCER_SCREENING, Preferences(days=["2026-10-10"]), NOW)
     assert r.notes[0].say == "Nothing is open on Saturday 10 October for Skin Cancer Screening; here are other options."
+
+
+# ---- round 5 (triage.md, round 5 section)
+def test_r5_no_crash_when_nothing_is_open_and_someone_was_turned_down(catalog, new_caller):
+    # Round 5 check, must-fix 1: book every open time of the skin doctors first.
+    schedule = Schedule(catalog)
+    for pid, t, minutes in list(_every_open_skin_slot(catalog, schedule)):
+        schedule.book(pid, t, minutes)
+    for prefs in (Preferences(not_provider_ids=[DANIEL_CHEN_DERM]), Preferences(doctor_name_heard="Dr. Garcia")):
+        r = find_options(catalog, schedule, new_caller, SKIN_CANCER_SCREENING, prefs, NOW)
+        assert not r.options and r.notes[-1].kind == "no_times"
+        assert not any(n.say.endswith(": .") or "Doctors who can: ." in n.say for n in r.notes)
+
+
+def _every_open_skin_slot(catalog, schedule):
+    vt = catalog.visit_types[SKIN_CANCER_SCREENING]
+    for p in catalog.providers_offering(SKIN_CANCER_SCREENING):
+        for lid in p.location_ids:
+            for t in schedule.open_slots(p.id, lid, vt.duration_min, NOW):
+                yield p.id, t, vt.duration_min
+
+
+def test_r5_choosing_a_turned_down_doctor_takes_them_off_the_list(catalog, schedule, new_caller):
+    # Round 5 check, should-fix 4: turn everyone down, then pick from the "no other doctor" offer.
+    card = _dermatology_card(new_caller)
+    _offer(catalog, schedule, card)
+    card.turn_down_doctors(catalog, on_offer=True)
+    picked = card.choose_option(_offer(catalog, schedule, card).options[0].option_id)
+    assert picked.provider_id not in card.preferences.not_provider_ids
+    assert "not: " + picked.provider_name not in card.summary(catalog)
+    card.change_choice("doctor", "")   # even a doctor change doesn't put them back on the list
+    assert picked.provider_id not in card.preferences.not_provider_ids
+
+
+def test_r5_choose_option_refuses_an_option_not_on_offer(catalog, schedule, new_caller):
+    card = _dermatology_card(new_caller)
+    _offer(catalog, schedule, card)
+    with pytest.raises(ValueError, match="isn't on offer"):
+        card.choose_option("99")
+
+
+def test_r5_long_no_other_doctor_list_is_cut_short(catalog, schedule, new_caller):
+    # Round 5 check, should-fix 5: say three names and "and N more", like "Doctors who can".
+    vt = "appt_001" if "appt_001" in catalog.visit_types else ANNUAL_PHYSICAL
+    everyone = [p.id for p in catalog.providers_offering(vt)]
+    r = find_options(catalog, schedule, new_caller, vt, Preferences(not_provider_ids=everyone), NOW)
+    note = next(n.say for n in r.notes if n.kind == "no_other_doctor")
+    assert " more are the only options." in note and note.count("Dr. ") == 3
+
+
+def test_r5_plural_grammar_for_several_turned_down_doctors(catalog, schedule, new_caller):
+    garcias = [p.id for p in catalog.providers.values() if p.name.endswith(" Garcia")]
+    r = find_options(catalog, schedule, new_caller, ANNUAL_PHYSICAL,
+                     Preferences(not_provider_ids=garcias, doctor_name_heard="Dr. Garcia"), NOW)
+    note = next(n.say for n in r.notes if "turned down" in n.say)
+    assert note.startswith("The only doctors matching 'Dr. Garcia' who can do this are ")
+    assert note.endswith("Check whether the caller wants one of them after all.")
+
+
+@pytest.mark.parametrize("said, shown", [("Chinese", "Chinese"), ("español", "Español"), ("ASL", "ASL")])
+def test_r5_a_language_we_have_no_record_of_gets_a_true_note(catalog, schedule, new_caller, said, shown):
+    r = find_options(catalog, schedule, new_caller, ANNUAL_PHYSICAL, Preferences(language=said), NOW)
+    assert r.options and [n.say for n in r.notes] == [
+        f"None of our doctors is listed as speaking {shown}. "
+        "Our doctors speak Arabic, English, Hindi, Mandarin, Portuguese, Spanish and Vietnamese."]
+
+
+def test_r5_no_preference_words_count_as_empty_for_language(catalog, schedule, new_caller):
+    r = find_options(catalog, schedule, new_caller, ANNUAL_PHYSICAL, Preferences(language="don't mind"), NOW)
+    assert r.options and not r.notes
+
+
+def test_r5_turn_down_accepts_one_id_on_its_own(catalog, new_caller):
+    card = _dermatology_card(new_caller)
+    card.turn_down_doctors(catalog, provider_ids=DANIEL_CHEN_DERM)
+    assert card.preferences.not_provider_ids == [DANIEL_CHEN_DERM]

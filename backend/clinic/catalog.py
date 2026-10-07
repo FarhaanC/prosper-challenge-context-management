@@ -208,6 +208,7 @@ def _name_fits(heard: set, name: str, said: str = "") -> bool:
 
 _TEXT, _LIST, _YES_NO, _NUMBER = "text", "list of text", "true/false", "whole number"
 _LATITUDE, _LONGITUDE = "a latitude (a number from -90 to 90)", "a longitude (a number from -180 to 180)"
+_TEXT_OR_EMPTY = "text (it may be empty)"
 REQUIRED_FIELDS = {
     "locations": {"id": _TEXT, "name": _TEXT, "address": _TEXT, "city": _TEXT, "phone": _TEXT, "hours": _TEXT},
     "providers": {"id": _TEXT, "name": _TEXT, "title": _TEXT, "specialty": _TEXT, "location_ids": _LIST,
@@ -224,13 +225,15 @@ OPTIONAL_FIELDS = {
     "appointment_types": {"required_capability": _TEXT},
 }
 EXTRA_LOCATION_FIELDS = {"lat": _LATITUDE, "lon": _LONGITUDE}
-EXTRA_LOCATION_OPTIONAL = {"neighbourhood": _TEXT, "also_called": _LIST}
+EXTRA_LOCATION_OPTIONAL = {"neighbourhood": _TEXT_OR_EMPTY, "also_called": _LIST}
 
 
 def _right_type(value, kind: str) -> bool:
     if kind in (_LATITUDE, _LONGITUDE):
         limit = 90 if kind == _LATITUDE else 180
         return isinstance(value, (int, float)) and not isinstance(value, bool) and -limit <= value <= limit
+    if kind == _TEXT_OR_EMPTY:
+        return isinstance(value, str)
     if kind == _TEXT:
         return isinstance(value, str) and bool(value.strip())
     if kind == _LIST:

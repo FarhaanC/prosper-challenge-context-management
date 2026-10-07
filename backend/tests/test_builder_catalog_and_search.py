@@ -233,8 +233,16 @@ def test_r4_doctor_words_regular_rule_plus_a_short_table(catalog, word, specialt
     assert catalog.match_specialty(word) == specialty
 
 
-def test_r4_one_no_preference_list_and_a_separate_any_day_list():
-    from clinic.fuzzy import ANY_DAY, NO_PREFERENCE, means_any_day, means_no_preference
-    assert not NO_PREFERENCE & ANY_DAY   # so the order they're checked in can't matter
-    assert means_any_day("Any day!") and not means_no_preference("any day")
-    assert means_no_preference("any time works") and not means_any_day("any time works")
+def test_r5_one_no_preference_list():
+    # Round 5: with plain time fields, "any day" just empties the day field, so the
+    # separate "any day" list is gone and there is one list.
+    from clinic import fuzzy
+    from clinic.fuzzy import means_no_preference
+    assert not hasattr(fuzzy, "ANY_DAY")
+    assert all(means_no_preference(x) for x in ("Any day!", "any time works", "I don't mind", "whatever"))
+
+
+def test_r5_an_empty_neighbourhood_is_fine():
+    extras = copy.deepcopy(EXTRAS)
+    extras["locations"][MIDTOWN]["neighbourhood"] = ""
+    Catalog(RAW, extras)
