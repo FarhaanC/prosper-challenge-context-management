@@ -12,7 +12,8 @@ from reference import LOC, PROV, SPECIALTIES, VT, ref_bookable, ref_pairs
 from round2_reference import RESTRICT_PHRASES, check, interpret, universe
 
 CALLERS = {"new": (True, []), "returning-all": (False, list(SPECIALTIES)), "returning-none": (False, [])}
-LANGS = sorted({l for p in PROV.values() for l in p["languages"]}) + ["Klingon", "spanish"]
+KNOWN_LANGS = sorted({l for p in PROV.values() for l in p["languages"]})
+LANGS = KNOWN_LANGS + ["Klingon", "spanish"]
 DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "today", "tomorrow", "thu",
         (NOW + timedelta(days=7)).date().isoformat(), (NOW + timedelta(days=20)).date().isoformat()]
 FULL_NAMES = sorted({p["name"] for p in PROV.values()})
@@ -190,6 +191,9 @@ def test_language_impossible_notes_true_whole_catalog(catalog, schedule):
                     false.append((kind, VT[vt]["name"], lang, speakers, impossible))
                 if not speakers and slots_for(schedule, kind, vt):
                     want = f"None of the doctors available to you for {VT[vt]['name']} speaks {lang.capitalize()}."
+                    if lang.lower() not in {x.lower() for x in KNOWN_LANGS}:  # round 6 s5: not in our records
+                        want = (f"None of our doctors is listed as speaking {lang}. Our doctors speak "
+                                + ", ".join(KNOWN_LANGS[:-1]) + f" and {KNOWN_LANGS[-1]}.")
                     if impossible != [want]:
                         false.append((kind, VT[vt]["name"], lang, "expected", want, impossible))
     assert not false, (len(false), false[:5])

@@ -69,13 +69,18 @@ def test_an_unknown_but_real_looking_language_is_kept_and_gets_the_true_note(cat
     card = card_with()
     card.change_choice("language", "Klingon")
     r = run(catalog, schedule, card.preferences)
-    assert r.options and said(r) == ["None of the doctors available to you for Skin Cancer Screening speaks Klingon."]
+    # Round 6 s5: a language not in our records gets its own always-true sentence.
+    langs = sorted({l for x in PROV.values() for l in x["languages"]})
+    assert r.options and said(r) == ["None of our doctors is listed as speaking Klingon. Our doctors speak "
+                                     + ", ".join(langs[:-1]) + " and " + langs[-1] + "."]
     assert kinds(r) == ["wish_impossible"]
 
 
-@pytest.mark.parametrize("value", ["any language", "not Spanish", "no Spanish please", "don't mind", "any",
-                                   "no preference", "Spanish please", "Spanish or English", "anything but Spanish",
-                                   "whatever", "none", "a Spanish speaker", "Spanish speaking"])
+# Round 6 s2 moved "don't mind", "any", "no preference", "whatever" and "none" out of this
+# list: they now count as "" for language too (tested just below).
+@pytest.mark.parametrize("value", ["any language", "not Spanish", "no Spanish please",
+                                   "Spanish please", "Spanish or English", "anything but Spanish",
+                                   "a Spanish speaker", "Spanish speaking"])
 def test_a_sentence_is_refused_with_how_to_pass_the_language(catalog, schedule, value):
     card = card_with()
     card.change_choice("language", value)
@@ -83,6 +88,16 @@ def test_a_sentence_is_refused_with_how_to_pass_the_language(catalog, schedule, 
     assert not r.options and kinds(r) == ["bad_input"], (value, said(r))
     assert "one language name" in r.notes[0].say.lower()
     assert not any("speaks" in s for s in said(r))  # never a false "nobody speaks ..." note
+
+
+@pytest.mark.parametrize("value", ["don't mind", "any", "no preference", "whatever", "none"])
+def test_no_preference_words_clear_the_language_wish(catalog, schedule, value):
+    card = card_with(language="Spanish")
+    card.change_choice("language", value)
+    base = run(catalog, schedule, Preferences())
+    r = run(catalog, schedule, card.preferences)
+    assert not r.notes, (value, said(r))
+    assert [(o.provider_id, o.start) for o in r.options] == [(o.provider_id, o.start) for o in base.options]
 
 
 @pytest.mark.parametrize("clear", ["", "   "])
@@ -109,11 +124,16 @@ def test_chinese_alone_never_gives_a_false_nobody_speaks_note(catalog, schedule)
                                    "this morning or this afternoon", "morning and afternoon",
                                    "Thursday morning, Friday afternoon", "Afternoon or morning"])
 def test_both_times_of_day_in_a_spoken_value_are_refused(catalog, schedule, value):
+    # Round 6 s1: the AI's mistake can land in either plain field; both are refused.
     card = card_with()
-    card.change_choice("time", value)
+    card.change_choice("time", time_of_day=value)
     r = run(catalog, schedule, card.preferences)
     assert not r.options and r.notes and set(kinds(r)) == {"bad_input"}, (value, said(r), card.preferences.time_of_day)
     assert any("one day at a time" in n.say for n in r.notes)
+    card = card_with()
+    card.change_choice("time", value)   # as one day entry
+    r = run(catalog, schedule, card.preferences)
+    assert not r.options and r.notes and set(kinds(r)) == {"bad_input"}, (value, said(r), card.preferences.days)
 
 
 @pytest.mark.parametrize("prefs", [
@@ -124,25 +144,26 @@ def test_both_times_of_day_in_a_spoken_value_are_refused(catalog, schedule, valu
 ])
 def test_both_times_of_day_in_the_stored_wish_are_refused(catalog, schedule, prefs):
     r = run(catalog, schedule, Preferences(**prefs))
-    assert not r.options and kinds(r) == ["bad_input"], (prefs, said(r), [o.spoken for o in r.options])
+    # one bad_input note per value that can't be used (two bad day entries give two)
+    assert not r.options and r.notes and set(kinds(r)) == {"bad_input"}, (prefs, said(r), [o.spoken for o in r.options])
 
 
 def test_both_times_of_day_through_the_days_argument_are_refused(catalog, schedule):
     card = card_with()
     card.change_choice("time", days=["Thursday morning", "Friday afternoon"])
     r = run(catalog, schedule, card.preferences)
-    assert not r.options and kinds(r) == ["bad_input"], (card.preferences.days, card.preferences.time_of_day,
-                                                          [o.spoken for o in r.options])
+    assert not r.options and r.notes and set(kinds(r)) == {"bad_input"}, (
+        card.preferences.days, card.preferences.time_of_day, [o.spoken for o in r.options])
 
 
-@pytest.mark.parametrize("value,days,tod", [("Thursday morning", ["Thursday"], "morning"),
-                                            ("afternoon", [], "afternoon"),
-                                            ("Thursday or Friday", ["Thursday", "Friday"], "")])
+@pytest.mark.parametrize("value,days,tod", [(dict(days=["Thursday"], time_of_day="morning"), ["Thursday"], "morning"),
+                                            (dict(time_of_day="afternoon"), [], "afternoon"),
+                                            (dict(days=["Thursday", "Friday"]), ["Thursday", "Friday"], "")])
 def test_one_time_of_day_is_still_fine(catalog, schedule, value, days, tod):
     card = card_with()
-    card.change_choice("time", value)
+    card.change_choice("time", **value)   # round 6 s1: plain fields
     r = run(catalog, schedule, card.preferences)
-    assert "bad_input" not in kinds(r)
+    assert "bad_input" not in kinds(r) and r.options
     for o in r.options:
         assert not days or o.start.strftime("%A") in days
         assert not tod or (o.start.hour < 12) == (tod == "morning")
@@ -156,10 +177,14 @@ ANY_DAY = ["any day", "Any day", "any date", "any day is fine", "any day works",
 
 @pytest.mark.parametrize("value", NO_PREFERENCE)
 def test_no_preference_clears_day_and_time(catalog, schedule, value):
+    # Round 6 s2: the word counts as "" in each field it is put in, independently.
     card = card_with(days=["Thursday"], time_of_day="morning")
-    card.change_choice("time", value)
+    card.change_choice("time", days=[value], time_of_day=value)
     assert card.preferences.days == [] and card.preferences.time_of_day == "", value
     assert not run(catalog, schedule, card.preferences).notes
+    card = card_with(days=["Thursday"], time_of_day="morning")
+    card.change_choice("time", value)   # one day entry: clears the day only
+    assert card.preferences.days == [] and card.preferences.time_of_day == "morning", value
 
 
 @pytest.mark.parametrize("value", ANY_DAY)

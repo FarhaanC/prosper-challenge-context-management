@@ -34,6 +34,15 @@ Round 5 updates (spec-changes-round-5.md):
   note reads "The only doctor matching '...' who can do this is X, whom you turned
   down. Check whether ..." (it does not end with "turned down.").
 
+Round 6 updates (spec-changes-round-6.md):
+- s1: each day entry is exactly one weekday name (or "thu"/"thurs"-style short form),
+  "today", "tomorrow" or YYYY-MM-DD; the time of day is exactly "morning" or
+  "afternoon". Anything else: no options and bad_input notes.
+- s2: "no preference" words count as "" in every field (doctor, place, language, each
+  day entry, time of day).
+- s3: a doctor or place value with one of the listed sentence words is refused
+  (bad_input, no options) and never brings a turned-down doctor back.
+
 Only the exact forms below are interpreted (exact doctor names / surnames,
 exact location names or "the <neighbourhood> one"), so nothing here depends on
 the module's fuzzy matching.
@@ -83,11 +92,42 @@ def _day_test(d):
     if d[:1].isdigit():
         t = date.fromisoformat(d)
         return lambda s: s.date() == t
-    i = next(i for i, w in enumerate(WEEKDAYS) if w.startswith(d[:3]))
+    i = WEEKDAYS.index(SHORT_DAYS.get(d, d))
     return lambda s: s.weekday() == i
 
 
-ANY_DOCTOR = {"any", "anyone", "no preference"}
+# Round 6 s2: the spec's examples of "no preference" words (spaces, capitals, apostrophes ignored).
+NO_PREF = {"idontmind", "dontmind", "nopreference", "any", "anyday", "anytime", "whenever", "whatever",
+           "anyone", "anybody", "anywhere", "doesntmatter", "anytimeworks"}
+# Round 6 s3: words no name has.
+SENTENCE_WORDS = {"not", "but", "except", "without", "another", "other", "else", "someone", "somebody",
+                  "anyone", "anybody", "different", "instead", "please"}
+SHORT_DAYS = {w[:3]: w for w in WEEKDAYS} | {w[:4]: w for w in WEEKDAYS} | {"thurs": "thursday", "tues": "tuesday",
+                                                                              "weds": "wednesday"}
+
+
+def no_pref(text):
+    return "".join(ch for ch in str(text or "").lower() if ch.isalnum()) in NO_PREF
+
+
+def is_sentence(text):
+    words = "".join(ch if ch.isalnum() else " " for ch in str(text or "").lower()).split()
+    return bool(set(words) & SENTENCE_WORDS) and not no_pref(text)
+
+
+def day_entry_ok(d):
+    """Round 6 s1: is this one usable day entry (inside the window)?"""
+    d = " ".join(str(d or "").split()).lower()
+    if d in ("today", "tomorrow") or d in WEEKDAYS or d in SHORT_DAYS:
+        return True
+    if len(d) == 10 and d[4] == "-" and d[7] == "-":
+        try:
+            t = date.fromisoformat(d)
+        except ValueError:
+            return False
+        return NOW.date() <= t <= NOW.date() + timedelta(days=14)
+    return False
+
 
 
 class Wishes(list):
@@ -112,18 +152,25 @@ def interpret(prefs):
     wishes = Wishes()
     wishes.bad_input = out_of_window(prefs.days)
     wishes.excluded = frozenset(getattr(prefs, "not_provider_ids", []) or [])
-    if prefs.doctor_name_heard.strip() and prefs.doctor_name_heard.strip().lower() not in ANY_DOCTOR:
+    # Round 6 s1-s3: values that can't be used refuse the whole search.
+    days_given = [d for d in prefs.days if str(d or "").strip() and not no_pref(d)]
+    tod_given = "" if no_pref(prefs.time_of_day) else " ".join(prefs.time_of_day.split()).lower()
+    if any(not day_entry_ok(d) for d in days_given) or tod_given not in ("", "morning", "afternoon") \
+            or is_sentence(prefs.doctor_name_heard) or is_sentence(prefs.location_hint):
+        wishes.bad_input = True
+        return wishes
+    if prefs.doctor_name_heard.strip() and not no_pref(prefs.doctor_name_heard):
         ids = doctors_named(prefs.doctor_name_heard)
         if len({PROV[i]["name"] for i in ids}) == 1:  # round 5 s3: only a name picking out one doctor
             wishes.excluded = wishes.excluded - ids
         kw = PROV[next(iter(ids))]["name"].split()[-1]
         wishes.append(("doctor", False, lambda p, l, s, ids=ids: p in ids, kw))
-    if prefs.location_hint.strip():
+    if prefs.location_hint.strip() and not no_pref(prefs.location_hint):
         lid = RESTRICT_PHRASES.get(prefs.location_hint.strip().lower())
         if lid:
             wishes.append(("place", False, lambda p, l, s, lid=lid: l == lid, LOC[lid]["name"]))
-    days = [d for d in prefs.days if d.strip() and d.strip().lower() not in ("any", "any day")]
-    tod = prefs.time_of_day.strip().lower()
+    days = days_given
+    tod = tod_given
     if days or tod in ("morning", "afternoon"):
         tests = [_day_test(d) for d in days]
 
@@ -136,7 +183,7 @@ def interpret(prefs):
                 return s.hour >= 12
             return True
         wishes.append(("time", False, t, None))
-    if prefs.language.strip():
+    if prefs.language.strip() and not no_pref(prefs.language):
         lang = prefs.language.strip().lower()
         wishes.append(("language", False,
                        lambda p, l, s, lang=lang: lang in [x.lower() for x in PROV[p]["languages"]],
@@ -189,8 +236,8 @@ def check(result, slots, wishes):
     problems = []
     if getattr(wishes, "bad_input", False):
         kinds = [n.kind for n in result.notes]
-        if result.options or kinds != ["bad_input"]:
-            problems.append(f"out-of-window date: expected no options and one bad_input note, got "
+        if result.options or not kinds or set(kinds) != {"bad_input"}:
+            problems.append(f"unusable value: expected no options and only bad_input notes, got "
                             f"{len(result.options)} options, notes {[str(n) for n in result.notes]}")
         return problems
     excluded = getattr(wishes, "excluded", frozenset())

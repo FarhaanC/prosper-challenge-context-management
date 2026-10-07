@@ -41,23 +41,26 @@ def run(catalog, schedule, prefs):
     return find_options(catalog, schedule, new_caller(), SKIN, prefs, NOW)
 
 
-# ---------------------------------------------------------------- time phrases through change_choice
-@pytest.mark.parametrize("phrase,days,tod", [
-    ("this afternoon", ["today"], "afternoon"),
-    ("This afternoon.", ["today"], "afternoon"),
-    ("this morning", ["today"], "morning"),
-    ("Thursday or Friday", [THU, FRI], ""),
-    ("Thursday, morning please", [THU], "morning"),
-    ("Thursday afternoon please", [THU], "afternoon"),
-    ("tomorrow morning", ["tomorrow"], "morning"),
+# ---------------------------------------------------------------- time wishes through change_choice
+# Round 6 s1: the AI turns the caller's phrase (first column) into plain fields.
+@pytest.mark.parametrize("phrase,kwargs,days,tod", [
+    ("this afternoon", dict(days=["today"], time_of_day="afternoon"), ["today"], "afternoon"),
+    ("This afternoon.", dict(days=["Today"], time_of_day="Afternoon"), ["today"], "afternoon"),  # case doesn't matter
+    ("this morning", dict(days=["today"], time_of_day="morning"), ["today"], "morning"),
+    ("Thursday or Friday", dict(days=[THU, FRI]), [THU, FRI], ""),
+    ("Thursday, morning please", dict(days=["thu"], time_of_day="morning"), [THU], "morning"),
+    ("Thursday afternoon please", dict(days=["thurs"], time_of_day="afternoon"), [THU], "afternoon"),
+    ("tomorrow morning", dict(days=["tomorrow"], time_of_day="morning"), ["tomorrow"], "morning"),
 ])
-def test_time_phrases_set_day_and_time(catalog, schedule, phrase, days, tod):
+def test_time_phrases_set_day_and_time(catalog, schedule, phrase, kwargs, days, tod):
     card = card_with()
-    card.change_choice("time", phrase)
+    card.change_choice("time", **kwargs)
     p = card.preferences
-    assert [d.lower() for d in p.days] == [d.lower() for d in days] and p.time_of_day == tod, (p.days, p.time_of_day)
+    assert [d.lower() for d in p.days] == [d.lower() for d in kwargs.get("days", [])], p.days
+    assert p.time_of_day.lower() == tod, p.time_of_day
     r = run(catalog, schedule, p)
     assert not [n for n in r.notes if n.kind == "bad_input"], [n.say for n in r.notes]
+    assert r.options
     for o in r.options:  # every option meets the wish, or a note says why not
         day_ok = any((d == "today" and o.start.date() == TODAY) or (d == "tomorrow" and o.start.date() == TODAY + timedelta(1))
                      or o.start.strftime("%A") == d for d in days)
@@ -68,8 +71,9 @@ def test_time_phrases_set_day_and_time(catalog, schedule, phrase, days, tod):
 @pytest.mark.parametrize("phrase", ["I don't mind", "don't mind", "dont mind", "whenever", "any time", "Any time.",
                                     "no preference", "No preference"])
 def test_no_preference_time_phrases_clear_day_and_time(phrase):
+    # Round 6 s2: a no-preference word counts as "" in each field it is put in.
     card = card_with(days=[THU], time_of_day="morning")
-    card.change_choice("time", phrase)
+    card.change_choice("time", days=[phrase], time_of_day=phrase)
     assert card.preferences.days == [] and card.preferences.time_of_day == ""
 
 
@@ -82,7 +86,7 @@ def test_any_day_clears_the_day_only(phrase):
 
 def test_only_what_is_mentioned_changes():
     card = card_with(days=[THU], time_of_day="morning")
-    card.change_choice("time", "afternoon")
+    card.change_choice("time", time_of_day="afternoon")   # round 6 s1: None keeps the day
     assert card.preferences.days == [THU] and card.preferences.time_of_day == "afternoon"
     card.change_choice("time", "Friday")
     assert card.preferences.days == [FRI] and card.preferences.time_of_day == "afternoon"
@@ -97,13 +101,17 @@ def test_unclear_time_phrases_give_bad_input_and_no_options(catalog, schedule, p
 
 
 def test_time_phrases_also_work_in_preferences_days(catalog, schedule):
-    r = run(catalog, schedule, Preferences(days=["this afternoon"]))
+    # Round 6 s1: Preferences takes the same plain values; phrases there are refused.
+    r = run(catalog, schedule, Preferences(days=["today"], time_of_day="afternoon"))
     assert not [n for n in r.notes if n.kind == "bad_input"]
     today_pm = [s for s in skin_slots(schedule) if s[2].date() == TODAY and s[2].hour >= 12]
     if today_pm:
         assert r.options and all(o.start.date() == TODAY and o.start.hour >= 12 for o in r.options)
-    r2 = run(catalog, schedule, Preferences(days=["Thursday or Friday"]))
+    r2 = run(catalog, schedule, Preferences(days=[THU, FRI]))
     assert r2.options and all(o.start.strftime("%A") in (THU, FRI) for o in r2.options)
+    for phrase in ("this afternoon", "Thursday or Friday"):
+        r3 = run(catalog, schedule, Preferences(days=[phrase]))
+        assert not r3.options and [n.kind for n in r3.notes] == ["bad_input"], (phrase, [n.say for n in r3.notes])
 
 
 # ---------------------------------------------------------------- "no preference" everywhere
@@ -144,13 +152,13 @@ def test_language_change_is_latest_and_maps_two_word_names(catalog, schedule):
         assert r.options and all(o.provider_id in speakers for o in r.options)
     else:
         assert any("Mandarin" in n.say and "chinese" not in n.say.lower() for n in r.notes), [n.say for n in r.notes]
-    # Round 5 s2: only "" clears the language wish. "any" is no longer read as "clear":
-    # it is refused by the search with a bad_input note (s5), never a false note.
     card.change_choice("language", "")
     assert card.preferences.language == ""
+    # Round 6 s2 (reverses round 5): "any" counts as "" for language too: no wish, no note.
     card.change_choice("language", "any")
+    assert card.preferences.latest == "language"
     r = run(catalog, schedule, card.preferences)
-    assert not r.options and [n.kind for n in r.notes] == ["bad_input"], [n.say for n in r.notes]
+    assert r.options and r.notes == [], [n.say for n in r.notes]
 
 
 def test_unknown_language_is_kept_as_said(catalog, schedule):

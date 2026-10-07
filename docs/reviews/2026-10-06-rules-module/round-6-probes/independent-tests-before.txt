@@ -1,0 +1,130 @@
+tests_independent/test_round5_values.py:161: AssertionError
+______________ test_no_preference_clears_day_and_time[Dont mind] _______________
+
+catalog = <clinic.catalog.Catalog object at 0x7fd10cf7d7f0>
+schedule = <clinic.slots.Schedule object at 0x7fd10b0d1cd0>, value = 'Dont mind'
+
+    @pytest.mark.parametrize("value", NO_PREFERENCE)
+    def test_no_preference_clears_day_and_time(catalog, schedule, value):
+        card = card_with(days=["Thursday"], time_of_day="morning")
+        card.change_choice("time", value)
+>       assert card.preferences.days == [] and card.preferences.time_of_day == "", value
+E       AssertionError: Dont mind
+E       assert ([] == []
+E         
+E         Use -v to get more diff and 'morning' == ''
+E         
+E         + morning)
+
+tests_independent/test_round5_values.py:161: AssertionError
+=========================== short test summary info ============================
+FAILED tests_independent/test_round2_other.py::test_any_time_clears_time_of_day_wish
+FAILED tests_independent/test_round2_wishes.py::test_language_impossible_notes_true_whole_catalog
+FAILED tests_independent/test_round3_wishes.py::test_time_change_only_what_is_mentioned_changes[Thursday morning-start0-want0]
+FAILED tests_independent/test_round3_wishes.py::test_time_change_only_what_is_mentioned_changes[thursday afternoon-start1-want1]
+FAILED tests_independent/test_round3_wishes.py::test_time_change_only_what_is_mentioned_changes[afternoon-start2-want2]
+FAILED tests_independent/test_round3_wishes.py::test_time_change_only_what_is_mentioned_changes[morning-start3-want3]
+FAILED tests_independent/test_round3_wishes.py::test_time_change_only_what_is_mentioned_changes[any time-start7-want7]
+FAILED tests_independent/test_round3_wishes.py::test_time_change_only_what_is_mentioned_changes[Any time-start8-want8]
+FAILED tests_independent/test_round3_wishes.py::test_time_change_only_what_is_mentioned_changes[tomorrow morning-start9-want9]
+FAILED tests_independent/test_round3_wishes.py::test_time_change_only_what_is_mentioned_changes[today afternoon-start10-want10]
+FAILED tests_independent/test_round3_wishes.py::test_time_change_then_options_honour_it_whole_catalog[Thursday morning]
+FAILED tests_independent/test_round3_wishes.py::test_time_change_then_options_honour_it_whole_catalog[afternoon]
+FAILED tests_independent/test_round3_wishes.py::test_time_change_then_options_honour_it_whole_catalog[tomorrow afternoon]
+FAILED tests_independent/test_round4_turned_down.py::test_someone_else_with_ordinary_filler_words[Someone else, please]
+FAILED tests_independent/test_round4_turned_down.py::test_someone_else_with_ordinary_filler_words[someone else please]
+FAILED tests_independent/test_round4_turned_down.py::test_someone_else_with_ordinary_filler_words[the other doctor]
+FAILED tests_independent/test_round4_turned_down.py::test_someone_else_with_ordinary_filler_words[Another doctor, please]
+FAILED tests_independent/test_round4_turned_down.py::test_a_negated_name_never_becomes_a_wish_for_that_doctor[No, not Dr. Chen]
+FAILED tests_independent/test_round4_turned_down.py::test_a_negated_name_never_becomes_a_wish_for_that_doctor[anyone but Dr. Chen]
+FAILED tests_independent/test_round4_turned_down.py::test_a_negated_name_never_becomes_a_wish_for_that_doctor[not Dr. Chen]
+FAILED tests_independent/test_round4_words.py::test_time_phrases_set_day_and_time[this afternoon-days0-afternoon]
+FAILED tests_independent/test_round4_words.py::test_time_phrases_set_day_and_time[This afternoon.-days1-afternoon]
+FAILED tests_independent/test_round4_words.py::test_time_phrases_set_day_and_time[this morning-days2-morning]
+FAILED tests_independent/test_round4_words.py::test_time_phrases_set_day_and_time[Thursday or Friday-days3-]
+FAILED tests_independent/test_round4_words.py::test_time_phrases_set_day_and_time[Thursday, morning please-days4-morning]
+FAILED tests_independent/test_round4_words.py::test_time_phrases_set_day_and_time[Thursday afternoon please-days5-afternoon]
+FAILED tests_independent/test_round4_words.py::test_time_phrases_set_day_and_time[tomorrow morning-days6-morning]
+FAILED tests_independent/test_round4_words.py::test_no_preference_time_phrases_clear_day_and_time[I don't mind]
+FAILED tests_independent/test_round4_words.py::test_no_preference_time_phrases_clear_day_and_time[don't mind]
+FAILED tests_independent/test_round4_words.py::test_no_preference_time_phrases_clear_day_and_time[dont mind]
+FAILED tests_independent/test_round4_words.py::test_no_preference_time_phrases_clear_day_and_time[whenever]
+FAILED tests_independent/test_round4_words.py::test_no_preference_time_phrases_clear_day_and_time[any time]
+FAILED tests_independent/test_round4_words.py::test_no_preference_time_phrases_clear_day_and_time[Any time.]
+FAILED tests_independent/test_round4_words.py::test_no_preference_time_phrases_clear_day_and_time[no preference]
+FAILED tests_independent/test_round4_words.py::test_no_preference_time_phrases_clear_day_and_time[No preference]
+FAILED tests_independent/test_round4_words.py::test_only_what_is_mentioned_changes
+FAILED tests_independent/test_round4_words.py::test_time_phrases_also_work_in_preferences_days
+FAILED tests_independent/test_round4_words.py::test_language_change_is_latest_and_maps_two_word_names
+FAILED tests_independent/test_round5_notes.py::test_no_other_doctor_note_whole_catalog[new]
+FAILED tests_independent/test_round5_notes.py::test_no_other_doctor_note_whole_catalog[returning-none]
+FAILED tests_independent/test_round5_notes.py::test_no_other_doctor_note_whole_catalog[returning-all]
+FAILED tests_independent/test_round5_turn_down.py::test_change_choice_doctor_never_turns_anyone_down[someone else]
+FAILED tests_independent/test_round5_turn_down.py::test_change_choice_doctor_never_turns_anyone_down[somebody else]
+FAILED tests_independent/test_round5_turn_down.py::test_change_choice_doctor_never_turns_anyone_down[a different doctor]
+FAILED tests_independent/test_round5_turn_down.py::test_change_choice_doctor_never_turns_anyone_down[another doctor]
+FAILED tests_independent/test_round5_turn_down.py::test_change_choice_doctor_never_turns_anyone_down[anyone else]
+FAILED tests_independent/test_round5_turn_down.py::test_change_choice_doctor_never_turns_anyone_down[other doctor]
+FAILED tests_independent/test_round5_turn_down.py::test_change_choice_doctor_never_turns_anyone_down[Someone else, please]
+FAILED tests_independent/test_round5_turn_down.py::test_change_choice_doctor_never_turns_anyone_down[not Dr. Chen]
+FAILED tests_independent/test_round5_turn_down.py::test_change_choice_doctor_never_turns_anyone_down[No, not Dr. Chen]
+FAILED tests_independent/test_round5_turn_down.py::test_change_choice_doctor_never_turns_anyone_down[anyone but Dr. Chen]
+FAILED tests_independent/test_round5_turn_down.py::test_change_choice_doctor_never_turns_anyone_down[not him]
+FAILED tests_independent/test_round5_turn_down.py::test_change_choice_doctor_never_turns_anyone_down[the other one]
+FAILED tests_independent/test_round5_turn_down.py::test_change_choice_doctor_never_turns_anyone_down[a different one]
+FAILED tests_independent/test_round5_turn_down.py::test_change_choice_doctor_never_turns_anyone_down[]
+FAILED tests_independent/test_round5_turn_down.py::test_words_passed_as_a_name_give_a_visible_not_found_note_and_no_guess[someone else-appt_027]
+FAILED tests_independent/test_round5_turn_down.py::test_words_passed_as_a_name_give_a_visible_not_found_note_and_no_guess[someone else-appt_000]
+FAILED tests_independent/test_round5_turn_down.py::test_words_passed_as_a_name_give_a_visible_not_found_note_and_no_guess[somebody else-appt_027]
+FAILED tests_independent/test_round5_turn_down.py::test_words_passed_as_a_name_give_a_visible_not_found_note_and_no_guess[somebody else-appt_000]
+FAILED tests_independent/test_round5_turn_down.py::test_words_passed_as_a_name_give_a_visible_not_found_note_and_no_guess[a different doctor-appt_027]
+FAILED tests_independent/test_round5_turn_down.py::test_words_passed_as_a_name_give_a_visible_not_found_note_and_no_guess[a different doctor-appt_000]
+FAILED tests_independent/test_round5_turn_down.py::test_words_passed_as_a_name_give_a_visible_not_found_note_and_no_guess[another doctor-appt_027]
+FAILED tests_independent/test_round5_turn_down.py::test_words_passed_as_a_name_give_a_visible_not_found_note_and_no_guess[another doctor-appt_000]
+FAILED tests_independent/test_round5_turn_down.py::test_words_passed_as_a_name_give_a_visible_not_found_note_and_no_guess[anyone else-appt_027]
+FAILED tests_independent/test_round5_turn_down.py::test_words_passed_as_a_name_give_a_visible_not_found_note_and_no_guess[anyone else-appt_000]
+FAILED tests_independent/test_round5_turn_down.py::test_words_passed_as_a_name_give_a_visible_not_found_note_and_no_guess[other doctor-appt_027]
+FAILED tests_independent/test_round5_turn_down.py::test_words_passed_as_a_name_give_a_visible_not_found_note_and_no_guess[other doctor-appt_000]
+FAILED tests_independent/test_round5_turn_down.py::test_words_passed_as_a_name_give_a_visible_not_found_note_and_no_guess[Someone else, please-appt_027]
+FAILED tests_independent/test_round5_turn_down.py::test_words_passed_as_a_name_give_a_visible_not_found_note_and_no_guess[Someone else, please-appt_000]
+FAILED tests_independent/test_round5_turn_down.py::test_words_passed_as_a_name_give_a_visible_not_found_note_and_no_guess[not Dr. Chen-appt_027]
+FAILED tests_independent/test_round5_turn_down.py::test_words_passed_as_a_name_give_a_visible_not_found_note_and_no_guess[not Dr. Chen-appt_000]
+FAILED tests_independent/test_round5_turn_down.py::test_words_passed_as_a_name_give_a_visible_not_found_note_and_no_guess[No, not Dr. Chen-appt_027]
+FAILED tests_independent/test_round5_turn_down.py::test_words_passed_as_a_name_give_a_visible_not_found_note_and_no_guess[No, not Dr. Chen-appt_000]
+FAILED tests_independent/test_round5_turn_down.py::test_words_passed_as_a_name_give_a_visible_not_found_note_and_no_guess[anyone but Dr. Chen-appt_027]
+FAILED tests_independent/test_round5_turn_down.py::test_words_passed_as_a_name_give_a_visible_not_found_note_and_no_guess[anyone but Dr. Chen-appt_000]
+FAILED tests_independent/test_round5_turn_down.py::test_words_passed_as_a_name_give_a_visible_not_found_note_and_no_guess[not him-appt_027]
+FAILED tests_independent/test_round5_turn_down.py::test_words_passed_as_a_name_give_a_visible_not_found_note_and_no_guess[not him-appt_000]
+FAILED tests_independent/test_round5_turn_down.py::test_words_passed_as_a_name_give_a_visible_not_found_note_and_no_guess[the other one-appt_027]
+FAILED tests_independent/test_round5_turn_down.py::test_words_passed_as_a_name_give_a_visible_not_found_note_and_no_guess[the other one-appt_000]
+FAILED tests_independent/test_round5_turn_down.py::test_words_passed_as_a_name_give_a_visible_not_found_note_and_no_guess[a different one-appt_027]
+FAILED tests_independent/test_round5_turn_down.py::test_words_passed_as_a_name_give_a_visible_not_found_note_and_no_guess[a different one-appt_000]
+FAILED tests_independent/test_round5_values.py::test_an_unknown_but_real_looking_language_is_kept_and_gets_the_true_note
+FAILED tests_independent/test_round5_values.py::test_a_sentence_is_refused_with_how_to_pass_the_language[don't mind]
+FAILED tests_independent/test_round5_values.py::test_a_sentence_is_refused_with_how_to_pass_the_language[any]
+FAILED tests_independent/test_round5_values.py::test_a_sentence_is_refused_with_how_to_pass_the_language[no preference]
+FAILED tests_independent/test_round5_values.py::test_a_sentence_is_refused_with_how_to_pass_the_language[whatever]
+FAILED tests_independent/test_round5_values.py::test_a_sentence_is_refused_with_how_to_pass_the_language[none]
+FAILED tests_independent/test_round5_values.py::test_both_times_of_day_in_a_spoken_value_are_refused[morning or afternoon]
+FAILED tests_independent/test_round5_values.py::test_both_times_of_day_in_a_spoken_value_are_refused[Thursday morning or Friday afternoon]
+FAILED tests_independent/test_round5_values.py::test_both_times_of_day_in_a_spoken_value_are_refused[this morning or this afternoon]
+FAILED tests_independent/test_round5_values.py::test_both_times_of_day_in_a_spoken_value_are_refused[morning and afternoon]
+FAILED tests_independent/test_round5_values.py::test_both_times_of_day_in_a_spoken_value_are_refused[Thursday morning, Friday afternoon]
+FAILED tests_independent/test_round5_values.py::test_both_times_of_day_in_a_spoken_value_are_refused[Afternoon or morning]
+FAILED tests_independent/test_round5_values.py::test_both_times_of_day_in_the_stored_wish_are_refused[prefs2]
+FAILED tests_independent/test_round5_values.py::test_both_times_of_day_through_the_days_argument_are_refused
+FAILED tests_independent/test_round5_values.py::test_one_time_of_day_is_still_fine[Thursday morning-days0-morning]
+FAILED tests_independent/test_round5_values.py::test_one_time_of_day_is_still_fine[afternoon-days1-afternoon]
+FAILED tests_independent/test_round5_values.py::test_one_time_of_day_is_still_fine[Thursday or Friday-days2-]
+FAILED tests_independent/test_round5_values.py::test_no_preference_clears_day_and_time[I don't mind]
+FAILED tests_independent/test_round5_values.py::test_no_preference_clears_day_and_time[no preference]
+FAILED tests_independent/test_round5_values.py::test_no_preference_clears_day_and_time[any time]
+FAILED tests_independent/test_round5_values.py::test_no_preference_clears_day_and_time[any time works]
+FAILED tests_independent/test_round5_values.py::test_no_preference_clears_day_and_time[anytime]
+FAILED tests_independent/test_round5_values.py::test_no_preference_clears_day_and_time[whenever]
+FAILED tests_independent/test_round5_values.py::test_no_preference_clears_day_and_time[doesn't matter]
+FAILED tests_independent/test_round5_values.py::test_no_preference_clears_day_and_time[either]
+FAILED tests_independent/test_round5_values.py::test_no_preference_clears_day_and_time[whatever]
+FAILED tests_independent/test_round5_values.py::test_no_preference_clears_day_and_time[Any time is fine]
+FAILED tests_independent/test_round5_values.py::test_no_preference_clears_day_and_time[Dont mind]
+109 failed, 1417 passed in 154.67s (0:02:34)

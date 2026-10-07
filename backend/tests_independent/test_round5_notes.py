@@ -24,6 +24,7 @@ import pytest
 from clinic import Preferences, Schedule, find_options
 from conftest import NOW, new_caller, returning
 from reference import LOC, PROV, SPECIALTIES, VT, ref_bookable, ref_pairs
+from round6_reference import who_can_problems
 
 CALLERS = {"new": (True, []), "returning-none": (False, []), "returning-all": (False, list(SPECIALTIES))}
 _SLOTS = {}
@@ -233,7 +234,6 @@ def test_no_other_doctor_note_whole_catalog(catalog, schedule, kind):
         able = sorted({s[0] for s in slots(schedule, kind, vt)})
         if not able:
             continue
-        want = {PROV[p]["name"] for p in able}
         offering = sorted(p for p, x in PROV.items() if vt in x["appointment_type_ids"])
         for label, down in [("everyone who can", able), ("plus unrelated doctors", sorted(PROV)),
                             ("every doctor offering it", offering)]:
@@ -247,8 +247,8 @@ def test_no_other_doctor_note_whole_catalog(catalog, schedule, kind):
             if not m or m.group("vt") != VT[vt]["name"]:
                 problems.append((where, "wording", nod[0]))
                 continue
-            problems += [(where, p, nod[0]) for p in list_problems(m.group("names"), want)]
-            if (m.group("verb") == "is the only option") != (len(want) == 1):
+            problems += [(where, p, nod[0]) for p in who_can_problems(m.group("names"), able)]
+            if (m.group("verb") == "is the only option") != (len(able) == 1):
                 problems.append((where, "singular/plural", nod[0]))
             if not {o.provider_id for o in r.options} <= set(able):
                 problems.append((where, "offered someone who can't"))

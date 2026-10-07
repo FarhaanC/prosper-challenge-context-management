@@ -392,25 +392,26 @@ def _card(days=(), tod=""):
     return card
 
 
-@pytest.mark.parametrize("value,start,want", [
-    ("Thursday morning", ([], ""), (["Thursday"], "morning")),
-    ("thursday afternoon", (["Monday"], "morning"), (["thursday"], "afternoon")),
-    ("afternoon", (["Thursday"], "morning"), (["Thursday"], "afternoon")),   # keeps an earlier Thursday
-    ("morning", (["Friday"], ""), (["Friday"], "morning")),
-    ("Thursday", ([], "morning"), (["Thursday"], "morning")),                # keeps an earlier morning
-    ("any day", (["Thursday"], "morning"), ([], "morning")),                 # clears the day only
-    ("Any day", (["Thursday"], "afternoon"), ([], "afternoon")),
-    ("any time", (["Thursday"], "morning"), ([], "")),                       # clears day and time of day
-    ("Any time", (["Thursday"], "afternoon"), ([], "")),
-    ("tomorrow morning", ([], ""), (["tomorrow"], "morning")),
-    ("today afternoon", ([], ""), (["today"], "afternoon")),
+# Round 6 s1: the AI fills plain fields; the spoken phrase each case stood for is in the comment.
+@pytest.mark.parametrize("kwargs,start,want", [
+    (dict(days=["Thursday"], time_of_day="morning"), ([], ""), (["Thursday"], "morning")),   # "Thursday morning"
+    (dict(days=["thursday"], time_of_day="afternoon"), (["Monday"], "morning"), (["thursday"], "afternoon")),
+    (dict(time_of_day="afternoon"), (["Thursday"], "morning"), (["Thursday"], "afternoon")),  # keeps Thursday
+    (dict(time_of_day="morning"), (["Friday"], ""), (["Friday"], "morning")),
+    (dict(new_value="Thursday"), ([], "morning"), (["Thursday"], "morning")),                # keeps the morning
+    (dict(days=[]), (["Thursday"], "morning"), ([], "morning")),                             # "any day"
+    (dict(new_value="Any day"), (["Thursday"], "afternoon"), ([], "afternoon")),             # s2: a no-preference entry
+    (dict(days=[], time_of_day=""), (["Thursday"], "morning"), ([], "")),                    # "any time"
+    (dict(days=["Any time"], time_of_day="any time"), (["Thursday"], "afternoon"), ([], "")),
+    (dict(days=["tomorrow"], time_of_day="morning"), ([], ""), (["tomorrow"], "morning")),
+    (dict(days=["today"], time_of_day="afternoon"), ([], ""), (["today"], "afternoon")),     # "this afternoon"
 ])
-def test_time_change_only_what_is_mentioned_changes(value, start, want):
+def test_time_change_only_what_is_mentioned_changes(kwargs, start, want):
     card = _card(*start)
-    assert card.change_choice("time", value) == BOOKING
+    assert card.change_choice("time", **kwargs) == BOOKING
     p = card.preferences
     got = ([d for d in p.days], p.time_of_day)
-    assert (got[0] if got[0] else [], got[1] or "") == (want[0], want[1]), (value, got)
+    assert (got[0] if got[0] else [], got[1] or "") == (want[0], want[1]), (kwargs, got)
     assert p.latest == "time"
 
 
@@ -422,7 +423,9 @@ def test_time_change_arguments_still_work():
     assert card.preferences.days == ["Friday"] and card.preferences.time_of_day == "afternoon"
 
 
-@pytest.mark.parametrize("value", ["Thursday morning", "afternoon", "Tuesday", "any time", "tomorrow afternoon"])
+@pytest.mark.parametrize("value", [dict(days=["Thursday"], time_of_day="morning"), dict(time_of_day="afternoon"),
+                                   dict(new_value="Tuesday"), dict(days=[], time_of_day=""),
+                                   dict(days=["tomorrow"], time_of_day="afternoon")])
 def test_time_change_then_options_honour_it_whole_catalog(catalog, schedule, value):
     """After change_choice('time', value) from a chosen option, every visit type: options meet
     the new day/time when anyone can, and the carried doctor/place follow the model."""
@@ -435,7 +438,7 @@ def test_time_change_then_options_honour_it_whole_catalog(catalog, schedule, val
         pid, lid, start = slots[0]
         card = _chosen_card(kind, vt, pid, lid, start)
         card.preferences.days, card.preferences.time_of_day = ["Wednesday"], "morning"
-        card.change_choice("time", value)
+        card.change_choice("time", **value)   # round 6 s1: plain fields
         p = card.preferences
         r = find_options(catalog, schedule, card.caller, vt, p, NOW)
         if "bad_input" in [n.kind for n in r.notes]:

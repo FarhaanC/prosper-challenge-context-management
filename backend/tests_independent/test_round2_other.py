@@ -74,12 +74,25 @@ def test_any_day_clears_day_wish(value):
 
 
 def test_any_time_clears_time_of_day_wish():
-    """Spec 1: '"any day" / "any time" clears the day or time wish.' A caller who said
-    'morning' and now says 'any time is fine' should lose the morning restriction."""
+    """A caller who said 'morning' and now says 'any time is fine' loses the morning
+    restriction. Round 6 s1: the AI sends plain fields, so that is days=[] and
+    time_of_day="" (or a no-preference word in each field, s2)."""
     c = full_card()
-    c.preferences.time_of_day = "morning"
+    c.preferences.days, c.preferences.time_of_day = ["Thursday"], "morning"
+    c.change_choice("time", days=[], time_of_day="")
+    assert (c.preferences.days, c.preferences.time_of_day) == ([], ""), c.preferences
+    c.preferences.days, c.preferences.time_of_day = ["Thursday"], "morning"
+    c.change_choice("time", days=["any time"], time_of_day="Any time")
+    assert (c.preferences.days, c.preferences.time_of_day) == ([], ""), c.preferences
+
+
+def test_any_time_as_a_day_entry_clears_only_the_day():
+    """Round 6 s2: 'Each field is independent: "any time" as a day entry clears the
+    day only, not the time of day.' new_value is one day entry (s1)."""
+    c = full_card()
+    c.preferences.days, c.preferences.time_of_day = ["Thursday"], "morning"
     c.change_choice("time", "any time")
-    assert c.preferences.time_of_day == "", c.preferences
+    assert (c.preferences.days, c.preferences.time_of_day) == ([], "morning"), c.preferences
 
 
 def test_any_time_via_time_of_day_argument():

@@ -11,7 +11,6 @@ calendar is used only as the source of open times, as in earlier rounds.
 """
 
 import re
-from dataclasses import replace
 
 import pytest
 
@@ -144,9 +143,10 @@ def test_someone_else_during_an_offer_of_one_named_doctor(catalog, schedule):
     assert r2.options and "Dr. Daniel Chen" not in {o.provider_name for o in r2.options}
 
 
-# Round 4 tested that filler words still turned the doctor down. Round 5 reverses that on
-# purpose: the words are only ever a name. The intent that survives: the mistake must be
-# VISIBLE (a doctor_not_found note), nobody is turned down, and nothing is guessed.
+# Round 4 tested that filler words still turned the doctor down. Round 5 reversed that,
+# and round 6 s3 now refuses such values outright. The intent that survives: the mistake
+# must be VISIBLE (round 6: a bad_input note and no options), nobody is turned down, and
+# nothing is guessed.
 @pytest.mark.parametrize("phrase", ["Someone else, please", "someone else please", "the other doctor",
                                     "Another doctor, please"])
 def test_someone_else_with_ordinary_filler_words(catalog, schedule, phrase):
@@ -155,11 +155,10 @@ def test_someone_else_with_ordinary_filler_words(catalog, schedule, phrase):
     choose(card, r.options[0])
     card.change_choice("doctor", phrase)
     r2 = search(catalog, schedule, card)
-    # the same card without the doctor words (the chosen place is still carried over)
-    base = find_options(catalog, schedule, new_caller(), SKIN, replace(card.preferences, doctor_name_heard=""), NOW)
     assert card.preferences.not_provider_ids == []
-    assert [n.kind for n in r2.notes] == ["doctor_not_found"], [n.say for n in r2.notes]
-    assert [(o.provider_id, o.start) for o in r2.options] == [(o.provider_id, o.start) for o in base.options]
+    assert [n.kind for n in r2.notes] == ["bad_input"], [n.say for n in r2.notes]
+    assert "turn_down_doctors" in r2.notes[0].say
+    assert r2.options == []
 
 
 def test_not_dr_name_turns_down_every_match(catalog, schedule):
@@ -175,15 +174,14 @@ def test_not_dr_name_turns_down_every_match(catalog, schedule):
 
 @pytest.mark.parametrize("phrase", ["No, not Dr. Chen", "anyone but Dr. Chen", "not Dr. Chen"])
 def test_a_negated_name_never_becomes_a_wish_for_that_doctor(catalog, schedule, phrase):
-    # Round 5 s2: if the AI wrongly passes these words to change_choice, they are "treated
-    # as a name, which matches nobody, so the agent gets a doctor_not_found note". The
-    # opposite must never happen: offering ONLY the doctor the caller just refused.
+    # If the AI wrongly passes these words to change_choice, round 6 s3 refuses them with a
+    # bad_input note and no options. The opposite must never happen: offering ONLY the
+    # doctor the caller just refused.
     card = card_for("new", SKIN)
     card.change_choice("doctor", phrase)
     r = search(catalog, schedule, card)
-    names = {o.provider_name for o in r.options}
-    assert names != {"Dr. Daniel Chen"}, (phrase, names, [n.say for n in r.notes])
-    assert "doctor_not_found" in [n.kind for n in r.notes], [n.say for n in r.notes]
+    assert r.options == [], (phrase, [o.spoken for o in r.options])
+    assert [n.kind for n in r.notes] == ["bad_input"], [n.say for n in r.notes]
 
 
 def test_visit_type_change_forgets_turned_down_doctors(catalog, schedule):

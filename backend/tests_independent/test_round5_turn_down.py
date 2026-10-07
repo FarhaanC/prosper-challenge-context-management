@@ -8,7 +8,6 @@ fake calendar is used only as the source of open times, as in earlier rounds.
 
 from collections import Counter
 from dataclasses import replace
-
 import pytest
 
 from clinic import BOOKING, VISIT_TYPE, BookingCard, Choices, Preferences, find_options
@@ -222,23 +221,24 @@ def test_change_choice_doctor_never_turns_anyone_down(catalog, schedule, phrase)
     card, chosen, _ = _offer_and_choose(catalog, schedule)
     card.preferences.not_provider_ids = ["prov_027"]   # turned down earlier in the call
     assert card.change_choice("doctor", phrase) == BOOKING
-    assert card.preferences.not_provider_ids == ["prov_027"]
-    assert chosen.provider_id not in card.preferences.not_provider_ids or chosen.provider_id == "prov_027"
+    # Nobody is added. Round 6 s4: the chosen doctor is never on the list, so if the chosen
+    # doctor happens to be prov_027 (choices filled in directly) they come off it.
+    assert set(card.preferences.not_provider_ids) == {"prov_027"} - {chosen.provider_id}
 
 
 @pytest.mark.parametrize("vt", [SKIN, NEW_CONSULT])
 @pytest.mark.parametrize("phrase", PHRASES)
 def test_words_passed_as_a_name_give_a_visible_not_found_note_and_no_guess(catalog, schedule, vt, phrase):
-    # Spec s2: they "are treated as a name, which matches nobody, so the agent gets a
-    # doctor_not_found note (the mistake is visible, not guessed at)".
+    # Round 6 s3 (replaces round 5 s2): every phrase here has a word no name has, so the
+    # search is refused with one bad_input note and no options. Never a guessed doctor.
     card = card_for("returning-all", vt)
     choose(card, search(catalog, schedule, card).options[0])
     card.change_choice("doctor", phrase)
     r = search(catalog, schedule, card)
-    without = find_options(catalog, schedule, card.caller, vt, replace(card.preferences, doctor_name_heard=""), NOW)
-    assert "doctor_not_found" in [n.kind for n in r.notes], (phrase, says(r))
-    assert [(o.provider_id, o.start) for o in r.options] == [(o.provider_id, o.start) for o in without.options], \
-        (phrase, [o.spoken for o in r.options], says(r))
+    assert [n.kind for n in r.notes] == ["bad_input"], (phrase, says(r))
+    assert "turn_down_doctors" in r.notes[0].say
+    assert r.options == [], (phrase, [o.spoken for o in r.options])
+    assert card.preferences.not_provider_ids == []
 
 
 def test_empty_doctor_value_means_no_doctor_wish(catalog, schedule):
@@ -380,7 +380,7 @@ def test_picking_from_a_no_other_doctor_offer_then_changing_the_day_whole_catalo
             continue
         pick = r.options[0]
         choose(card, pick)
-        card.change_choice("time", "any time")
+        card.change_choice("time", days=[], time_of_day="")   # "any time" (round 6 s1: plain fields)
         if pick.provider_id in card.preferences.not_provider_ids:
             problems.append((VT[vt]["name"], "picked doctor still turned down"))
         if PROV[pick.provider_id]["name"] in not_list(card.summary(catalog)) and \
