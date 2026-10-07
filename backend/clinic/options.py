@@ -36,17 +36,16 @@ from typing import Callable, Optional
 
 from .card import DOCTOR, LANGUAGE, LOCATION, TIME, TIMES_OF_DAY, Preferences, turned_down_ids
 from .catalog import Catalog, VisitType, distance_miles
-from .fuzzy import NOT_NAME_WORDS, looks_like_a_sentence, means_no_preference
+from .fuzzy import NOT_NAME_WORDS, looks_like_a_sentence, means_no_preference, tidy
 from .patients import Caller
 from .rules import can_book_visit_type, pair_problems
-from .slots import DAYS_AHEAD, Schedule, booking_days, spoken_time
+from .slots import DAYS_AHEAD, Schedule, booking_days, is_iso_date, spoken_time
 
 WEEKDAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
 # The day words accepted, each meaning one weekday: full names, plurals ("thursdays")
 # and the usual short forms. Nothing else, so "thus" or "frid" is refused, not guessed.
 SHORT_DAYS = {"mon": 0, "tue": 1, "tues": 1, "wed": 2, "thu": 3, "thur": 3, "thurs": 3, "fri": 4, "sat": 5, "sun": 6}
 WEEKDAY_WORDS = {**{w: i for i, w in enumerate(WEEKDAYS)}, **{w + "s": i for i, w in enumerate(WEEKDAYS)}, **SHORT_DAYS}
-ISO_DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
 # Below this, saying "about 0.1 miles from X" adds nothing: it's effectively the same place.
 DISTANCE_WORTH_SAYING = 0.2
 # How many names to read out in "Doctors who can: ..." before saying "and N more".
@@ -61,8 +60,8 @@ DOCTOR_NOT_FOUND = "doctor_not_found"    # no doctor by that name
 DOCTOR_NAME_GUESS = "doctor_name_guess"  # only approximate name matches: check with the caller
 SAME_NAME = "doctors_same_name"          # several doctors share the name: ask which one
 NO_OTHER_DOCTOR = "no_other_doctor"      # the caller turned a doctor down, but nobody else can do it
-PLACE_UNKNOWN = "place_unknown"          # place words not recognised
-PLACE_AMBIGUOUS = "place_ambiguous"      # place words fit several locations: ask which one
+PLACE_UNKNOWN = "place_unknown"          # a place name we don't recognise
+PLACE_AMBIGUOUS = "place_ambiguous"      # a place name that fits several locations: ask which one
 WISH_IMPOSSIBLE = "wish_impossible"      # a wish nobody can meet
 WISH_CONFLICT = "wish_conflict"          # a wish that can't be met together with a stronger one
 NO_TIMES = "no_times"                    # nothing open at all in the booking window
@@ -160,7 +159,7 @@ def check_time_wishes(days, time_of_day, now: datetime) -> TimeTests:
     day_tests, labels, problems = [], [], []
     weekdays_named = False
     for raw in days or []:
-        d = " ".join(str(raw or "").split()).lower().rstrip(".")
+        d = tidy(raw).lower().rstrip(".")
         if not d or means_no_preference(d):
             continue
         if d in ("today", "tomorrow"):
@@ -174,7 +173,7 @@ def check_time_wishes(days, time_of_day, now: datetime) -> TimeTests:
             labels.append("on " + WEEKDAYS[weekday].capitalize())
             weekdays_named = True
             continue
-        target = date.fromisoformat(d) if ISO_DATE.fullmatch(d) and _is_date(d) else None
+        target = date.fromisoformat(d) if is_iso_date(d) else None
         if target is None:
             problems.append(f"I couldn't use the day '{raw}'. Pass each day on its own: a weekday name, 'today', "
                             f"'tomorrow' or a date like {window[7]:%Y-%m-%d}. Put morning or afternoon "
@@ -186,7 +185,7 @@ def check_time_wishes(days, time_of_day, now: datetime) -> TimeTests:
             day_tests.append(lambda day, t=target: day == t)
             labels.append(f"on {target:%A} {target.day} {target:%B}")
 
-    tod = " ".join(str(time_of_day or "").split()).lower()
+    tod = tidy(time_of_day).lower()
     time_ok = None
     if tod and not means_no_preference(tod):
         if tod == TIMES_OF_DAY[0]:
@@ -200,14 +199,6 @@ def check_time_wishes(days, time_of_day, now: datetime) -> TimeTests:
     day_ok = (lambda day: any(test(day) for test in day_tests)) if day_tests else None
     phrase = " ".join(filter(None, [_join(labels, "or") if labels else "", f"in the {tod}" if time_ok else ""]))
     return TimeTests(day_ok, time_ok, phrase, bool(labels) and not weekdays_named, problems)
-
-
-def _is_date(text: str) -> bool:
-    try:
-        date.fromisoformat(text)
-        return True
-    except ValueError:
-        return False
 
 
 # ---------------------------------------------------------------- open times, per search
@@ -290,25 +281,32 @@ def _why_doctor_cant(catalog: Catalog, caller: Caller, vt: VisitType, p, valid: 
     return "equipment"
 
 
-def _a_few(items: list, sep: str = ", ") -> str:
-    """Read out at most NAMES_TO_READ items: 'A, B and C', or 'A, B, C and 4 more'.
-    Items that contain commas use sep='; ': 'A; B; C; and 4 more'."""
+def _a_few(items: list, sep: str = ", ", word: str = "and") -> str:
+    """Read out at most NAMES_TO_READ items: 'A, B and C', or 'A, B, C and 4 more'
+    ('or' with word="or"). Items that contain commas use sep='; ': 'A; B; C; and 4 more'."""
     shown, more = items[:NAMES_TO_READ], len(items) - NAMES_TO_READ
     if sep != ", ":
-        return sep.join(shown + ([f"and {more} more"] if more > 0 else []))
-    return ", ".join(shown) + f" and {more} more" if more > 0 else _join(shown)
+        return sep.join(shown + ([f"{word} {more} more"] if more > 0 else []))
+    return ", ".join(shown) + f" {word} {more} more" if more > 0 else _join(shown, word)
+
+
+def _labels(doctors: list, places_of: Callable, with_specialty: bool = True) -> list:
+    """How to say each doctor: 'Dr. Kenji Kim (Dermatology)', or just the name. A label
+    that would otherwise repeat becomes 'Dr. Daniel Chen (Dermatology, Downtown Health
+    Center / Richmond Care Center)', so two doctors with the same name are never read
+    out as if they were one. Labels are counted before any is changed.
+    `places_of(doctor)` gives the place names to add."""
+    base = [f"{p.name} ({p.specialty})" if with_specialty else p.name for p in doctors]
+    repeated = {label for label, n in Counter(base).items() if n > 1}
+    return [f"{p.name} ({p.specialty}, {' / '.join(sorted(places_of(p)))})" if label in repeated else label
+            for p, label in zip(doctors, base)]
 
 
 def _who_can(pairs: list) -> str:
     """'Dr. Daniel Chen (Dermatology), Dr. Kenji Kim (Dermatology) and 4 more', with no
     name read out twice unexplained (two Maria Garcias get their locations added)."""
     doctors = list({p.id: p for p, _ in pairs}.values())
-    labels = [f"{p.name} ({p.specialty})" for p in doctors]
-    repeated = {label for label, n in Counter(labels).items() if n > 1}  # counted before any label changes
-    for i, p in enumerate(doctors):
-        if labels[i] in repeated:
-            labels[i] = f"{p.name} ({p.specialty}, {' / '.join(sorted({l.name for q, l in pairs if q.id == p.id}))})"
-    return _a_few(labels)
+    return _a_few(_labels(doctors, lambda p: {l.name for q, l in pairs if q.id == p.id}))
 
 
 def find_options(
@@ -450,7 +448,7 @@ def _known_language(catalog: Catalog, said) -> tuple:
     problem saying how to pass it: a sentence ("not Spanish"), more than two words, or
     a value that mixes a language we have with other words ("Spanish French",
     "Spanish only"), because picking one of the words would be a guess."""
-    words = " ".join(str(said or "").split())
+    words = tidy(said)
     if not words or means_no_preference(words):
         return "", ""
     low = words.lower()
@@ -472,11 +470,11 @@ def _sentence_problems(prefs: Preferences) -> list:
     Downtown") is refused rather than matched by spelling, which could turn a refusal
     into a wish for that very doctor or place."""
     problems = []
-    doctor = " ".join(str(prefs.doctor_name_heard or "").split())
+    doctor = tidy(prefs.doctor_name_heard)
     if doctor and not means_no_preference(doctor) and looks_like_a_sentence(doctor):
         problems.append(f"I couldn't use the doctor name '{doctor}'. Pass just the doctor's name, or leave it "
                         "empty for no doctor wish. To turn doctors down, use turn_down_doctors.")
-    place = " ".join(str(prefs.location_hint or "").split())
+    place = tidy(prefs.location_hint)
     if place and not means_no_preference(place) and looks_like_a_sentence(place):
         problems.append(f"I couldn't use the place '{place}'. Pass just a place name (a neighbourhood, street or "
                         "location name; set near for somewhere close), or leave it empty for no place wish.")
@@ -485,13 +483,13 @@ def _sentence_problems(prefs: Preferences) -> list:
 
 def _doctor_wishes(catalog: Catalog, prefs: Preferences) -> tuple:
     wishes, notes = [], []
-    heard = " ".join(str(prefs.doctor_name_heard or "").split())
+    heard = tidy(prefs.doctor_name_heard)
     if heard and not means_no_preference(heard):
         matches = catalog.match_providers(heard)
         if not matches:
             notes.append(Note(DOCTOR_NOT_FOUND, f"I couldn't find a doctor called {heard} here."))
         else:
-            notes += _name_guess_notes(heard, matches)
+            notes += _name_guess_notes(catalog, heard, matches)
             doctors = tuple(m.provider for m in matches)
             names = sorted({p.name for p in doctors})
             label = names[0] if len(names) == 1 else heard
@@ -507,17 +505,16 @@ def _doctor_wishes(catalog: Catalog, prefs: Preferences) -> tuple:
 def _place_wishes(catalog: Catalog, prefs: Preferences) -> tuple:
     """Returns (wishes, point to rank by distance from, its name, notes)."""
     wishes, notes, point, point_label = [], [], None, ""
-    hint = " ".join(str(prefs.location_hint or "").split())
+    hint = tidy(prefs.location_hint)
     if hint:
         place = catalog.resolve_place(hint, near=prefs.near)
         if place.kind == "none":
             notes.append(Note(PLACE_UNKNOWN, f"I don't recognise the place '{hint}'. Pass just a place name: "
                                              "a neighbourhood, a street or one of our location names."))
         elif place.kind == "ambiguous":
-            names = [catalog.locations[i].name for i in place.location_ids]
-            notes.append(Note(PLACE_AMBIGUOUS, f"'{hint}' could mean {_join(names, 'or')}. Ask the caller which one."))
+            either = _a_few([catalog.locations[i].name for i in place.location_ids], word="or")
+            notes.append(Note(PLACE_AMBIGUOUS, f"'{hint}' could mean {either}. Ask the caller which one."))
             if not place.near:  # "Mission" narrows to those; near the Mission doesn't narrow
-                either = _join(names, "or")
                 wishes.append(_Wish(LOCATION, either, f"at {either}", location_ids=frozenset(place.location_ids)))
         elif place.kind in ("location", "landmark"):
             point, point_label = place.point, place.label
@@ -581,13 +578,13 @@ def _impossible_note(catalog: Catalog, caller: Caller, vt: VisitType, w: _Wish, 
     # DOCTOR: say why each matching doctor can't, and who can.
     groups: dict = {}
     for p in w.doctors:
-        code = _why_doctor_cant(catalog, caller, vt, p, rule_ok)
-        groups.setdefault(code, []).append(f"{p.name} ({p.specialty})" if code == "offer" else p.name)
+        groups.setdefault(_why_doctor_cant(catalog, caller, vt, p, rule_ok), []).append(p)
     parts = []
-    for code, names in groups.items():
+    for code, doctors in groups.items():
         one, many = _REASONS[code]
-        reason = (one if len(names) == 1 else many).format(vt=vt.name, cap=vt.required_capability, days=days)
-        parts.append(f"{_a_few(names)} {reason}")
+        reason = (one if len(doctors) == 1 else many).format(vt=vt.name, cap=vt.required_capability, days=days)
+        labels = _labels(doctors, lambda p: _place_names(catalog, p), with_specialty=(code == "offer"))
+        parts.append(f"{_a_few(labels)} {reason}")
     said = w.heard or w.label
     who = f" Doctors who can: {_who_can(valid)}." if valid else ""
     return Note(WISH_IMPOSSIBLE, f"No doctor matching '{said}' can do this: {'; '.join(parts)}.{who}")
@@ -606,13 +603,15 @@ def _same_name_note(catalog: Catalog, vt: VisitType, w: _Wish, pairs: list) -> l
                             + _a_few(desc, "; ") + ". Ask the caller which one they mean.")]
 
 
-def _name_guess_notes(heard: str, matches: list) -> list:
+def _place_names(catalog: Catalog, p) -> set:
+    return {catalog.locations[lid].name for lid in p.location_ids}
+
+
+def _name_guess_notes(catalog: Catalog, heard: str, matches: list) -> list:
     """Say so when the name matched only approximately, so the agent checks with the caller."""
     if all(m.is_exact for m in matches):
         return []
-    shown = [f"{m.provider.name} ({m.provider.specialty})" for m in matches[:NAMES_TO_READ]]
-    more = len(matches) - len(shown)
-    listed = _join(shown + ([f"{more} more"] if more else []))
+    listed = _a_few(_labels([m.provider for m in matches], lambda p: _place_names(catalog, p)))
     if not all(m.first_name_matched for m in matches):
         return [Note(DOCTOR_NAME_GUESS, f"There's no doctor called {heard}. Doctors with that surname: {listed}. "
                                         "Check with the caller.")]

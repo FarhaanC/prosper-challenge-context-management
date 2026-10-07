@@ -659,3 +659,33 @@ def test_r6_only_the_five_change_names(new_caller, what):
     with pytest.raises(ValueError, match="visit_type, doctor, location, time or language"):
         card.change_choice(what, "x")
     assert card.to_dict() == before
+
+
+# ---- round 7 (triage.md, round 7 section)
+def test_r7_near_must_be_a_real_yes_or_no(new_caller):
+    card = _dermatology_card(new_caller)
+    with pytest.raises(ValueError, match="near must be true or false"):
+        card.change_choice("location", "Downtown", near="false")
+
+
+def test_r7_same_name_doctors_are_told_apart_in_every_list(new_caller):
+    # Round 7 check, should-fix 2: the "can't do this" reasons and "Doctors with that surname".
+    big = _catalog_with_extra_doctors(1)
+    twin = big.providers["prov_twin_0"]
+    assert twin.name == "Dr. Daniel Chen" and twin.specialty == "Dermatology"
+    r = find_options(big, Schedule(big), new_caller, ANNUAL_PHYSICAL, Preferences(doctor_name_heard="Dr. Daniel Chen"),
+                     NOW)
+    note = next(n.say for n in r.notes if n.kind == WISH_IMPOSSIBLE)
+    assert "Dr. Daniel Chen (Dermatology, Downtown Health Center / Richmond Care Center)" in note
+    assert "Dr. Daniel Chen (Dermatology, Midtown Medical Group)" in note
+    r = find_options(big, Schedule(big), new_caller, SKIN_CANCER_SCREENING, Preferences(doctor_name_heard="Dr. Dan Chen"),
+                     NOW)
+    guess = next(n.say for n in r.notes if n.kind == DOCTOR_NAME_GUESS)
+    # the twin is past the first three names, but the first Dr. Daniel Chen still gets his places
+    assert "Dr. Daniel Chen (Dermatology, Downtown Health Center / Richmond Care Center)" in guess
+
+
+def test_r7_a_long_list_of_places_reads_three_then_or_n_more():
+    from clinic.options import _a_few
+    assert _a_few(["A", "B"], word="or") == "A or B"
+    assert _a_few(["A", "B", "C", "D", "E"], word="or") == "A, B, C or 2 more"

@@ -101,7 +101,9 @@ def test_landmarks(catalog, name, landmark):
 
 
 @pytest.mark.parametrize("phrase", ["near Downtown", "closer to Downtown", "the Midtown one", "on Geary",
-                                    "Union Square area", "the Midtown one in SF", "Geary", "main"])
+                                    "Union Square area", "the Midtown one in SF", "Geary", "main",
+                                    # round 7: words that aren't in any of our place names
+                                    "Midtown office", "Downtown location", "Sunset hospital", "Richmond branch"])
 def test_r6_place_phrases_are_not_read(catalog, phrase):
     # The AI passes the name and near; a whole phrase isn't a place name, so it isn't guessed at.
     assert catalog.resolve_place(phrase).kind == "none"
@@ -251,3 +253,9 @@ def test_r6_a_repeated_id_is_reported_once():
     raw = copy.deepcopy(RAW)
     raw["providers"] += [copy.deepcopy(raw["providers"][0]) for _ in range(2)]
     assert _problems(raw).count("appears more than once") == 1
+
+
+def test_r7_a_word_from_our_own_names_is_fine(catalog):
+    # "Clinic" is part of two of our names, so it doesn't stop a match; "office" isn't, so it does.
+    assert catalog.resolve_place("Richmond clinic").location_ids == [RICHMOND]
+    assert catalog.resolve_place("Sunset Community Clinic").location_ids == [SUNSET]

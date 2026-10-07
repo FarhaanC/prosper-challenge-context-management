@@ -44,11 +44,11 @@ VISIT_SPELLING = 0.7
 SHORT_PLACE_WORD = 5
 PLACE_SPELLING = 0.8
 
-# Words in place names that don't help tell places apart ("Mission Bay Health Center").
-GENERIC_PLACE_WORDS = {
-    "health", "center", "centre", "clinic", "medical", "group", "family", "specialty",
-    "care", "community", "the", "office", "location", "hospital", "site", "branch", "of", "and",
-}
+# Words that are part of our own place names but don't tell them apart ("Mission Bay
+# Health Center", "Sunset Community Clinic"), plus "the" ("the Castro"). Only words from
+# our names: anything else ("Midtown office") isn't a place name and isn't guessed at.
+GENERIC_PLACE_WORDS = {"health", "center", "clinic", "medical", "group", "family", "specialty", "care",
+                       "community", "the"}
 CITY_WORDS = {"sf", "san", "francisco", "city"}
 STREET_WORDS = {"street", "avenue", "boulevard", "road", "lane"}
 STREET_ABBREVIATIONS = {"st", "ave", "blvd", "rd", "ln"}  # count only as the last word ("Mission St", not "St Mary's")
@@ -128,13 +128,16 @@ class ProviderMatch:
 
 @dataclass
 class PlaceMatch:
-    """What a caller's place words resolved to."""
+    """What a place name resolved to."""
 
     kind: str  # "location" | "landmark" | "ambiguous" | "any" (no preference) | "none" (not recognised)
     label: str = ""
     location_ids: list = field(default_factory=list)  # one if kind=location, several if ambiguous
     point: Optional[tuple] = None  # (lat, lon) to measure distance from
     near: bool = False  # rank by distance from it, rather than only that place (passed in, never read from words)
+
+
+EARTH_RADIUS_MILES = 3958.8
 
 
 class CatalogError(ValueError):
@@ -160,7 +163,7 @@ def distance_miles(a: tuple, b: tuple) -> float:
     """Straight-line ("as the crow flies") distance between two (lat, lon) points."""
     lat1, lon1, lat2, lon2 = map(math.radians, (*a, *b))
     h = math.sin((lat2 - lat1) / 2) ** 2 + math.cos(lat1) * math.cos(lat2) * math.sin((lon2 - lon1) / 2) ** 2
-    return 3958.8 * 2 * math.asin(math.sqrt(h))
+    return EARTH_RADIUS_MILES * 2 * math.asin(math.sqrt(h))
 
 
 def _distinct_words(text: str) -> list:

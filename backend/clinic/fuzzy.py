@@ -77,6 +77,11 @@ def normalize(text) -> str:
     return _normalize(str(text or ""))
 
 
+def tidy(text) -> str:
+    """Spaces tidied: "  Dr.   Chen " -> "Dr. Chen". Nothing else changes."""
+    return " ".join(str(text or "").split())
+
+
 def squash(text) -> str:
     """Lowercase letters and digits only: "I don't mind!" -> "idontmind"."""
     return re.sub(r"[^a-z0-9]", "", str(text or "").lower())

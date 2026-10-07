@@ -22,7 +22,7 @@ def _location_result(l) -> dict:
 
 
 def answer_question(catalog: Catalog, about, name) -> dict:
-    about = str(about or "").lower().strip()
+    about = str(about or "").lower().strip().replace(" ", "_")  # "Visit Type" -> visit_type
     name = str(name or "").strip()
     if not name:
         return {"found": False, "message": "Say which location, doctor or visit type you mean."}

@@ -108,3 +108,14 @@ def test_answer_question_closest_location_uses_real_distance(catalog):  # 6
 def test_r6_answer_question_refuses_a_sentence(catalog, about, said):
     out = answer_question(catalog, about, said)
     assert out["found"] is False and "isn't a" in out["message"]
+
+
+@pytest.mark.parametrize("about", ["visit_type", "Visit Type", " VISIT TYPE "])
+def test_r7_answer_question_takes_the_exact_names_any_case(catalog, about):
+    assert answer_question(catalog, about, "Skin Cancer Screening")["found"] is True
+
+
+def test_r7_one_date_check_everywhere():
+    from clinic.slots import is_iso_date
+    assert is_iso_date("1984-03-12") and is_iso_date("2024-02-29")
+    assert not any(is_iso_date(x) for x in ("12/03/1984", "1990-02-30", "2023-02-29", "1984-3-12", ""))

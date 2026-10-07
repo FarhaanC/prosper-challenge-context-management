@@ -3,6 +3,14 @@
 Nothing here knows about Pipecat or voice. The voice agent and the typed test
 harness both call this same code, so what we test is what runs.
 
+The rule for what comes in from the AI (plan decision 23, as settled in review
+rounds 4-7): names (doctors, places, languages) are matched forgivingly against
+our own records, because the AI doesn't know them. Two fixed word lists are read:
+"no preference" words (treated as empty) and words no name has, like "not" or
+"another" (refused, with a note saying how to send the value). Everything else
+is a plain instruction (ids, yes/no, a weekday or a date, "morning" or
+"afternoon"), and anything that isn't one of those is refused, never guessed.
+
     catalog.py   the catalog, checked at load; search (specialties, doctor names, places)
     fuzzy.py     forgiving name matching that reports how close a match is
     patients.py  fake returning patients; the step-by-step identity check

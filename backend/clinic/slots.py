@@ -25,6 +25,7 @@ because the computer running the agent may be anywhere (e.g. Dubai, 11 hours ahe
 from __future__ import annotations
 
 import hashlib
+import re
 from datetime import date, datetime, time, timedelta
 from typing import Iterator, Optional
 
@@ -40,6 +41,21 @@ MIN_NOTICE = timedelta(hours=2)  # don't book someone in for 10 minutes from now
 
 class SlotTaken(ValueError):
     """Raised when booking a time that isn't free."""
+
+
+# A date written YYYY-MM-DD, the one date format the code takes from the AI.
+ISO_DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
+
+
+def is_iso_date(text: str) -> bool:
+    """A real date written YYYY-MM-DD ("1984-03-12"; not "12/03/1984" or "1984-02-30")."""
+    if not ISO_DATE.fullmatch(str(text)):
+        return False
+    try:
+        date.fromisoformat(text)
+        return True
+    except ValueError:
+        return False
 
 
 def clinic_now() -> datetime:

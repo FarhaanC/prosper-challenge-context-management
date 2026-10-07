@@ -18,7 +18,7 @@ from datetime import datetime
 from typing import Optional
 
 from .catalog import Catalog
-from .fuzzy import looks_like_a_sentence, means_no_preference
+from .fuzzy import looks_like_a_sentence, means_no_preference, tidy
 from .patients import Caller, IdentityCheck
 from .slots import spoken_time
 
@@ -81,7 +81,7 @@ def turned_down_ids(catalog: Catalog, prefs: Preferences) -> set:
     who share the exact same name are treated as one name. Unknown ids are ignored.
     """
     down = {i for i in prefs.not_provider_ids or [] if i in catalog.providers}
-    heard = " ".join(str(prefs.doctor_name_heard or "").split())
+    heard = tidy(prefs.doctor_name_heard)
     if down and heard and not means_no_preference(heard) and not looks_like_a_sentence(heard):
         matches = catalog.match_providers(heard)
         if len({m.provider.name for m in matches}) == 1:
@@ -169,13 +169,15 @@ class BookingCard:
         kind = CHANGEABLE.get(str(what).lower().strip().replace(" ", "_"))
         if kind is None:
             raise ValueError(f"Can't change {what!r}; choose visit_type, doctor, location, time or language.")
-        said = " ".join(str(new_value or "").split())
+        said = tidy(new_value)
         if kind == TIME and said and days is not None:
             raise ValueError("Pass the day either as new_value or in days, not both.")
         if kind == TIME and said:
             days, said = [said], ""   # new_value is one day entry ("any day" in it clears the day)
         if means_no_preference(said):
             said = ""
+        if not isinstance(near, bool):  # "false" as text would otherwise count as yes
+            raise ValueError("near must be true or false.")
         if near and kind != LOCATION:
             raise ValueError("near goes with a location change only.")
         prefs = self.preferences
@@ -197,10 +199,10 @@ class BookingCard:
             prefs.language = said
         elif kind == TIME:
             if days is not None:
-                entries = [" ".join(str(d or "").split()) for d in days]
+                entries = [tidy(d) for d in days]
                 prefs.days = [d for d in entries if d and not means_no_preference(d)]
             if time_of_day is not None:
-                tod = " ".join(str(time_of_day).split()).lower()
+                tod = tidy(time_of_day).lower()
                 prefs.time_of_day = "" if means_no_preference(tod) else tod
             prefs.soonest = False
         return self._finish_change(kind)

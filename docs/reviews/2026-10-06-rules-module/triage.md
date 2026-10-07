@@ -212,10 +212,49 @@ Findings from [`round-6-check.md`](round-6-check.md), a check by one fresh agent
 
 - **Builder tests:** 256 of 256 pass (32 new).
 - **Independent tests:** 1,758 of 1,962 pass. **All 4 round-6 failures are fixed.**
-- **The 204 that now fail come from agreed changes**, checked as before with a scratch adapter (never committed) that plays the AI's part for places only: it turns the testers' place phrases into a name plus `near`, as the old code read them ("on Geary" → "Geary Street"), and maps the old synonym names ("provider", "clinic") to the exact ones. With it, 1,944 of 1,962 pass. The 18 left are:
+- **The 204 that now fail come from agreed changes** *(correction found in round 7: the real number was **192**; 204 was counted before a last edit to the place code, and this line wasn't updated)*, checked as before with a scratch adapter (never committed) that plays the AI's part for places only: it turns the testers' place phrases into a name plus `near`, as the old code read them ("on Geary" → "Geary Street"), and maps the old synonym names ("provider", "clinic") to the exact ones. With it, 1,944 of 1,962 pass. The 18 left are:
   - **the "whom you turned down" notes now read three names, then "and N more"** (15 tests; a separate check confirmed all 1,753 such notes across the catalog are true);
   - **places inside a same-name label are joined with " / "**, not "and" (2 tests);
   - **one adapter slip**: it stripped "anywhere" from "anywhere is fine", which the real code reads as no preference (checked directly).
 - **Speed:** unchanged: 220–390 ms per search on the large fake catalog (500 locations, 2,000 doctors).
 - **Code checker:** pyflakes finds nothing in `clinic/` or the builder tests.
 - **The builder did not edit any independent test.** The changes are written up in [`round-7-spec-changes.md`](round-7-spec-changes.md) for a fresh checker.
+
+---
+
+# Round 7 (version `37c5b8a`)
+
+Findings from [`round-7-check.md`](round-7-check.md), a check by one fresh agent acting as tester and reviewer (**R7**, numbered as in its Part B). It confirmed all 192 out-of-date tests came only from agreed changes: it fixed every one by changing tests only.
+
+**Status:** fixed in the "round-7 fixes" commit. Two failure groups are **disputed** and went to a fresh verifier, as `docs/process.md` requires (see the end of this section).
+
+| # | Problem (plain words) | Found by | Decision | Outcome |
+| --- | --- | --- | --- | --- |
+| R7-1 | **Leftover place words still read phrases:** "Midtown office", "Downtown location", "Sunset hospital", "Richmond branch" were taken as our clinics. Eight words in the generic-word list (office, location, hospital, site, branch, centre, of, and) appear in none of our place names. | R7 must-fix 1 | Fix | **Fixed.** The list now holds only words that are part of our own place names (health, center, clinic, medical, group, family, specialty, care, community) plus "the" ("the Castro"). "Clinic" stays because it's in two of our names, so "Richmond clinic" still finds Richmond: the rule is "words from our own names", not a list of filler. |
+| R7-2 | **Same-name, same-specialty doctors weren't told apart** in the "can't do this" reasons or "Doctors with that surname". The surname note had its own copy of the "three, then N more" code. | R7 should-fix 2 | Fix | **Fixed.** One labelling helper (`_labels`) for every doctor list: a label that would repeat becomes "Dr. Daniel Chen (Dermatology, Downtown Health Center / Richmond Care Center)". Every list now uses `_a_few` for "three, then N more". |
+| R7-3 | `answer_question` refused "Visit Type". | R7 should-fix 3 | Fix | **Fixed.** Case and spaces ignored, as in `change_choice`. |
+| R7-4 | **The claim should name the two word lists.** | R7 should-fix 4 (judgement) | Fix (wording) | **Reworded** and now stated once in the code, in the package overview (`clinic/__init__.py`), and in the round-8 spec note (the older notes keep their wording as history): *names (doctors, places, languages) are matched forgivingly against our own records; two fixed word lists are read, one of "no preference" words (treated as empty) and one of words no name has (refused); everything else is a plain instruction.* |
+| R7-5 | The "could mean A or B" note for a shared place name had no length limit. | R7 should-fix 5 (judgement) | Fix | **Fixed.** Three names, then "or N more". |
+| R7-6 | **Spec gap:** the round-7 note listed "not far from…" as "not recognised", but the sentence guard refuses it as `bad_input`. | R7 should-fix 6 | Fix (spec) | **Fixed** in [`round-8-spec-changes.md`](round-8-spec-changes.md): any value with a word no name has ("not", "but", …) is refused before matching. |
+| R7-7 | Stale "place words" wording in two comments. | R7 NIT 7 | Fix | **Fixed.** |
+| R7-8 | `near="false"` (text) counted as yes. | R7 NIT 8 | Fix | **Fixed.** `near` must be a real true/false, or it's refused. |
+| R7-9 | "French only" is kept as an unknown language "French Only". | R7 NIT 9 (judgement) | **Leave** (accepted, not dismissed) | The note it gives is true ("None of our doctors is listed as speaking French Only. Our doctors speak …") and lists our languages, so the AI can correct itself. Adding "only" to a word list would start the phrase-reading again. |
+| R7-10 | For a landmark (always near), the summary doesn't say "near". | R7 NIT 10 (judgement) | **Leave** (accepted, not dismissed) | The summary records what the AI asked for; the search's handling of landmarks is documented. Harmless. |
+| R7-11 | **Copy-paste:** the space-tidying line 11 times; two date checkers; a bare earth radius. | R7 NIT 11 | Fix | **Fixed.** One `fuzzy.tidy()`; one `slots.is_iso_date()` (used by the search and the patient check); `EARTH_RADIUS_MILES`. |
+| R7-12 | The builder's "phrases not read" test missed "…office", "…location". | R7 NIT 12 | Fix | **Fixed.** Added, plus "Richmond clinic" as a must-match. |
+| R7-extra | **Found by the builder:** an earlier edit had left two blank lines missing between a function and the next block in `patients.py`. | builder | Fix | **Fixed** while moving the date check. |
+
+## Results after the round-7 fixes
+
+- **Builder tests:** 268 of 268 pass (12 new).
+- **Independent tests:** 2,840 of 2,848 pass. **All 22 round-7 failures except 8 are fixed.** The 8 left are disputed (below).
+- **Speed and code checker:** unchanged; pyflakes finds nothing.
+
+## Disputed: sent to a fresh verifier
+
+The builder thinks these 8 failing tests are wrong, which `docs/process.md` says the builder can't decide alone:
+
+- **6 × "{x} clinic" is not recognised** (`test_round7_places.py`). The builder's view: "clinic" is a word of two of our own place names, so it's allowed under the rule; the round-7 spec note was wrong to list it.
+- **2 × same-name, same-specialty labels** (`test_round7_notes.py`: the "can't do this" reasons and the surname note). The builder's view: the notes are right ("Dr. Daniel Chen (Dermatology, Downtown Health Center / Richmond Care Center) and Dr. Daniel Chen (Dermatology, Sunset Community Clinic) aren't taking new patients"), and the tests' list reader splits on the comma inside the brackets.
+
+The verifier's ruling is recorded below.
