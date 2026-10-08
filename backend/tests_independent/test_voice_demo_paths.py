@@ -154,7 +154,8 @@ def test_james_wilson_knee_mri_near_downtown_only_valid_imaging_options_nearest_
 def test_demo_script_skin_check_then_knee_mri_for_returning_patient(clinic):
     s = to_booking(clinic, SKIN_CHECK, JAMES, visit_description="skin check", doctor_name="Dr. Garsha")
     first_numbers = [int(o[0]) for o in offered(s)]
-    out = step(s, "change_choice", {"what": "visit_type", "new_value": "knee MRI"})
+    # round 2: new change_choice shape (spec note "change_choice has a new shape")
+    out = step(s, "change_choice", {"visit_type": "knee MRI"})
     assert out.result["ok"] is True and out.next_stage == VISIT_TYPE
     c = s.card.choices
     assert (c.visit_type_id, c.provider_id, c.location_id, c.slot) == ("", "", "", None)

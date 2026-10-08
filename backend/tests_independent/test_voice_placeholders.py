@@ -62,7 +62,11 @@ def test_booking_card_shows_caller_wishes_and_agreed_choices(clinic):
     text = s.fill("{booking_card}")
     assert "James Wilson" in text and "returning" in text.lower()
     assert "Radiology" in text and "Orthopedics" in text, "referrals on file"
-    assert "knee MRI" in text and "Downtown" in text and "Wednesday" in text and "English" in text
+    # round 2: once the visit type is accepted, the card's visit description is that visit's name,
+    # not the caller's first words (spec note "What the AI is shown", decision 53)
+    assert "Downtown" in text and "Wednesday" in text and "English" in text
+    assert s.card.preferences.visit_description == "MRI - Knee"
+    assert "knee MRI" not in text, "the card must not contradict the agreed visit"
     assert "MRI - Knee" in text, "the agreed visit type"
     o = s.card.offered_options[0]
     step(s, "choose_option", {"option_id": o.option_id})
@@ -103,7 +107,8 @@ def test_options_text_shows_at_most_three(clinic):
 
 def test_options_text_is_refreshed_after_every_rebuild(clinic):
     s = to_booking(clinic)
-    step(s, "change_choice", {"what": "time", "days": ["Friday"]})
+    # round 2: new change_choice shape (spec note "change_choice has a new shape")
+    assert step(s, "change_choice", {"days": ["Friday"]}).result["ok"] is True
     lines = option_lines(s.fill("{options}"))
     assert set(lines) == {o.option_id for o in s.card.offered_options}
     assert all(o.start.weekday() == 4 for o in s.card.offered_options)
@@ -113,7 +118,8 @@ def test_unusable_values_are_for_the_ai_not_the_caller(clinic):
     # Decision 38/40: a value the code can't use is refused with a note saying how to send
     # it; that note is an instruction for the AI and must not be read to the caller.
     s = to_booking(clinic)
-    step(s, "change_choice", {"what": "language", "new_value": "Spanish French"})
+    # round 2: new change_choice shape (spec note "change_choice has a new shape")
+    step(s, "change_choice", {"language": "Spanish French"})
     text = s.fill("{options}")
     told = " ".join(section(text, "Tell the caller first"))
     assert "Pass one language" not in told and "Spanish French" not in told
@@ -145,13 +151,14 @@ def test_options_text_after_a_change_of_visit_type_shows_no_old_options(clinic):
     # 11), including the options on offer. {options} must not still show them.
     s = to_booking(clinic)
     old = {o.option_id for o in s.card.offered_options}
-    step(s, "change_choice", {"what": "visit_type", "new_value": "flu shot"})
+    # round 2: new change_choice shape; and the spec now says {options} raises an error here, as
+    # before any search (spec note "What the AI is shown": "After a visit-type change, {options}
+    # has no search to show")
+    assert step(s, "change_choice", {"visit_type": "flu shot"}).result["ok"] is True
     assert not s.card.offered_options
-    try:
-        text = s.fill("{options}")
-    except ValueError:
-        return  # refusing to show stale options is fine
-    assert not (set(option_lines(text)) & old), f"stale options still shown:\n{text}"
+    assert old, "options were on offer before the change"
+    with pytest.raises(ValueError):
+        s.fill("{options}")
 
 
 # ------------------------------------------------------------------ {outcome}
@@ -175,13 +182,15 @@ def test_outcome_after_hand_off_mentions_staff_and_no_booking(clinic):
 def test_option_numbers_are_never_reused_through_a_long_call(clinic):
     s = to_booking(clinic, SKIN_CHECK, JAMES)
     seen = [o[0] for o in offered(s)]
-    moves = [("change_choice", {"what": "time", "days": ["Thursday"]}),
+    # round 2: new change_choice shape; the last move used empty values to clear the time wish, which
+    # now count as "not sent", so it sends "any" instead (spec note "change_choice has a new shape")
+    moves = [("change_choice", {"days": ["Thursday"]}),
              ("turn_down_doctors", {"on_offer": True}),
-             ("change_choice", {"what": "location", "new_value": "Midtown"}),
-             ("change_choice", {"what": "visit_type", "new_value": "full body skin exam"}),
+             ("change_choice", {"place": "Midtown"}),
+             ("change_choice", {"visit_type": "full body skin exam"}),
              ("choose_visit_type", {"visit_type_id": "appt_028"}),
-             ("change_choice", {"what": "language", "new_value": "Spanish"}),
-             ("change_choice", {"what": "time", "days": [], "time_of_day": ""})]
+             ("change_choice", {"language": "Spanish"}),
+             ("change_choice", {"days": ["any"], "time_of_day": "any"})]
     for tool, args in moves:
         assert step(s, tool, args).result.get("ok") is True, (tool, args)
         if s.stage == BOOKING:

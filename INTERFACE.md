@@ -1,4 +1,4 @@
-# Interface sheet for the independent tester (voice stages, build 349b652)
+# Interface sheet for the independent tester (voice stages, build 25c3f91)
 
 How to call the code. This sheet lists names, fields and shapes only; work out expected answers from the plan, the decisions and the raw data, not from the code.
 
@@ -31,11 +31,12 @@ b.global_functions()
 # flow_manager only needs a .state dict holding {'session': session}
 ```
 
-Agent file fields beyond the starter format: per node `tools` (names), per agent `global_tools`, `history` ('keep'|'reset'), `parallel_tool_calls` (bool). Placeholders allowed in task messages:
+Agent file fields beyond the starter format: per node `tools` (names), per agent `global_tools`, `history` ('keep'|'reset'), `parallel_tool_calls` (bool). Placeholders allowed in task messages (and only there):
 
 - `{today}`: today's date and the time at the clinics
 - `{booking_card}`: the booking card: who is calling, what they asked for, what's agreed
 - `{specialties}`: the names of all our specialties
+- `{visit_types}`: the visit types of the specialty already picked (if any), each marked bookable or not
 - `{options}`: the notes and options on offer, from the latest search
 - `{outcome}`: what the end stage should tell the caller (booked, or handed to staff)
 
@@ -43,7 +44,7 @@ Agent file fields beyond the starter format: per node `tools` (names), per agent
 
 ### start_booking
 
-Call once you have the caller's full name, whether they've been a patient with us before, and (for returning patients) their date of birth. Also pass anything they've already said they want. If it returns ok false with a 'say', say that sentence and follow it (ask again, ask them to spell their last name, or offer to register them as a new patient or put them through to staff). If they choose to register as new, call again with returning false.
+Call once you have the caller's full name, whether they've been a patient with us before, and (for returning patients) their date of birth. Also send anything they've already said they want. If it returns ok false with a 'say', say that sentence and follow it (ask again, ask them to spell their last name, or offer to register them as a new patient or have a member of staff call them back). If they choose to register as new, call again with returning false.
 
 Required: ['full_name', 'returning']. Can move to: ['visit_type', 'end'].
 
@@ -69,9 +70,13 @@ Required: ['full_name', 'returning']. Can move to: ['visit_type', 'end'].
   "type": "string",
   "description": "What they want, in their words (\"knee MRI\")."
  },
+ "specialty": {
+  "type": "string",
+  "description": "If it's clear which of our specialties fits what they want, that specialty's name from your instructions (its visit types are then ready in the next stage). Leave it out if unsure."
+ },
  "doctor_name": {
   "type": "string",
-  "description": "A doctor the caller asked for, as they said it (\"Dr. Garcia\"). Only a name. For 'someone else' or 'not Dr. X', use turn_down_doctors once options are on offer."
+  "description": "A doctor the caller asked for, as they said it (\"Dr. Garcia\"). Only a name. For 'someone else' or 'not Dr. X', use turn_down_doctors."
  },
  "place": {
   "type": "string",
@@ -86,13 +91,14 @@ Required: ['full_name', 'returning']. Can move to: ['visit_type', 'end'].
   "items": {
    "type": "string"
   },
-  "description": "Days that suit the caller, ONE day per entry: a weekday name (\"Thursday\"), \"today\", \"tomorrow\", or a date YYYY-MM-DD. \"Thursday or Friday\" is [\"Thursday\", \"Friday\"]. Never put a time of day here."
+  "description": "Days that suit the caller, ONE day per entry: a weekday name (\"Thursday\"), \"today\", \"tomorrow\", or a date YYYY-MM-DD (use the year from 'Now' in your instructions). \"Thursday or Friday\" is [\"Thursday\", \"Friday\"]. Never put a time of day here."
  },
  "time_of_day": {
   "type": "string",
   "enum": [
    "morning",
-   "afternoon"
+   "afternoon",
+   "any"
   ],
   "description": "\"morning\" (before noon) or \"afternoon\" (noon or later). Leave it out if they didn't say."
  },
@@ -124,7 +130,7 @@ Required: ['specialty']. Can move to: stays.
 
 ### choose_visit_type
 
-Call when the caller has picked a visit type. If it's refused, explain the reason in plain words and offer the alternative it gives. Also pass any new wishes they mentioned in this stage.
+Call when the caller has picked a visit type. If it's refused, explain the reason in plain words and offer the alternative it gives. Also send any new wishes they mentioned in this stage.
 
 Required: ['visit_type_id']. Can move to: ['booking'].
 
@@ -132,11 +138,11 @@ Required: ['visit_type_id']. Can move to: ['booking'].
 {
  "visit_type_id": {
   "type": "string",
-  "description": "The id from list_visit_types."
+  "description": "The visit type's id from the list."
  },
  "doctor_name": {
   "type": "string",
-  "description": "A doctor the caller asked for, as they said it (\"Dr. Garcia\"). Only a name. For 'someone else' or 'not Dr. X', use turn_down_doctors once options are on offer."
+  "description": "A doctor the caller asked for, as they said it (\"Dr. Garcia\"). Only a name. For 'someone else' or 'not Dr. X', use turn_down_doctors."
  },
  "place": {
   "type": "string",
@@ -151,13 +157,14 @@ Required: ['visit_type_id']. Can move to: ['booking'].
   "items": {
    "type": "string"
   },
-  "description": "Days that suit the caller, ONE day per entry: a weekday name (\"Thursday\"), \"today\", \"tomorrow\", or a date YYYY-MM-DD. \"Thursday or Friday\" is [\"Thursday\", \"Friday\"]. Never put a time of day here."
+  "description": "Days that suit the caller, ONE day per entry: a weekday name (\"Thursday\"), \"today\", \"tomorrow\", or a date YYYY-MM-DD (use the year from 'Now' in your instructions). \"Thursday or Friday\" is [\"Thursday\", \"Friday\"]. Never put a time of day here."
  },
  "time_of_day": {
   "type": "string",
   "enum": [
    "morning",
-   "afternoon"
+   "afternoon",
+   "any"
   ],
   "description": "\"morning\" (before noon) or \"afternoon\" (noon or later). Leave it out if they didn't say."
  },
@@ -182,7 +189,7 @@ Required: ['option_id']. Can move to: stays.
 {
  "option_id": {
   "type": "string",
-  "description": "The option number from your instructions."
+  "description": "The option number from your instructions, e.g. \"2\"."
  }
 }
 ```
@@ -199,9 +206,9 @@ Required: none. Can move to: ['end', 'booking'].
 
 ### turn_down_doctors
 
-The caller doesn't want certain doctors. "Someone else" or "a different doctor" while options are on offer: on_offer true. "Not him" or "not her" about the doctor just chosen: current true. "Not Dr. Chen": doctor_name "Dr. Chen". If several doctors match the name, you get their ids: call again with doctor_id. Fresh options follow.
+The caller doesn't want certain doctors. "Not Dr. Chen": doctor_name "Dr. Chen" (works at any point in the call). "Someone else" or "a different doctor" while options are on offer: on_offer true. "Not him" or "not her" about the doctor just chosen: current true. If several doctors match a name, you get their ids: call again with doctor_id. Once options are on offer, fresh options follow.
 
-Required: none. Can move to: ['booking'].
+Required: none. Can move to: ['visit_type', 'booking'].
 
 ```json
 {
@@ -226,51 +233,55 @@ Required: none. Can move to: ['booking'].
 
 ### change_choice
 
-The caller wants a different (or new) visit type, doctor, place, time or language. Send what, plus only the fields for that kind:
-- visit_type: new_value = what they want now, in their words.
-- doctor: new_value = a doctor's name, or "" for any doctor. For 'someone else' or 'not Dr. X', use turn_down_doctors once options are on offer.
-- location: new_value = a place name, or "" for anywhere; near = true for somewhere close to it.
-- time: days and/or time_of_day (leave one out to keep it; [] or "" clears it). No new_value.
-- language: new_value = one language, or "" for any.
-Once options are on offer, fresh options follow.
+The caller wants something different, or adds a wish. Send only the fields that change, in the same form as for start_booking: doctor_name, place (with near), days, time_of_day, soonest, language; or visit_type for a different kind of visit (what they want now, in their words, plus specialty if clear). Several can go in one call: "Friday afternoon at Midtown" is days ["Friday"], time_of_day "afternoon", place "Midtown". To drop a wish, send "any" (doctor_name "any", days ["any"], time_of_day "any"). Once options are on offer, fresh options follow. For 'someone else' or 'not Dr. X', use turn_down_doctors.
 
-Required: ['what']. Can move to: ['visit_type', 'booking'].
+Required: none. Can move to: ['visit_type', 'booking'].
 
 ```json
 {
- "what": {
+ "visit_type": {
   "type": "string",
-  "enum": [
-   "visit_type",
-   "doctor",
-   "location",
-   "time",
-   "language"
-  ]
+  "description": "A different kind of visit, in the caller's words."
  },
- "new_value": {
+ "specialty": {
   "type": "string",
-  "description": "See above. Only a name or the visit, never a sentence."
+  "description": "If it's clear which of our specialties fits what they want, that specialty's name from your instructions (its visit types are then ready in the next stage). Leave it out if unsure."
+ },
+ "doctor_name": {
+  "type": "string",
+  "description": "A doctor the caller asked for, as they said it (\"Dr. Garcia\"). Only a name. For 'someone else' or 'not Dr. X', use turn_down_doctors."
+ },
+ "place": {
+  "type": "string",
+  "description": "A place the caller mentioned: one of our locations, a neighbourhood, a landmark or a street with its street word (\"Midtown\", \"Union Square\", \"Geary Street\"). Only the name; put closeness in near."
  },
  "near": {
   "type": "boolean",
-  "description": "location only: somewhere close to the place."
+  "description": "With place: true if the caller wants somewhere close to it (\"near Union Square\"), false if they mean that place itself (\"the Midtown one\")."
  },
  "days": {
   "type": "array",
   "items": {
    "type": "string"
   },
-  "description": "time only: ONE day per entry: a weekday name, \"today\", \"tomorrow\" or YYYY-MM-DD. [] clears the day wish."
+  "description": "Days that suit the caller, ONE day per entry: a weekday name (\"Thursday\"), \"today\", \"tomorrow\", or a date YYYY-MM-DD (use the year from 'Now' in your instructions). \"Thursday or Friday\" is [\"Thursday\", \"Friday\"]. Never put a time of day here."
  },
  "time_of_day": {
   "type": "string",
   "enum": [
    "morning",
    "afternoon",
-   ""
+   "any"
   ],
-  "description": "time only: \"morning\", \"afternoon\", or \"\" to clear it."
+  "description": "\"morning\" (before noon) or \"afternoon\" (noon or later). Leave it out if they didn't say."
+ },
+ "soonest": {
+  "type": "boolean",
+  "description": "true if the caller wants the earliest time possible."
+ },
+ "language": {
+  "type": "string",
+  "description": "One language the doctor should speak (\"Spanish\")."
  }
 }
 ```
@@ -300,7 +311,7 @@ Required: ['about', 'name']. Can move to: stays.
 
 ### hand_off
 
-Put the caller through to a member of staff: to reschedule or cancel an appointment, or when they ask for a person. Ends the call with a goodbye.
+For things a member of staff handles: rescheduling or cancelling an appointment, or when the caller asks for a person. Staff will call them back; this ends the call with a goodbye.
 
 Required: ['reason']. Can move to: ['end'].
 

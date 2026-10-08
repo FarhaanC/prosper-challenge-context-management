@@ -85,8 +85,10 @@ def test_turn_down_by_unique_name(clinic):
 def test_turned_down_doctor_stays_out_after_later_changes(clinic):
     s = to_booking(clinic)
     step(s, "turn_down_doctors", {"doctor_id": "prov_027"})
-    step(s, "change_choice", {"what": "time", "days": ["Thursday", "Friday"]})
-    step(s, "change_choice", {"what": "location", "new_value": "Midtown"})
+    # round 2: new change_choice shape (spec note "change_choice has a new shape"); each must be accepted,
+    # or this test would pass without testing anything
+    assert step(s, "change_choice", {"days": ["Thursday", "Friday"]}).result["ok"] is True
+    assert step(s, "change_choice", {"place": "Midtown"}).result["ok"] is True
     # Midtown: of the new-patient dermatologists only Kenji Kim works there, and he's turned down.
     assert offered(s) and all(pid != "prov_027" for _, pid, _, _ in offered(s))
 
@@ -104,7 +106,8 @@ def test_turning_down_everyone_who_can_still_offers_them_with_a_note(clinic):
 def test_change_of_visit_type_starts_the_turned_down_list_again(clinic):
     s = to_booking(clinic, KNEE_MRI, JAMES)
     step(s, "turn_down_doctors", {"doctor_id": "prov_014"})
-    step(s, "change_choice", {"what": "visit_type", "new_value": "x-ray"})
+    # round 2: new change_choice shape (spec note "change_choice has a new shape")
+    assert step(s, "change_choice", {"visit_type": "x-ray"}).result["ok"] is True
     assert s.card.preferences.not_provider_ids == []
 
 
@@ -156,7 +159,8 @@ def s_text(s):
 def test_confirm_after_a_change_is_refused(clinic):
     s = to_booking(clinic)
     choose_first(s)
-    step(s, "change_choice", {"what": "time", "time_of_day": "afternoon"})
+    # round 2: new change_choice shape (spec note "change_choice has a new shape")
+    assert step(s, "change_choice", {"time_of_day": "afternoon"}).result["ok"] is True
     out = step(s, "confirm_booking", {})
     assert out.result["ok"] is False and saved_lines(clinic) == []
 
@@ -192,10 +196,12 @@ def test_hand_off_after_a_booking_keeps_the_booking(clinic):
     assert len(saved_lines(clinic)) == 1
 
 
+# round 2: new change_choice shape, so the refusal comes from the finished call and not from an
+# unknown "what" field (spec note "change_choice has a new shape"; "The order of a call", decision 55)
 @pytest.mark.parametrize("args", [
-    {"what": "time", "days": ["Thursday"]},
-    {"what": "visit_type", "new_value": "flu shot"},
-    {"what": "doctor", "new_value": "Dr. Kenji Kim"},
+    {"days": ["Thursday"]},
+    {"visit_type": "flu shot"},
+    {"doctor_name": "Dr. Kenji Kim"},
 ])
 @pytest.mark.parametrize("ending", ["booked", "handed_off"])
 def test_change_choice_after_the_call_ended_is_refused(clinic, args, ending):

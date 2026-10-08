@@ -35,12 +35,13 @@ def test_registry_destinations_match_the_interface(name):
 
 
 # ------------------------------------------------------------------ stage 1
+# round 2: change_choice sends the wish fields themselves, not what/new_value (spec note "change_choice has a new shape", decision 51)
 @pytest.mark.parametrize("args", [
-    {"what": "visit_type", "new_value": "skin check"},
-    {"what": "doctor", "new_value": "Dr. Kenji Kim"},
-    {"what": "location", "new_value": "Midtown"},
-    {"what": "time", "days": ["Thursday"]},
-    {"what": "language", "new_value": "Spanish"},
+    {"visit_type": "skin check"},
+    {"doctor_name": "Dr. Kenji Kim"},
+    {"place": "Midtown"},
+    {"days": ["Thursday"]},
+    {"language": "Spanish"},
 ])
 def test_change_choice_in_identify_records_without_moving(clinic, args):
     s = new_call(clinic)
@@ -52,7 +53,8 @@ def test_change_choice_in_identify_records_without_moving(clinic, args):
 
 def test_wish_recorded_in_identify_is_used_later(clinic):
     s = new_call(clinic)
-    step(s, "change_choice", {"what": "time", "days": ["Thursday"]})
+    # round 2: new change_choice shape, days sent on their own (spec note "change_choice has a new shape")
+    step(s, "change_choice", {"days": ["Thursday"]})
     step(s, "start_booking", dict(NEW))
     step(s, "choose_visit_type", {"visit_type_id": SKIN_CHECK})
     assert s.card.preferences.days == ["Thursday"]
@@ -90,12 +92,13 @@ def test_failed_identity_stays_in_identify(clinic):
 
 
 # ------------------------------------------------------------------ stage 2
+# round 2: new change_choice shape (spec note "change_choice has a new shape", decision 51)
 @pytest.mark.parametrize("args", [
-    {"what": "visit_type", "new_value": "flu shot"},
-    {"what": "doctor", "new_value": "Dr. Kenji Kim"},
-    {"what": "location", "new_value": "Downtown", "near": True},
-    {"what": "time", "time_of_day": "afternoon"},
-    {"what": "language", "new_value": "Spanish"},
+    {"visit_type": "flu shot"},
+    {"doctor_name": "Dr. Kenji Kim"},
+    {"place": "Downtown", "near": True},
+    {"time_of_day": "afternoon"},
+    {"language": "Spanish"},
 ])
 def test_change_choice_in_visit_type_records_without_moving(clinic, args):
     s = to_visit_type(clinic, NEW)
@@ -140,7 +143,8 @@ def test_change_visit_type_in_booking_goes_to_stage_2_and_clears_what_depended_o
     s = to_booking(clinic)
     old_numbers = [o[0] for o in offered(s)]
     _chosen(s)
-    out = step(s, "change_choice", {"what": "visit_type", "new_value": "knee MRI"})
+    # round 2: a different visit goes in the visit_type field (spec note "change_choice has a new shape")
+    out = step(s, "change_choice", {"visit_type": "knee MRI"})
     assert out.result["ok"] is True and out.next_stage == VISIT_TYPE and s.stage == VISIT_TYPE
     c = s.card.choices
     assert (c.specialty, c.visit_type_id, c.provider_id, c.location_id, c.slot) == ("", "", "", "", None)
@@ -151,12 +155,13 @@ def test_change_visit_type_in_booking_goes_to_stage_2_and_clears_what_depended_o
     assert s.card.status == "in_progress"
 
 
+# round 2: new change_choice shape, one wish field per case (spec note "change_choice has a new shape")
 @pytest.mark.parametrize("args,check", [
-    ({"what": "time", "days": ["Thursday"]}, lambda pid, lid, st: st.weekday() == THURSDAY),
-    ({"what": "time", "time_of_day": "afternoon"}, lambda pid, lid, st: st.hour >= 12),
-    ({"what": "doctor", "new_value": "Dr. Daniel Smith"}, lambda pid, lid, st: pid == "prov_035"),
-    ({"what": "location", "new_value": "Midtown"}, lambda pid, lid, st: lid == "loc_005"),
-    ({"what": "language", "new_value": "Spanish"},
+    ({"days": ["Thursday"]}, lambda pid, lid, st: st.weekday() == THURSDAY),
+    ({"time_of_day": "afternoon"}, lambda pid, lid, st: st.hour >= 12),
+    ({"doctor_name": "Dr. Daniel Smith"}, lambda pid, lid, st: pid == "prov_035"),
+    ({"place": "Midtown"}, lambda pid, lid, st: lid == "loc_005"),
+    ({"language": "Spanish"},
      lambda pid, lid, st: "Spanish" in PROV[pid]["languages"]),
 ])
 def test_change_in_booking_rebuilds_booking_with_fresh_options(clinic, args, check):
@@ -181,8 +186,9 @@ def test_change_time_keeps_the_doctor_and_place_as_wishes(clinic):
     # Decision 26: the old doctor and place become wishes, honoured if they still fit.
     s = to_booking(clinic)
     pid, lid, slot = _chosen(s)
-    step(s, "change_choice", {"what": "time", "days": [date(2026, 10, 7).isoformat(), date(2026, 10, 8).isoformat(),
-                                                       date(2026, 10, 9).isoformat(), "Monday", "Tuesday"]})
+    # round 2: new change_choice shape, days on their own (spec note "change_choice has a new shape")
+    step(s, "change_choice", {"days": [date(2026, 10, 7).isoformat(), date(2026, 10, 8).isoformat(),
+                                       date(2026, 10, 9).isoformat(), "Monday", "Tuesday"]})
     p = s.card.preferences
     assert p.preferred_provider_id == pid and p.preferred_location_id == lid
 

@@ -103,24 +103,31 @@ def test_start_booking_refuses_bad_identity_values(clinic, args):
 
 
 # ------------------------------------------------------------------ change_choice values
+# round 2: every case rewritten in the new change_choice shape (spec note "change_choice has a new
+# shape", decision 51). In the old shape all of these were refused just because "what" is now an
+# unknown field, so they no longer tested the value. Each keeps its old purpose:
+# - "time as a phrase" now puts the phrase in time_of_day (the old new_value for a time is gone);
+# - "time with nothing" becomes a call with no fields ("nothing sent" is refused);
+# - "near without a place" sends place "" (an empty value counts as not sent);
+# - "unknown kind" becomes an unknown field; "no kind" is unchanged (new_value is now an unknown field).
 BAD_CHANGES = [
-    ("someone else", {"what": "doctor", "new_value": "someone else"}),
-    ("not Dr. Kim", {"what": "doctor", "new_value": "not Dr. Kim"}),
-    ("time as new_value phrase", {"what": "time", "new_value": "Thursday morning"}),
-    ("day and time in one entry", {"what": "time", "days": ["Thursday morning"]}),
-    ("days as text", {"what": "time", "days": "Thursday"}),
-    ("evening", {"what": "time", "time_of_day": "evening"}),
-    ("time with nothing", {"what": "time"}),
-    ("date outside window", {"what": "time", "days": ["2027-01-01"]}),
-    ("place sentence", {"what": "location", "new_value": "anywhere but Downtown"}),
-    ("near as text", {"what": "location", "new_value": "Downtown", "near": "yes"}),
-    ("near with a time change", {"what": "time", "days": ["Friday"], "near": True}),
-    ("near without a place", {"what": "location", "new_value": "", "near": True}),
-    ("language sentence", {"what": "language", "new_value": "not Spanish"}),
-    ("two languages", {"what": "language", "new_value": "Spanish French"}),
-    ("unknown kind", {"what": "mood", "new_value": "happy"}),
+    ("someone else", {"doctor_name": "someone else"}),
+    ("not Dr. Kim", {"doctor_name": "not Dr. Kim"}),
+    ("time as a phrase", {"time_of_day": "Thursday morning"}),
+    ("day and time in one entry", {"days": ["Thursday morning"]}),
+    ("days as text", {"days": "Thursday"}),
+    ("evening", {"time_of_day": "evening"}),
+    ("time with nothing", {}),
+    ("date outside window", {"days": ["2027-01-01"]}),
+    ("place sentence", {"place": "anywhere but Downtown"}),
+    ("near as text", {"place": "Downtown", "near": "yes"}),
+    ("near with a time change", {"days": ["Friday"], "near": True}),
+    ("near without a place", {"place": "", "near": True}),
+    ("language sentence", {"language": "not Spanish"}),
+    ("two languages", {"language": "Spanish French"}),
+    ("unknown kind", {"mood": "happy"}),
     ("no kind", {"new_value": "Dr. Kim"}),
-    ("value not text", {"what": "doctor", "new_value": 42}),
+    ("value not text", {"doctor_name": 42}),
 ]
 
 
@@ -137,13 +144,14 @@ def test_change_choice_in_booking_refuses_and_keeps_the_options_on_offer(clinic,
 def test_change_choice_doctor_does_not_silently_drop_a_day_sent_with_it(clinic):
     # INTERFACE: "Send what, plus only the fields for that kind". A day sent with a doctor
     # change must be refused, or honoured; dropping it silently loses the caller's wish.
+    # round 2: new change_choice shape. Decision 51 settles the either/or: every field sent is
+    # applied, so both the doctor and the day must now be on the card (spec note "Several fields
+    # can go in one call").
     s = to_booking(clinic)
-    before = snapshot(s)
-    out = step(s, "change_choice", {"what": "doctor", "new_value": "Dr. Kenji Kim", "days": ["Thursday"]})
-    if out.result.get("ok") is False:
-        assert snapshot(s) == before
-    else:
-        assert s.card.preferences.days == ["Thursday"], "the day wish was silently dropped"
+    out = step(s, "change_choice", {"doctor_name": "Dr. Kenji Kim", "days": ["Thursday"]})
+    assert out.result.get("ok") is True, out.result
+    assert s.card.preferences.days == ["Thursday"], "the day wish was silently dropped"
+    assert s.card.preferences.doctor_name_heard == "Dr. Kenji Kim"
 
 
 def test_unknown_field_is_not_silently_dropped(clinic):
@@ -202,7 +210,8 @@ def test_choose_option_refuses_numbers_not_on_offer(clinic, oid):
 def test_choose_option_refuses_a_stale_number_after_fresh_options(clinic):
     s = to_booking(clinic)
     stale = [o[0] for o in offered(s)]
-    step(s, "change_choice", {"what": "time", "days": ["Friday"]})
+    # round 2: new change_choice shape (spec note "change_choice has a new shape")
+    assert step(s, "change_choice", {"days": ["Friday"]}).result["ok"] is True
     for n in stale:
         refused_without_change(s, "choose_option", {"option_id": n})
 

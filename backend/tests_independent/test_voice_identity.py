@@ -8,12 +8,13 @@ as new, call again with returning false."
 """
 
 import copy
+import json
 
 import pytest
 
 from clinic import PatientDirectory
-from voice_reference import (END, IDENTIFY, JAMES, NEW, PATIENT, PATIENTS, VISIT_TYPE, make_clinic, new_call,
-                             snapshot, step)
+from voice_reference import (AGENT_FILE, END, IDENTIFY, JAMES, NEW, PATIENT, PATIENTS, VISIT_TYPE, make_clinic,
+                             new_call, snapshot, step)
 
 DOB = PATIENT["James Wilson"]["date_of_birth"]
 WRONG_DOB = "1984-03-13"
@@ -39,7 +40,14 @@ def test_found_returning_patient_moves_on_with_their_record(clinic):
     c = s.card.caller
     assert (c.name, c.patient_id, c.is_new_patient) == ("James Wilson", "pat_001", False)
     assert sorted(c.referrals_on_file) == sorted(PATIENT["James Wilson"]["referrals_on_file"])
-    assert "James" in out.result.get("say", ""), "decision 36: thank them by first name"
+    # round 2: the success reply is {"ok": true} with no "say"; the thank-you by first name moved to
+    # stage 2's instructions (spec note "start_booking": "Stage 2's instructions tell the AI to thank
+    # the caller by first name"). So check the reply, and that stage 2 has both the instruction and the name.
+    assert out.result == {"ok": True}, out.result
+    stage_2 = next(n for n in json.loads(AGENT_FILE.read_text(encoding="utf-8"))["nodes"] if n["name"] == VISIT_TYPE)
+    told = "\n".join(m["content"] for m in stage_2["task_messages"])
+    assert "first name" in told and "thank" in told.lower(), "decision 36: thank them by first name"
+    assert "James Wilson" in s.fill(told), "the name to thank them by is in what the AI is shown"
 
 
 @pytest.mark.parametrize("dob", [None, "", "12/03/1984", "March 12 1984"])

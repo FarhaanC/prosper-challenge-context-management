@@ -79,7 +79,9 @@ def test_clinic_agent_loads_with_safe_settings(builder):
     c = builder.config
     assert c.history == "reset"
     assert c.parallel_tool_calls is False, "plan: parallel tool calls are turned off"
-    assert set(c.global_tools) == {"answer_question", "change_choice", "hand_off"}, "decision 46"
+    # round 2: turn_down_doctors is now always available too (spec note "turn_down_doctors is available in every stage", decision 53)
+    assert set(c.global_tools) == {"answer_question", "change_choice", "turn_down_doctors", "hand_off"}, \
+        "decisions 46, 53"
 
 
 def test_global_functions_are_exactly_what_the_interface_shows(builder):
@@ -113,8 +115,10 @@ def test_every_stage_function_is_what_the_interface_shows(builder, clinic):
     seen.update({f.name: f for f in c.node["functions"]})
     c("choose_visit_type", {"visit_type_id": SKIN_CHECK})
     seen.update({f.name: f for f in c.node["functions"]})
+    # round 2: turn_down_doctors left the booking stage's own list for the global tools
+    # (spec note "Smaller changes": the booking stage's own tools are choose_option and confirm_booking)
     assert set(seen) == {"start_booking", "list_visit_types", "choose_visit_type", "choose_option",
-                         "confirm_booking", "turn_down_doctors"}
+                         "confirm_booking"}
     for name, f in seen.items():
         desc, required, _, props = iface[name]
         assert (f.description, sorted(f.required), f.properties) == (desc, sorted(required), props), name
@@ -142,7 +146,8 @@ def test_failed_start_booking_handler_stays(builder, clinic):
 
 def test_change_choice_handler_in_identify_stays(builder, clinic):
     c = Call(builder, clinic)
-    result, nxt = c("change_choice", {"what": "time", "days": ["Thursday"]})
+    # round 2: new change_choice shape (spec note "change_choice has a new shape")
+    result, nxt = c("change_choice", {"days": ["Thursday"]})
     assert result["ok"] is True and nxt is None and c.session.stage == IDENTIFY
 
 
@@ -171,7 +176,8 @@ def test_change_in_booking_rebuilds_booking_with_fresh_options_and_reset(builder
     c("start_booking", dict(NEW))
     c("choose_visit_type", {"visit_type_id": SKIN_CHECK})
     old = set(option_lines(c.text()))
-    result, nxt = c("change_choice", {"what": "time", "days": ["Friday"]})
+    # round 2: new change_choice shape (spec note "change_choice has a new shape")
+    result, nxt = c("change_choice", {"days": ["Friday"]})
     assert result["ok"] is True and nxt is not None and nxt["name"] == BOOKING
     new = option_lines(c.text())
     assert new and not (set(new) & old)
