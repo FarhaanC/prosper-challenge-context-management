@@ -1,3 +1,7 @@
+# ---- Local runtime data (fake bookings, call logs) ----
+backend/bookings.jsonl
+backend/call_logs/
+
 # ---- Secrets / env ----
 .env
 .env.*

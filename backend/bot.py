@@ -6,7 +6,11 @@
 # definition (JSON) via AgentBuilder and runs it. Swapping the agent is a data
 # change (edit/replace the JSON), not a code change.
 #
-#   example_flow.json  ->  AgentBuilder  ->  Pipecat Flows graph  ->  FlowManager
+#   clinic_agent.json  ->  AgentBuilder  ->  Pipecat Flows graph  ->  FlowManager
+#
+# Each call gets its own CallSession (booking card, options on offer, call log in
+# call_logs/). The clinic data, and the schedule with every saved booking
+# (bookings.jsonl), are loaded once and shared by every call.
 #
 # Run:  python bot.py   then open http://localhost:7860/client
 #
@@ -35,14 +39,18 @@ from pipecat.workers.runner import WorkerRunner
 from pipecat_flows import FlowManager
 
 from agent_builder import AgentBuilder
+from call import Clinic
 
 # Load .env next to this file, so the bot runs the same from the repo root or backend/.
 load_dotenv(Path(__file__).parent / ".env", override=True)
 
 
 # The agent this bot runs. Point this at any agent JSON (the Phase 2 Copilot
-# would generate one and drop it here).
-AGENT_FLOW = Path(__file__).parent / "example_flow.json"
+# would generate one and drop it here). example_flow.json is the starter agent.
+AGENT_FLOW = Path(__file__).parent / "clinic_agent.json"
+
+# Loaded once: catalog, fake patients, and the schedule with every saved booking.
+CLINIC = Clinic.load()
 
 
 transport_params = {
@@ -61,7 +69,12 @@ async def run_bot(
         api_key=os.environ["ELEVENLABS_API_KEY"],
         settings=ElevenLabsTTSService.Settings(voice=config.voice_id),
     )
-    llm = OpenAILLMService(api_key=os.environ["OPENAI_API_KEY"], model=config.model)
+    # parallel_tool_calls off: one tool call per reply, so two calls can't both move the call.
+    extra = {} if config.parallel_tool_calls else {"parallel_tool_calls": False}
+    llm = OpenAILLMService(
+        api_key=os.environ["OPENAI_API_KEY"],
+        settings=OpenAILLMService.Settings(model=config.model, extra=extra),
+    )
 
     context = LLMContext()
     context_aggregator = LLMContextAggregatorPair(
@@ -92,12 +105,15 @@ async def run_bot(
         context_aggregator=context_aggregator,
         worker=worker,
         transport=transport,
+        global_functions=builder.global_functions(),
     )
 
     @transport.event_handler("on_client_connected")
     async def on_client_connected(transport, client):
-        logger.info("Client connected — starting flow at initial node")
-        await flow_manager.initialize(builder.build_initial_node())
+        session = CLINIC.new_call()
+        flow_manager.state["session"] = session
+        logger.info(f"Client connected — starting flow at initial node (call log: {session.log_path})")
+        await flow_manager.initialize(builder.build_initial_node(session))
 
     @transport.event_handler("on_client_disconnected")
     async def on_client_disconnected(transport, client):

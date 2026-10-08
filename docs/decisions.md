@@ -4,7 +4,8 @@ Every decision that shaped the work, with the reason. Numbers never change once 
 
 - **1–21:** made while planning (1–5 Oct), before any code.
 - **22–30:** made while building the rules module (5–6 Oct).
-- **31 onward:** made during the independent review rounds of the rules module (6–7 Oct). These were Farhaan's calls where behaviour changed, or a fresh verifier's ruling where the builder disagreed with a test.
+- **31–42:** made during the independent review rounds of the rules module (6–7 Oct). These were Farhaan's calls where behaviour changed, or a fresh verifier's ruling where the builder disagreed with a test.
+- **43 onward:** made while wiring the stages and tools into the voice agent (8 Oct).
 
 The reviews behind 31 onward are in [`reviews/2026-10-06-rules-module/`](reviews/2026-10-06-rules-module/). The quality process is in [`process.md`](process.md).
 
@@ -66,6 +67,18 @@ The reviews behind 31 onward are in [`reviews/2026-10-06-rules-module/`](reviews
 | 40 | **The rule for what comes in from the AI**, stated in `clinic/__init__.py`. Names (doctors, places, languages) are matched forgivingly against our own records, because the AI doesn't know them. Two fixed word lists are read: "no preference" words (treated as empty) and words no name has, like "not" (refused). Everything else is a plain instruction, and anything else is refused, never guessed. | Builder, from 37–39; worded after round 7 | One sentence that can be defended, and checked by reading the code. |
 | 41 | **A word like "clinic" or "center" in a place name counts only if it's part of that place's own name.** "Sunset Clinic" works; "Chinatown clinic" is not quietly read as "near Chinatown". | Fresh verifier, round 7 (the builder disagreed and lost) | A rule built from all eight names only fit this catalog, and it read phrases. |
 | 42 | **Two-word language values are refused unless they're one language name** (or a listed other name like "Mandarin Chinese"). A language we have no record of gets a note listing the languages we do have. | Builder, rounds 5–6 | "Spanish French" or "Chinese" must never be guessed, and every note must be true. |
+
+## Wiring the stages and tools into the voice agent (8 Oct)
+
+| # | Decision | Who | Why |
+| --- | --- | --- | --- |
+| 43 | **Every change of wish goes through one tool, `change_choice`.** There's no separate `find_options` tool. In the booking stage, every change rebuilds the stage with fresh options. (Replaces the `find_options` tool in the plan.) | Farhaan | Two tools that look alike ("find something else" and "change something") invite the AI to pick the wrong one. One way in means one behaviour to test. |
+| 44 | **This step gets the full independent check:** a separate fresh tester and a fresh reviewer, in parallel (as in round 1 of the rules module). | Farhaan | The tool layer is new code that the AI talks to directly; it deserves the same scrutiny as the rules. |
+| 45 | **A simple call log now; token counts and the live panel with the editor.** Each call writes one file (`backend/call_logs/`, not committed): one line for every stage move (with the instructions the AI was given) and every tool call (what was sent, what came back, the booking card). | Farhaan | It lets us check a real voice call line by line today, and it's what the editor's inspector panel will read. |
+| 46 | **"Can I speak to a person?" works in every stage** (`hand_off` is always available). | Farhaan | A caller who asks for a person mid-booking should get one, not be pushed on. |
+| 47 | **Wishes said early travel with the stage's main tool.** `start_booking` and `choose_visit_type` take the same wish fields (doctor, place + near, days, morning/afternoon, as soon as possible, language), so one tool call carries everything said so far. In stages 1 and 2, `change_choice` records the change without moving stage: it can't skip the identity check, or wipe stage 2 while the caller is choosing. | Builder | Each extra tool call costs about 1 s of silence. Moving stage on a change only makes sense once there are options to rebuild. |
+| 48 | **Bookings are saved one per line in `backend/bookings.jsonl`** (not committed) and reloaded when the agent starts, so a saved time is never offered again. A damaged line stops start-up with a message naming the line, rather than being skipped. One call at a time is assumed (it's a demo). | Builder | Plain text that can be read by eye, and appending a line can't damage earlier bookings. |
+| 49 | **The tools are plain Python in `backend/call/`; Pipecat stays in `agent_builder/`.** The tool list (the "tool registry") holds each tool's description, fields and the stages it can move to. The builder checks, when the agent file loads, that every tool exists, every stage a tool can move to exists, and every `{placeholder}` in the instructions is one the code knows. | Builder | Decision 22: the voice agent and the typed tests must run the same stage and tool code. Load-time checks turn a typo in the agent file into an error at start-up, not a broken call. |
 
 ## How the work is checked (process decisions, 5–6 Oct)
 
