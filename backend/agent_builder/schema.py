@@ -14,6 +14,7 @@
 #     every move; the new node's instructions carry what matters);
 #   - `parallel_tool_calls`: false lets the AI call one tool at a time, so two
 #     calls in one reply can't both try to move the call.
+# Keys the format doesn't know are refused at load (shape_problems).
 #
 
 from dataclasses import dataclass, field
@@ -21,6 +22,57 @@ from typing import Optional
 
 DEFAULT_VOICE_ID = "21m00Tcm4TlvDq8ikWAM"  # ElevenLabs "Rachel"
 DEFAULT_MODEL = "gpt-4o"
+
+
+# The keys each level of an agent file may have. Anything else is refused at load, so a
+# misspelt key ("tool" for "tools") is an error at start-up, not a stage that can't act.
+AGENT_KEYS = {"name", "initial_node", "nodes", "persona", "voice_id", "model", "global_tools", "history",
+              "parallel_tool_calls"}
+NODE_KEYS = {"name", "task_messages", "role_message", "edges", "tools", "pre_actions", "post_actions", "end"}
+EDGE_KEYS = {"function", "description", "target", "properties", "required"}
+
+
+def shape_problems(d) -> list:
+    """Unknown keys and values of the wrong kind, found before anything is built.
+    (What the values mean, such as tool names and placeholders, is checked by AgentBuilder.)"""
+    if not isinstance(d, dict):
+        return ["The agent file must be a JSON object."]
+    problems = [f"Unknown key '{k}' in the agent file." for k in sorted(set(d) - AGENT_KEYS)]
+    for key in ("name", "initial_node"):
+        if not isinstance(d.get(key), str):
+            problems.append(f"'{key}' must be text.")
+    for key in ("persona", "voice_id", "model", "history"):
+        if key in d and not isinstance(d[key], str):
+            problems.append(f"'{key}' must be text.")
+    nodes = d.get("nodes")
+    if not isinstance(nodes, list):
+        return problems + ["'nodes' must be a list."]
+    for i, n in enumerate(nodes):
+        if not isinstance(n, dict):
+            problems.append(f"Node #{i} must be an object.")
+            continue
+        where = f"Node '{n.get('name', f'#{i}')}'"
+        problems += [f"{where}: unknown key '{k}'." for k in sorted(set(n) - NODE_KEYS)]
+        if not isinstance(n.get("name"), str):
+            problems.append(f"{where}: 'name' must be text.")
+        if n.get("role_message") is not None and not isinstance(n["role_message"], str):
+            problems.append(f"{where}: 'role_message' must be text.")
+        messages = n.get("task_messages", [])
+        if not (isinstance(messages, list) and all(isinstance(m, dict) and isinstance(m.get("content"), str)
+                                                   for m in messages)):
+            problems.append(f"{where}: 'task_messages' must be a list of messages, each with text 'content'.")
+        for key in ("edges", "pre_actions", "post_actions"):
+            if not isinstance(n.get(key, []), list):
+                problems.append(f"{where}: '{key}' must be a list.")
+        for j, e in enumerate(n.get("edges", []) if isinstance(n.get("edges", []), list) else []):
+            if not isinstance(e, dict):
+                problems.append(f"{where}: edge #{j} must be an object.")
+                continue
+            problems += [f"{where}, edge #{j}: unknown key '{k}'." for k in sorted(set(e) - EDGE_KEYS)]
+            missing = [k for k in ("function", "description", "target") if not isinstance(e.get(k), str)]
+            if missing:
+                problems.append(f"{where}, edge #{j}: {', '.join(missing)} must be text.")
+    return problems
 
 
 @dataclass
@@ -88,6 +140,9 @@ class AgentConfig:
 
     @classmethod
     def from_dict(cls, d: dict) -> "AgentConfig":
+        problems = shape_problems(d)
+        if problems:
+            raise ValueError("The agent file has problems:\n- " + "\n- ".join(problems))
         return cls(
             name=d["name"],
             initial_node=d["initial_node"],

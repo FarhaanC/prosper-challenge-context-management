@@ -219,11 +219,16 @@ def test_wishes_travel_with_start_booking(clinic):
     assert (p.days, p.time_of_day, p.language, p.soonest) == (["Thursday", "friday"], "morning", "Spanish", True)
 
 
-@pytest.mark.parametrize("option_id, ok", [(None, True), ("Option 1", False), ("first", False)])
-def test_option_number_is_a_number_only(clinic, option_id, ok):
+@pytest.mark.parametrize("send, ok", [
+    (lambda first: int(first), True),        # the number as a number
+    (lambda first: first, True),             # the number as text
+    (lambda first: f"Option {first}", False),
+    (lambda first: "first", False),
+])
+def test_option_number_is_a_number_only(clinic, send, ok):
     s = new_caller_at_booking(clinic)
-    sent = int(s.card.offered_options[0].option_id) if option_id is None else option_id
-    assert step(s, "choose_option", option_id=sent).result["ok"] is ok
+    first = s.card.offered_options[0].option_id
+    assert step(s, "choose_option", option_id=send(first)).result["ok"] is ok
 
 
 def test_answer_question_checks_its_values_and_says_ok(clinic):
@@ -231,6 +236,8 @@ def test_answer_question_checks_its_values_and_says_ok(clinic):
     out = step(s, "answer_question", about="doctor", name="Maria Garcia")
     assert out.next_stage is None and out.result["ok"] is True and len(out.result["results"]) == 2
     assert step(s, "answer_question", about="doctor", name=["Dr. Chen"]).result["ok"] is False
+    missing = step(s, "answer_question", about="doctor", name="Dr. Nobody").result
+    assert missing == {"ok": False, "error": "No doctor matches 'Dr. Nobody'."}  # refusals use "error" (S10)
 
 
 # ---------------------------------------------------------------- order of the call
@@ -597,8 +604,11 @@ def test_the_pipecat_wrapper_moves_with_filled_instructions(clinic):
 
 
 def test_the_real_openai_request_sends_one_tool_at_a_time_in_every_stage(clinic):
-    """K11 / R14: build the request the OpenAI service would send (no network), for every
-    stage, with the service set up as bot.py sets it up."""
+    """K11 / R14: build the request the OpenAI service would send (no network) for each
+    stage's tools, with the service set up as bot.py sets it up, and check the
+    one-tool-at-a-time setting reaches it. (That every stage HAS tools is Pipecat Flows
+    adding the global tools to every node, manager.py; the load check covers an agent
+    with no global tools.)"""
     from pipecat.adapters.schemas.tools_schema import ToolsSchema
     from pipecat.processors.aggregators.llm_context import LLMContext
     from pipecat.services.openai.llm import OpenAILLMService
@@ -607,7 +617,6 @@ def test_the_real_openai_request_sends_one_tool_at_a_time_in_every_stage(clinic)
     llm = OpenAILLMService(api_key="sk-test", settings=OpenAILLMService.Settings(
         model=b.config.model, extra={} if b.config.parallel_tool_calls else {"parallel_tool_calls": False}))
     s = clinic.new_call(clock=lambda: NOW)
-    s.offer = None
     for name in ("identify", "visit_type", "booking", "end"):
         if name == "booking":
             s = new_caller_at_booking(clinic)
@@ -624,3 +633,134 @@ def test_the_real_openai_request_sends_one_tool_at_a_time_in_every_stage(clinic)
 def test_the_starter_agent_still_loads():
     b = AgentBuilder.from_json("example_flow.json")
     assert b.build_initial_node()["name"] == "greeting"
+
+
+# ---------------------------------------------------------------- round 2
+def test_turning_a_doctor_down_early_keeps_the_doctor_asked_for(clinic):
+    """S1: "Dr. Smith, please, but not Dr. Kim", before any options exist."""
+    s = new_caller_at_visit_type(clinic, doctor_name="Dr. Daniel Smith")
+    out = step(s, "turn_down_doctors", doctor_name="Dr. Kenji Kim")
+    assert out.result["ok"] is True and out.next_stage is None
+    p = s.card.preferences
+    assert (p.doctor_name_heard, p.not_provider_ids, p.latest) == ("Dr. Daniel Smith", [KENJI_KIM_DERM], "")
+    step(s, "choose_visit_type", visit_type_id=SKIN_CANCER_SCREENING)
+    assert {o.provider_id for o in s.card.offered_options} == {DANIEL_SMITH_DERM}
+
+
+def test_turning_down_the_doctor_asked_for_drops_that_wish(clinic):
+    s = new_caller_at_visit_type(clinic, doctor_name="Dr. Kenji Kim")
+    step(s, "turn_down_doctors", doctor_name="Dr. Kenji Kim")
+    assert s.card.preferences.doctor_name_heard == ""
+    step(s, "choose_visit_type", visit_type_id=SKIN_CANCER_SCREENING)
+    assert KENJI_KIM_DERM not in {o.provider_id for o in s.card.offered_options}
+
+
+@pytest.mark.parametrize("where", ["identify", "visit_type"])
+def test_early_turn_downs_survive_a_visit_change(clinic, where):
+    """S2: the list only starts again when an agreed visit is replaced."""
+    s = session_in(clinic) if where == "identify" else new_caller_at_visit_type(clinic)
+    step(s, "turn_down_doctors", doctor_name="Dr. Kenji Kim")
+    step(s, "change_choice", visit_type="skin cancer check")
+    assert s.card.preferences.not_provider_ids == [KENJI_KIM_DERM]
+    if where == "identify":
+        step(s, "start_booking", full_name="Farhan Jida", returning=False)
+    step(s, "choose_visit_type", visit_type_id=SKIN_CANCER_SCREENING)
+    assert KENJI_KIM_DERM not in {o.provider_id for o in s.card.offered_options}
+
+
+def test_replacing_an_agreed_visit_starts_the_turned_down_list_again(clinic):
+    s = new_caller_at_booking(clinic)
+    step(s, "turn_down_doctors", on_offer=True)
+    step(s, "change_choice", visit_type="knee MRI")
+    assert s.card.preferences.not_provider_ids == []
+
+
+def test_soonest_on_its_own_keeps_the_newer_place_choice(clinic):
+    """S3: "whatever's soonest" isn't a new day or time wish."""
+    s = new_caller_at_booking(clinic, NEW_PATIENT_CONSULTATION, days=["Friday"])
+    step(s, "change_choice", place="Midtown")
+    step(s, "change_choice", soonest=True)
+    p = s.card.preferences
+    assert (p.latest, p.soonest, p.days) == ("location", True, ["Friday"])
+    assert all(o.location_id == MIDTOWN for o in s.card.offered_options)
+
+
+def test_soonest_sent_with_a_time_change_is_kept(clinic):
+    s = new_caller_at_booking(clinic)
+    step(s, "change_choice", days=["Friday"], soonest=True)
+    assert (s.card.preferences.soonest, s.card.preferences.latest) == (True, "time")
+
+
+def test_choose_visit_type_refuses_once_a_visit_is_agreed(clinic):
+    """S4: what's saved must be what was read back."""
+    s = new_caller_at_booking(clinic)
+    step(s, "choose_option", option_id=s.card.offered_options[0].option_id)
+    out = step(s, "choose_visit_type", visit_type_id="appt_028")
+    assert out.result["ok"] is False and "change_choice" in out.result["error"]
+    assert s.card.choices.visit_type_id == SKIN_CANCER_SCREENING
+
+
+def test_a_specialty_sent_with_a_failed_identity_try_is_kept(clinic):
+    """S6: a later successful try without the specialty doesn't lose it."""
+    s = session_in(clinic)
+    name, dob = JAMES_WILSON
+    step(s, "start_booking", full_name=name, returning=True, date_of_birth="1990-01-01", specialty="Radiology")
+    step(s, "start_booking", full_name=name, returning=True, date_of_birth=dob)
+    assert s.fill("{visit_types}").startswith("Radiology visit types")
+
+
+def test_a_specialty_sent_in_stage_two_comes_back_with_its_visit_types(clinic):
+    s = new_caller_at_visit_type(clinic)
+    out = step(s, "change_choice", visit_type="skin check", specialty="Dermatology")
+    assert out.next_stage is None
+    assert SKIN_CANCER_SCREENING in {t["id"] for t in out.result["visit_types"]}
+
+
+def test_visit_type_any_is_refused(clinic):
+    """S8."""
+    s = new_caller_at_booking(clinic)
+    out = step(s, "change_choice", visit_type="any")
+    assert out.result["ok"] is False and s.card.choices.visit_type_id == SKIN_CANCER_SCREENING
+
+
+def test_each_stage_is_told_what_just_happened(clinic):
+    """S13: stage 2 can tell a fresh start from a change of visit."""
+    s = new_caller_at_visit_type(clinic)
+    assert "just been identified as Farhan Jida (a new patient): thank them, by first name (Farhan)" in \
+        s.fill("{just_happened}")
+    step(s, "choose_visit_type", visit_type_id=SKIN_CANCER_SCREENING)
+    assert s.fill("{just_happened}") == "The caller has just chosen Skin Cancer Screening."
+    step(s, "change_choice", days=["Friday"], place="Midtown")
+    assert s.fill("{just_happened}") == "The caller just changed: time, place. These options are fresh."
+    step(s, "change_choice", visit_type="knee MRI")
+    assert s.fill("{just_happened}") == "The caller asked for a different kind of visit."
+    assert "thank" not in s.fill("{just_happened}")
+
+
+def test_the_hand_off_goodbye_is_worded_as_done(clinic):
+    """S5: nothing in the end stage reads like a request for the hand_off tool."""
+    s = session_in(clinic)
+    step(s, "hand_off", reason="reschedule")
+    outcome = s.fill("{outcome}")
+    assert outcome.startswith("This call has already been passed to staff (the caller wanted to reschedule an "
+                              "appointment). A member of staff will call the caller back about this.")
+    assert "ends the call" not in TOOLS["hand_off"].description
+
+
+@pytest.mark.parametrize("break_it, message", [
+    (lambda d: d["nodes"][2].update(tool=d["nodes"][2].pop("tools")), "Node 'booking': unknown key 'tool'"),
+    (lambda d: d.update(global_tool=d.pop("global_tools")), "Unknown key 'global_tool'"),
+    (lambda d: d["nodes"][0].update(role_messages=[{"role": "system", "content": "x"}]), "unknown key 'role_messages'"),
+    (lambda d: d.update(history=["reset"]), "'history' must be text"),
+    (lambda d: d.update(persona=5), "'persona' must be text"),
+    (lambda d: d["nodes"][0].update(role_message=["x"]), "'role_message' must be text"),
+    (lambda d: d["nodes"][0].update(task_messages=["hello"]), "'task_messages' must be a list of messages"),
+    (lambda d: d["nodes"][0]["task_messages"][0].update(content="{{today}}"), "doubled braces"),
+])
+def test_agent_file_shape_problems_are_found_at_load(break_it, message):
+    """S7, S9: a misspelt key or a wrong kind of value is a clear error at start-up."""
+    d = agent_dict()
+    break_it(d)
+    with pytest.raises(ValueError, match=message):
+        AgentBuilder.from_dict(d)
+

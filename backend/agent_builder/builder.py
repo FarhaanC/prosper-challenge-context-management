@@ -169,6 +169,8 @@ def _tool_list_problems(tools, where: str) -> list:
 
 def _placeholder_problems(text: str, where: str, allowed: bool = True) -> list:
     """Anything in braces must be a known placeholder, and only task messages are filled."""
+    if "{{" in (text or "") or "}}" in (text or ""):
+        return [f"{where} contains doubled braces; braces are only for placeholders like {{today}}."]
     found = PLACEHOLDER.findall(text or "")
     if found and not allowed:
         return [f"{where} contains {{{found[0]}}}; placeholders only work in task messages."]

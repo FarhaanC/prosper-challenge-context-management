@@ -84,3 +84,34 @@ Done per process step 7, after the fixes, with the tester's tests unchanged.
 While proving this, the adapter run found **one more real gap** (fixed): `near: true` sent with the place "any" was accepted. Now it's refused like near with no place.
 
 **Next:** these 33 tests, and the interface sheet, go to a fresh tester with a written spec-change note (`round-2-spec-changes.md`), as in the rules-module rounds. The builder doesn't edit them.
+
+---
+
+# Round 2 (build `25c3f91`)
+
+One fresh agent, as in rounds 4–7 of the rules module. First, as tester, it brought the round-1 tests up to the new spec without reading the code: 24 edited, 336 added, and all 3,480 independent tests pass (`round-2-tests.md`). Then, as reviewer, it confirmed every round-1 fix and found 13 new issues, none high (`round-2-review.md`). All 13 are fixed.
+
+| # | Finding (short) | Decision | What happens |
+| --- | --- | --- | --- |
+| S1 | Turning one doctor down before options exist wipes the doctor the caller asked for | **Fix** (decision 57) | Before options are on offer, turning a doctor down only adds to the "not these doctors" list. A doctor wish stays unless it names only turned-down doctors, and the caller's latest change stays. |
+| S2 | A visit change in stages 1–2 wipes an early "not Dr. Kim" | **Fix** (decision 57) | The list starts again only when an *agreed* visit is replaced. |
+| S3 | "Whatever's soonest" on its own overturns a newer place choice | **Fix** (decision 57) | Soonest on its own doesn't count as a new day or time wish; the latest change stays. |
+| S4 | choose_visit_type after an option is chosen keeps the old doctor and time, so the saved visit isn't the one read back | **Fix** | choose_visit_type refuses once a visit is agreed ("use change_choice with visit_type"). |
+| S5 | After a hand-off, the end stage's text reads like a request for the hand_off tool | **Fix (wording, within decision 50)** | The goodbye says the call "has already been passed to staff (the caller wanted to …)". hand_off's description no longer says it "ends the call with a goodbye". The residual risk accepted in decision 50 remains. |
+| S6 | A specialty sent early is dropped; one sent in stage 2 does nothing visible | **Fix** | Kept from a failed identity try and not reset by a later try without one. In stage 2, change_choice with a specialty replies with that specialty's visit types. |
+| S7 | Misspelt keys load silently; wrong types crash with raw Python errors | **Fix** | Unknown keys (top level, stage, edge) and wrong types are refused at load, listed together, each naming the key. |
+| S8 | `visit_type: "any"` stored as the visit | **Fix** | Refused. |
+| S9 | `{{today}}` loads and reaches the AI half-filled | **Fix** | Doubled braces are refused at load. |
+| S10 | answer_question's own reply shape; the docstring's ok-false rule | **Fix** | A refusal or "not found" is `{"ok": false, "error": …}` like every tool's; found answers keep `found`. The docstring and persona now say: ok false means it wasn't done; an "error" is for the AI only; tell the caller what they need to know in your own words. |
+| S11 | Card kinds as plain strings; stale comment; duplicated message | **Fix** | tools.py uses the card's own constants; list_visit_types reuses the specialty check; card.py's comment corrected. |
+| S12 | Builder-test gaps; a test true by construction; a dead line | **Fix** | 21 new builder tests (one or more per finding). The OpenAI-request test now says what it proves (the setting reaches every stage's request) and what Pipecat guarantees. Dead line removed; the unclear parameter replaced. |
+| S13 | Stage 2 can't tell a fresh start from a change of visit; still silent while choosing | **Farhaan decides → fix** (decision 56) | Each stage gets one code-written line, "What just happened" (`{just_happened}`). Stage 2 thanks the caller by first name only when that line says so, and the AI says one short sentence before calling a tool. |
+
+**Proving the remaining failures:** none remain. After these fixes, 7 independent tests failed at first:
+- 4 pinned the goodbye sentence word for word. It was kept, inside the reworded goodbye.
+- 1 expected answer_question's `found` field, which the spec note never said would go. It was restored.
+- 1 checked that stage 2 still mentions thanking by first name. It does, now tied to "What just happened".
+- 1 compared the tools against the interface sheet, which was regenerated for this build.
+
+No independent test was edited. All 3,855 tests pass (375 builder, 3,480 independent).
+

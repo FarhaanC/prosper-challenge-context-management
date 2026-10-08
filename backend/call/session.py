@@ -35,6 +35,7 @@ CALL_LOG_DIR = BACKEND_DIR / "call_logs"         # not committed (.gitignore)
 # The placeholders stage instructions may contain, and what each is filled with.
 PLACEHOLDERS = {
     "today": "today's date and the time at the clinics",
+    "just_happened": "one sentence from the code saying why this stage started (e.g. the caller changed the visit)",
     "booking_card": "the booking card: who is calling, what they asked for, what's agreed",
     "specialties": "the names of all our specialties",
     "visit_types": "the visit types of the specialty already picked (if any), each marked bookable or not",
@@ -134,6 +135,7 @@ class CallSession:
         self.offer: Optional[OptionsResult] = None  # the latest search, shown in {options}
         self.outcome = ""               # what the end stage says; set by confirm_booking or hand_off
         self.listed_specialty: Optional[str] = None  # specialty whose visit types show in {visit_types}
+        self.just_happened = "The call has just started."  # set by the tool that moves the call
         self.log_path = log_path
 
     @property
@@ -180,6 +182,9 @@ class CallSession:
         now = self.now()
         clock = spoken_time(now).rsplit(" at ", 1)[1]  # "9 AM", said the same way as every time we offer
         return f"{now:%A} {now.day} {now:%B %Y} at {clock} (clinic time, San Francisco)"
+
+    def _fill_just_happened(self) -> str:
+        return self.just_happened
 
     def _fill_booking_card(self) -> str:
         return self.card.summary(self.catalog)

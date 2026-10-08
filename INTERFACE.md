@@ -1,4 +1,4 @@
-# Interface sheet for the independent tester (voice stages, build 25c3f91)
+# Interface sheet for the independent tester (voice stages, round-2 fixes)
 
 How to call the code. This sheet lists names, fields and shapes only; work out expected answers from the plan, the decisions and the raw data, not from the code.
 
@@ -31,9 +31,10 @@ b.global_functions()
 # flow_manager only needs a .state dict holding {'session': session}
 ```
 
-Agent file fields beyond the starter format: per node `tools` (names), per agent `global_tools`, `history` ('keep'|'reset'), `parallel_tool_calls` (bool). Placeholders allowed in task messages (and only there):
+Agent file fields beyond the starter format: per node `tools` (names), per agent `global_tools`, `history` ('keep'|'reset'), `parallel_tool_calls` (bool). Placeholders allowed in task messages (and only there; doubled braces are refused):
 
 - `{today}`: today's date and the time at the clinics
+- `{just_happened}`: one sentence from the code saying why this stage started (e.g. the caller changed the visit)
 - `{booking_card}`: the booking card: who is calling, what they asked for, what's agreed
 - `{specialties}`: the names of all our specialties
 - `{visit_types}`: the visit types of the specialty already picked (if any), each marked bookable or not
@@ -311,7 +312,7 @@ Required: ['about', 'name']. Can move to: stays.
 
 ### hand_off
 
-For things a member of staff handles: rescheduling or cancelling an appointment, or when the caller asks for a person. Staff will call them back; this ends the call with a goodbye.
+For things a member of staff handles: rescheduling or cancelling an appointment, or when the caller asks for a person. A member of staff will call them back. Afterwards your instructions say what to tell the caller.
 
 Required: ['reason']. Can move to: ['end'].
 

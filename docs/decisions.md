@@ -5,7 +5,7 @@ Every decision that shaped the work, with the reason. Numbers never change once 
 - **1–21:** made while planning (1–5 Oct), before any code.
 - **22–30:** made while building the rules module (5–6 Oct).
 - **31–42:** made during the independent review rounds of the rules module (6–7 Oct). These were Farhaan's calls where behaviour changed, or a fresh verifier's ruling where the builder disagreed with a test.
-- **43 onward:** made while wiring the stages and tools into the voice agent (8 Oct); 50 onward in its review.
+- **43 onward:** made while wiring the stages and tools into the voice agent (8 Oct); 50 onward in its two review rounds.
 
 The reviews behind 31 onward are in [`reviews/2026-10-06-rules-module/`](reviews/2026-10-06-rules-module/). The quality process is in [`process.md`](process.md).
 
@@ -85,6 +85,8 @@ The reviews behind 31 onward are in [`reviews/2026-10-06-rules-module/`](reviews
 | 53 | **Four small behaviour changes:** turn_down_doctors works in every stage (by name before options exist); wishes said during a failed identity try are kept; a field a tool doesn't have is refused, not ignored; once a visit type is accepted, the card's visit description is that visit's name. | Farhaan approved the builder's proposals (review R4, R7; tests T4, K1) | Each closes a way for something the caller said to be lost silently, or for the card to contradict itself. |
 | 54 | **A refused value changes nothing; a visit the caller can't book is not a refused value.** If choose_visit_type is refused because the visit can't be booked, the wishes sent with it (doctor, days...) still count. | Farhaan (review R12, won't fix) | They are the caller's own words; dropping them would lose what was said. |
 | 55 | **The order of a call is enforced by the code.** Once the call is booked or handed off, only answer_question and hand_off work. Tools that need the caller refuse until start_booking succeeds. Whether a change moves the call depends on the card (no caller yet → stay), not on a stage's name. | Builder (tests T5, T6; review R6) | The AI only sees each stage's tools in a voice call, but the typed test loop (decision 22) and edited agent files shouldn't depend on that. |
+| 56 | **Each stage is told what just happened.** One line written by the code (`{just_happened}`), e.g. "The caller asked for a different kind of visit". Stage 2 thanks the caller only when that line says they were just identified, and the AI says one short sentence before calling a tool. | Farhaan (round-2 review S13) | After a stage reset the AI can't tell a fresh start from a change of mind, and might thank the caller by name mid-call or leave them in silence. |
+| 57 | **Wishes said early aren't undone by later, smaller steps.** Before options are on offer, turning a doctor down only adds to the "not these doctors" list (it isn't a doctor change). Doctors turned down before any visit was agreed survive a change of visit. "As soon as possible" on its own isn't a new day or time wish. | Builder (round-2 review S1–S3) | Each was a way for something the caller said to be silently lost, which decision 11 rules out. |
 
 ## How the work is checked (process decisions, 5–6 Oct)
 

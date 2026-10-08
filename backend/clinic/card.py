@@ -34,7 +34,8 @@ END = "end"
 DOCTOR, LOCATION, TIME, LANGUAGE = "doctor", "location", "time", "language"
 VISIT = "visit_type"
 
-# The five things a caller can change, by the exact names the tools use.
+# The five things a caller can change. (The tools' fields have their own names, e.g.
+# doctor_name and place; call/tools.py maps them onto these.)
 CHANGEABLE = {"visit_type": VISIT, "doctor": DOCTOR, "location": LOCATION, "time": TIME, "language": LANGUAGE}
 TIMES_OF_DAY = ("morning", "afternoon")
 @dataclass
