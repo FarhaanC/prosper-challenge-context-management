@@ -23,10 +23,10 @@ from pathlib import Path
 from typing import Callable, Optional
 
 from clinic import (
-    BookingCard, Catalog, Note, OptionsResult, PatientDirectory, Schedule,
-    clinic_now, find_options, spoken_time,
+    BookingCard, Catalog, Note, OptionsResult, PatientDirectory, Schedule, can_book_visit_type, clinic_now,
+    find_options, spoken_time,
 )
-from clinic.options import BAD_INPUT
+from clinic.options import BAD_INPUT, PLACE_UNKNOWN
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
 BOOKINGS_FILE = BACKEND_DIR / "bookings.jsonl"   # not committed (.gitignore)
@@ -37,13 +37,16 @@ PLACEHOLDERS = {
     "today": "today's date and the time at the clinics",
     "booking_card": "the booking card: who is calling, what they asked for, what's agreed",
     "specialties": "the names of all our specialties",
+    "visit_types": "the visit types of the specialty already picked (if any), each marked bookable or not",
     "options": "the notes and options on offer, from the latest search",
     "outcome": "what the end stage should tell the caller (booked, or handed to staff)",
 }
-PLACEHOLDER = re.compile(r"\{([a-z_]+)\}")
+# Anything in braces counts as a placeholder, so a typo ("{Options}", "{booking card}")
+# is caught when the agent file loads instead of reaching the AI as raw text.
+PLACEHOLDER = re.compile(r"\{([^{}]*)\}")
 
 # Note kinds that are for the AI only (resend a value), never read to the caller.
-FOR_THE_AI_ONLY = {BAD_INPUT}
+FOR_THE_AI_ONLY = {BAD_INPUT, PLACE_UNKNOWN}
 
 
 class BookingsFileError(ValueError):
@@ -61,15 +64,35 @@ def read_bookings(path: Path, catalog: Catalog) -> list:
     for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
         if not line.strip():
             continue
-        try:
-            record = json.loads(line)
-            provider_id, start, duration = record["provider_id"], record["start"], record["duration_min"]
-            if provider_id not in catalog.providers:
-                raise ValueError(f"unknown doctor id {provider_id!r}")
-            booked.append((provider_id, datetime.fromisoformat(start), int(duration)))
-        except (ValueError, KeyError, TypeError) as e:
-            raise BookingsFileError(f"{path.name}, line {number}: can't use this booking ({e}).") from e
+        problem = _booking_problem(line, catalog)
+        if problem:
+            raise BookingsFileError(f"{path.name}, line {number}: can't use this booking ({problem}).")
+        record = json.loads(line)
+        booked.append((record["provider_id"], datetime.fromisoformat(record["start"]), int(record["duration_min"])))
     return booked
+
+
+def _booking_problem(line: str, catalog: Catalog) -> str:
+    try:
+        record = json.loads(line)
+    except ValueError:
+        return "not a JSON record"
+    if not isinstance(record, dict):
+        return "not a JSON record"
+    missing = [k for k in ("provider_id", "start", "duration_min") if k not in record]
+    if missing:
+        return f"missing {', '.join(missing)}"
+    if record["provider_id"] not in catalog.providers:
+        return f"unknown doctor id {record['provider_id']!r}"
+    try:
+        datetime.fromisoformat(record["start"])
+    except (TypeError, ValueError):
+        return f"start {record['start']!r} isn't a date and time"
+    try:
+        int(record["duration_min"])
+    except (TypeError, ValueError):
+        return f"duration_min {record['duration_min']!r} isn't a number of minutes"
+    return ""
 
 
 class Clinic:
@@ -110,6 +133,7 @@ class CallSession:
         self.stage = ""                 # set by enter_stage
         self.offer: Optional[OptionsResult] = None  # the latest search, shown in {options}
         self.outcome = ""               # what the end stage says; set by confirm_booking or hand_off
+        self.listed_specialty: Optional[str] = None  # specialty whose visit types show in {visit_types}
         self.log_path = log_path
 
     @property
@@ -131,6 +155,16 @@ class CallSession:
         self.offer = result
         return result
 
+    def visit_types_for(self, specialty: str) -> list:
+        """Every visit type in one specialty, marked whether THIS caller can book it, and why not."""
+        types = []
+        for vt in self.catalog.visit_types_in(specialty):
+            b = can_book_visit_type(self.catalog, self.card.caller, vt.id)
+            types.append({"id": vt.id, "name": vt.name, "minutes": vt.duration_min,
+                          "needs_referral": vt.requires_referral, "open_to_new_patients": vt.new_patients_allowed,
+                          "can_book": b.bookable, "why_not": b.reasons})
+        return types
+
     # ---- placeholders ------------------------------------------------------
     def fill(self, text: str) -> str:
         """Fill the placeholders in a stage's instructions. Unknown ones are an error
@@ -144,13 +178,26 @@ class CallSession:
 
     def _fill_today(self) -> str:
         now = self.now()
-        return f"{spoken_time(now)} (clinic time, San Francisco)"
+        clock = spoken_time(now).rsplit(" at ", 1)[1]  # "9 AM", said the same way as every time we offer
+        return f"{now:%A} {now.day} {now:%B %Y} at {clock} (clinic time, San Francisco)"
 
     def _fill_booking_card(self) -> str:
         return self.card.summary(self.catalog)
 
     def _fill_specialties(self) -> str:
         return ", ".join(self.catalog.specialties())
+
+    def _fill_visit_types(self) -> str:
+        if not self.listed_specialty:
+            return "Not looked up yet: call list_visit_types with the specialty that fits."
+        lines = [f"{self.listed_specialty} visit types for this caller (send the id to choose_visit_type):"]
+        for t in self.visit_types_for(self.listed_specialty):
+            if t["can_book"]:
+                lines.append(f"- {t['id']}: {t['name']} ({t['minutes']} min): can book")
+            else:
+                lines.append(f"- {t['id']}: {t['name']}: can't book ({' '.join(t['why_not'])})")
+        lines.append("If none of these fits what the caller wants, call list_visit_types for another specialty.")
+        return "\n".join(lines)
 
     def _fill_options(self) -> str:
         r = self.offer

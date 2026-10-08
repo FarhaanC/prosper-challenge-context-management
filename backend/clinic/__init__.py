@@ -24,7 +24,7 @@ is a plain instruction (ids, yes/no, a weekday or a date, "morning" or
 from .card import BOOKING, END, IDENTIFY, VISIT_TYPE, BookingCard, Choices, Preferences, turned_down_ids
 from .catalog import Catalog, CatalogError, PlaceMatch, ProviderMatch
 from .facts import answer_question
-from .options import Note, Option, OptionsResult, find_options
+from .options import Note, Option, OptionsResult, find_options, language_problem
 from .patients import Caller, IdentityCheck, IdentityStep, LookupResult, PatientDirectory
 from .rules import Bookability, alternatives_for, can_book_visit_type, check_booking
 from .slots import Schedule, SlotTaken, clinic_now, spoken_time
@@ -32,7 +32,7 @@ from .slots import Schedule, SlotTaken, clinic_now, spoken_time
 __all__ = [
     "BOOKING", "END", "IDENTIFY", "VISIT_TYPE", "BookingCard", "Choices", "Preferences", "turned_down_ids",
     "Catalog", "CatalogError", "PlaceMatch", "ProviderMatch", "answer_question",
-    "Note", "Option", "OptionsResult", "find_options",
+    "Note", "Option", "OptionsResult", "find_options", "language_problem",
     "Caller", "IdentityCheck", "IdentityStep", "LookupResult", "PatientDirectory",
     "Bookability", "alternatives_for", "can_book_visit_type", "check_booking",
     "Schedule", "SlotTaken", "clinic_now", "spoken_time",

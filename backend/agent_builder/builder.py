@@ -49,36 +49,43 @@ class AgentBuilder:
     # ---- validation --------------------------------------------------------
     def _validate(self) -> None:
         """Every problem in the agent file, listed at once, at start-up rather than mid-call."""
-        names = set(self._nodes_by_name)
-        if not names:
+        c = self.config
+        if not c.nodes:
             raise ValueError("Agent has no nodes.")
         problems = []
-        if self.config.initial_node not in names:
-            problems.append(f"initial_node '{self.config.initial_node}' is not a defined node.")
-        if self.config.history not in HISTORY:
-            problems.append(f"history must be one of {', '.join(HISTORY)}, not '{self.config.history}'.")
-        for tool in self.config.global_tools:
-            if tool not in TOOLS:
-                problems.append(f"Global tool '{tool}' isn't in the tool registry.")
-        for node in self.config.nodes:
+        names = [n.name for n in c.nodes]
+        for name in sorted({n for n in names if names.count(n) > 1}):
+            problems.append(f"Two nodes are called '{name}'.")
+        if c.initial_node not in names:
+            problems.append(f"initial_node '{c.initial_node}' is not a defined node.")
+        if c.history not in HISTORY:
+            problems.append(f"history must be one of {', '.join(HISTORY)}, not {c.history!r}.")
+        if not isinstance(c.parallel_tool_calls, bool):
+            problems.append(f"parallel_tool_calls must be true or false, not {c.parallel_tool_calls!r}.")
+        problems += _tool_list_problems(c.global_tools, "global_tools")
+        problems += _placeholder_problems(c.persona, "The persona", allowed=False)
+        for node in c.nodes:
             for edge in node.edges:
                 if edge.target not in names:
                     problems.append(f"Edge '{edge.function}' in node '{node.name}' targets unknown node "
                                     f"'{edge.target}'.")
-            for tool in node.tools:
-                if tool not in TOOLS:
-                    problems.append(f"Tool '{tool}' in node '{node.name}' isn't in the tool registry.")
+            problems += _tool_list_problems(node.tools, f"Node '{node.name}' tools")
+            if isinstance(node.tools, list) and isinstance(c.global_tools, list):
+                for tool in sorted(set(node.tools) & set(c.global_tools)):
+                    problems.append(f"Tool '{tool}' is in node '{node.name}' and in global_tools; list it once.")
+            problems += _placeholder_problems(node.role_message or "", f"Node '{node.name}' role_message",
+                                              allowed=False)
             for message in node.task_messages:
-                for placeholder in PLACEHOLDER.findall(message.get("content", "")):
-                    if placeholder not in PLACEHOLDERS:
-                        problems.append(f"Node '{node.name}' uses unknown placeholder {{{placeholder}}}; "
-                                        f"known: {', '.join(PLACEHOLDERS)}.")
-            if not self.config.parallel_tool_calls and not (node.edges or node.tools or self.config.global_tools):
+                problems += _placeholder_problems(message.get("content", ""), f"Node '{node.name}'")
+            if c.parallel_tool_calls is False and not (node.edges or node.tools or c.global_tools):
                 # OpenAI refuses the one-at-a-time setting on a request with no tools.
                 problems.append(f"Node '{node.name}' has no tools, which parallel_tool_calls false doesn't allow.")
         # Code-decided moves: every stage a tool can move to must exist.
-        for tool in sorted(set(self.config.global_tools).union(*(n.tools for n in self.config.nodes))):
-            for stage in TOOLS[tool].moves_to if tool in TOOLS else ():
+        used = set(c.global_tools if isinstance(c.global_tools, list) else [])
+        for node in c.nodes:
+            used |= set(node.tools if isinstance(node.tools, list) else [])
+        for tool in sorted(t for t in used if t in TOOLS):
+            for stage in TOOLS[tool].moves_to:
                 if stage not in names:
                     problems.append(f"Tool '{tool}' can move to stage '{stage}', which isn't a node.")
         if problems:
@@ -150,3 +157,20 @@ class AgentBuilder:
             required=tool.required,
             handler=handler,
         )
+
+
+def _tool_list_problems(tools, where: str) -> list:
+    if not (isinstance(tools, list) and all(isinstance(t, str) for t in tools)):
+        return [f"{where} must be a list of tool names."]
+    problems = [f"{where}: '{t}' is listed twice." for t in sorted({t for t in tools if tools.count(t) > 1})]
+    problems += [f"{where}: '{t}' isn't in the tool registry." for t in tools if t not in TOOLS]
+    return problems
+
+
+def _placeholder_problems(text: str, where: str, allowed: bool = True) -> list:
+    """Anything in braces must be a known placeholder, and only task messages are filled."""
+    found = PLACEHOLDER.findall(text or "")
+    if found and not allowed:
+        return [f"{where} contains {{{found[0]}}}; placeholders only work in task messages."]
+    return [f"{where} uses unknown placeholder {{{p}}}; known: {', '.join(PLACEHOLDERS)}."
+            for p in found if p not in PLACEHOLDERS]

@@ -8,42 +8,52 @@ code, never by the AI.
 What the AI sends follows the rule in clinic/__init__.py: names (doctors, places,
 languages) as the caller said them; everything else a plain value (ids, yes/no,
 one weekday or date per day entry, "morning" or "afternoon"). A value of the
-wrong kind is refused with a message saying how to send it; nothing is guessed.
-Refusals and "not found" replies have "ok": false, and the caller never hears the
-message itself: the AI acts on it.
+wrong kind, or a field the tool doesn't have, is refused with a message saying
+how to send it, and a refused call changes nothing. Nothing is guessed.
+
+Every reply has "ok". When it's false, the reply is for the AI to act on and the
+caller never hears it, except the identity steps' "say" sentence, which is meant
+to be said.
+
+Two checks apply to every tool (run_tool): once the call is booked or handed off,
+only answer_question and hand_off work; and tools that need to know who is
+calling refuse until start_booking has found or registered the caller.
 
 The registry (TOOLS) holds each tool's description and fields, which is what the
 AI reads, and the stages it can move to, which the builder checks against the
 agent file and the editor will draw as dashed arrows.
 
-| tool               | where           | moves to                                   |
-| start_booking      | identify        | visit_type (found or new), end (staff)     |
-| list_visit_types   | visit_type      | stays                                      |
-| choose_visit_type  | visit_type      | booking (accepted), stays (refused)        |
-| choose_option      | booking         | stays (gives the read-back)                |
-| confirm_booking    | booking         | end (saved), booking (time gone: new options) |
-| turn_down_doctors  | booking         | booking (new options)                      |
-| change_choice      | every stage     | booking (new options), visit_type, stays   |
-| answer_question    | every stage     | stays                                      |
-| hand_off           | every stage     | end                                        |
+| tool               | where           | moves to                                              |
+| start_booking      | identify        | visit_type (found or new), end (staff); else stays    |
+| list_visit_types   | visit_type      | stays                                                 |
+| choose_visit_type  | visit_type      | booking (accepted), stays (refused)                   |
+| choose_option      | booking         | stays (gives the read-back)                           |
+| confirm_booking    | booking         | end (saved), booking (time gone: fresh options)       |
+| change_choice      | every stage     | booking (fresh options), visit_type, or stays         |
+| turn_down_doctors  | every stage     | booking (fresh options), or stays                     |
+| answer_question    | every stage     | stays                                                 |
+| hand_off           | every stage     | end                                                   |
+
+change_choice and turn_down_doctors record without moving until there are options
+to rebuild: before the caller is identified, and in the visit_type stage (decision 47).
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
 from typing import Callable, Optional
 
 from clinic import (
-    BOOKING, END, IDENTIFY, VISIT_TYPE, Caller, Note, alternatives_for, answer_question,
-    can_book_visit_type, check_booking,
+    BOOKING, END, VISIT_TYPE, Caller, Note, alternatives_for, answer_question, can_book_visit_type,
+    check_booking, language_problem,
 )
-from clinic.card import CHANGEABLE, TIMES_OF_DAY
+from clinic.card import TIMES_OF_DAY
 from clinic.fuzzy import looks_like_a_sentence, means_no_preference, name_tokens, tidy
 from clinic.options import check_time_wishes
-from clinic.slots import SlotTaken
 
 from .session import CallSession
+
+ANY = "any"  # the value that drops a wish in change_choice
 
 
 @dataclass
@@ -54,10 +64,6 @@ class Outcome:
 
 class Refused(ValueError):
     """A value the tool can't use. The AI is told why and how to send it."""
-
-
-def _refused(message: str) -> Outcome:
-    return Outcome({"ok": False, "error": message})
 
 
 # ---------------------------------------------------------------- reading values
@@ -79,13 +85,14 @@ def _flag(args: dict, key: str) -> Optional[bool]:
 
 
 def _days(args: dict) -> Optional[list]:
-    """A list of day entries, or None if not sent."""
+    """A list of day entries, or None if not sent (an empty list counts as not sent)."""
     value = args.get("days")
     if value is None:
         return None
     if not (isinstance(value, list) and all(isinstance(d, str) for d in value)):
         raise Refused("days must be a list, one day per entry, e.g. [\"Thursday\", \"Friday\"].")
-    return [tidy(d) for d in value]
+    days = [tidy(d) for d in value if tidy(d)]
+    return days or None
 
 
 def _a_name(value: str, kind: str, extra: str = "") -> str:
@@ -95,18 +102,18 @@ def _a_name(value: str, kind: str, extra: str = "") -> str:
     return value
 
 
-def _check_times(session: CallSession, days: Optional[list], time_of_day: Optional[str]) -> None:
-    """Day and time values are checked before anything is recorded, so a bad one
-    changes nothing. A value not sent (None) is checked as it stands on the card."""
-    prefs = session.card.preferences
-    problems = check_time_wishes(prefs.days if days is None else days,
-                                 prefs.time_of_day if time_of_day is None else time_of_day, session.now()).problems
-    if problems:
-        raise Refused(" ".join(problems))
+def _specialty(session: CallSession, args: dict) -> Optional[str]:
+    said = _text(args, "specialty")
+    if not said:
+        return None
+    specialty = session.catalog.match_specialty(said)
+    if specialty is None:
+        raise Refused(f"'{said}' isn't one of our specialties. Use one of: {', '.join(session.catalog.specialties())}.")
+    return specialty
 
 
-# ---------------------------------------------------------------- wishes said early
-TURN_DOWN_HINT = " For 'someone else' or 'not Dr. X', use turn_down_doctors once options are on offer."
+# ---------------------------------------------------------------- wishes
+TURN_DOWN_HINT = " For 'someone else' or 'not Dr. X', use turn_down_doctors."
 
 WISH_FIELDS = {
     "doctor_name": {"type": "string", "description": (
@@ -119,43 +126,88 @@ WISH_FIELDS = {
         "that place itself (\"the Midtown one\").")},
     "days": {"type": "array", "items": {"type": "string"}, "description": (
         "Days that suit the caller, ONE day per entry: a weekday name (\"Thursday\"), \"today\", \"tomorrow\", "
-        "or a date YYYY-MM-DD. \"Thursday or Friday\" is [\"Thursday\", \"Friday\"]. Never put a time of day here.")},
-    "time_of_day": {"type": "string", "enum": list(TIMES_OF_DAY), "description": (
+        "or a date YYYY-MM-DD (use the year from 'Now' in your instructions). \"Thursday or Friday\" is "
+        "[\"Thursday\", \"Friday\"]. Never put a time of day here.")},
+    "time_of_day": {"type": "string", "enum": [*TIMES_OF_DAY, ANY], "description": (
         "\"morning\" (before noon) or \"afternoon\" (noon or later). Leave it out if they didn't say.")},
     "soonest": {"type": "boolean", "description": "true if the caller wants the earliest time possible."},
     "language": {"type": "string", "description": "One language the doctor should speak (\"Spanish\")."},
 }
+SPECIALTY_FIELD = {"type": "string", "description": (
+    "If it's clear which of our specialties fits what they want, that specialty's name from your instructions "
+    "(its visit types are then ready in the next stage). Leave it out if unsure.")}
 
 
-def _read_wishes(session: CallSession, args: dict) -> Callable[[], None]:
-    """Check every wish value, then return a function that records them on the card.
-    Checking everything first means a refused value records nothing."""
+@dataclass
+class Wishes:
+    """Checked wish values; None means not sent. "any" is kept as sent: it means no
+    wish when recording, and "drop this wish" in change_choice."""
+
+    doctor: Optional[str] = None
+    place: Optional[str] = None
+    near: bool = False
+    days: Optional[list] = None
+    time_of_day: Optional[str] = None
+    soonest: Optional[bool] = None
+    language: Optional[str] = None
+
+
+def _read_wishes(session: CallSession, args: dict) -> Wishes:
+    """Check every wish value before anything is recorded, so a refused value changes nothing."""
     doctor = _a_name(_text(args, "doctor_name"), "doctor", TURN_DOWN_HINT)
     place = _a_name(_text(args, "place"), "place", " Put closeness in near.")
     near = _flag(args, "near")
-    if near and not place:
-        raise Refused("near goes with a place. Pass the place too.")
+    if near and (not place or means_no_preference(place)):
+        raise Refused("near goes with a place name. Send the place too.")
     days = _days(args)
-    time_of_day = _text(args, "time_of_day").lower()
-    _check_times(session, days, time_of_day or None)
-    soonest = _flag(args, "soonest")
+    time_of_day = _text(args, "time_of_day").lower() or None
+    prefs = session.card.preferences
+    problems = check_time_wishes(prefs.days if days is None else days,
+                                 prefs.time_of_day if time_of_day is None else time_of_day, session.now()).problems
+    if problems:
+        raise Refused(" ".join(problems))
     language = _text(args, "language")
+    if language:
+        problem = language_problem(session.catalog, language)
+        if problem:
+            raise Refused(problem)
+    return Wishes(doctor or None, place or None, bool(near), days, time_of_day, _flag(args, "soonest"),
+                  language or None)
 
-    def record() -> None:
-        p = session.card.preferences
-        if doctor and not means_no_preference(doctor):
-            p.doctor_name_heard, p.preferred_provider_id = doctor, ""
-        if place and not means_no_preference(place):
-            p.location_hint, p.near, p.preferred_location_id = place, bool(near), ""
+
+def _record(session: CallSession, w: Wishes) -> None:
+    """Record the wishes said so far (start_booking, choose_visit_type). "any" means no wish."""
+    p = session.card.preferences
+
+    def said(value) -> bool:
+        return bool(value) and not means_no_preference(value)
+
+    if said(w.doctor):
+        p.doctor_name_heard, p.preferred_provider_id = w.doctor, ""
+    if said(w.place):
+        p.location_hint, p.near, p.preferred_location_id = w.place, w.near, ""
+    if w.days:
+        days = [d for d in w.days if not means_no_preference(d)]
         if days:
-            p.days = [d for d in days if d and not means_no_preference(d)]
-        if time_of_day and not means_no_preference(time_of_day):
-            p.time_of_day = time_of_day
-        if soonest is not None:
-            p.soonest = soonest
-        if language and not means_no_preference(language):
-            p.language = language
-    return record
+            p.days = days
+    if said(w.time_of_day):
+        p.time_of_day = w.time_of_day
+    if w.soonest is not None:
+        p.soonest = w.soonest
+    if said(w.language):
+        p.language = w.language
+
+
+def _after_change(session: CallSession, target: str) -> Outcome:
+    """Where a change leads. Before identification, or while choosing the visit, it's
+    recorded and the call stays (decision 47). Otherwise the stage is rebuilt."""
+    if session.card.caller is None or (target == VISIT_TYPE and session.stage == VISIT_TYPE):
+        return Outcome({"ok": True, "noted": "Recorded. Carry on with this stage."})
+    if target == BOOKING:
+        session.refresh_options()
+    else:
+        session.offer = None  # the visit changed: the old search no longer applies
+    return Outcome({"ok": True}, target)
 
 
 # ---------------------------------------------------------------- the tools
@@ -166,53 +218,53 @@ def start_booking(session: CallSession, args: dict) -> Outcome:
     name = _text(args, "full_name")
     returning = _flag(args, "returning")
     if returning is None:
-        raise Refused("Pass returning: true if they've been a patient with us before, false if not.")
-    record_wishes = _read_wishes(session, args)
+        raise Refused("Send returning: true if they've been a patient with us before, false if not.")
+    wishes = _read_wishes(session, args)
+    specialty = _specialty(session, args)
     visit = _text(args, "visit_description")
 
-    found_say = ""
+    def record() -> None:
+        _record(session, wishes)
+        if visit:
+            card.preferences.visit_description = visit
+
     if returning:
         step = card.identity.attempt(session.clinic.patients, name, _text(args, "date_of_birth"),
                                      _text(args, "spelled_last_name"))
         if step.status == "hand_to_staff":
-            return _hand_to_staff(session, step.say)
+            return _hand_to_staff(session, "The caller's details need checking by a member of staff.")
         if step.status != "found":
+            record()  # what they said they want isn't lost while we find them
             return Outcome({"ok": False, "status": step.status, "say": step.say})
-        caller, found_say = step.caller, step.say
+        caller = step.caller
     else:
         if len(name_tokens(name)) < 2:
-            raise Refused("Ask for the caller's full name (first and last) and pass it in full_name.")
+            raise Refused("Ask for the caller's full name (first and last) and send it in full_name.")
         caller = Caller(name=name)
 
     card.caller = caller
-    record_wishes()
-    if visit:
-        card.preferences.visit_description = visit
-    return Outcome({"ok": True, "say": found_say}, VISIT_TYPE)
+    record()
+    session.listed_specialty = specialty
+    return Outcome({"ok": True}, VISIT_TYPE)
 
 
 def list_visit_types(session: CallSession, args: dict) -> Outcome:
-    catalog, caller = session.catalog, session.card.caller
     said = _text(args, "specialty")
-    specialty = catalog.match_specialty(said)
+    specialty = session.catalog.match_specialty(said)
     if specialty is None:
-        raise Refused(f"'{said}' isn't one of our specialties. Use one of: {', '.join(catalog.specialties())}.")
-    types = []
-    for vt in catalog.visit_types_in(specialty):
-        b = can_book_visit_type(catalog, caller, vt.id)
-        types.append({"id": vt.id, "name": vt.name, "minutes": vt.duration_min,
-                      "needs_referral": vt.requires_referral, "open_to_new_patients": vt.new_patients_allowed,
-                      "can_book": b.bookable, "why_not": b.reasons})
-    return Outcome({"ok": True, "specialty": specialty, "visit_types": types})
+        raise Refused(f"'{said}' isn't one of our specialties. Use one of: {', '.join(session.catalog.specialties())}.")
+    session.listed_specialty = specialty
+    return Outcome({"ok": True, "specialty": specialty, "visit_types": session.visit_types_for(specialty)})
 
 
 def choose_visit_type(session: CallSession, args: dict) -> Outcome:
     catalog, card = session.catalog, session.card
     vt_id = _text(args, "visit_type_id")
     if vt_id not in catalog.visit_types:
-        raise Refused(f"'{vt_id}' isn't a visit type id. Use an id from list_visit_types.")
-    record_wishes = _read_wishes(session, args)
-    record_wishes()
+        raise Refused(f"'{vt_id}' isn't a visit type id. Use an id from the visit types listed.")
+    # The caller's wishes count even if this visit can't be booked: they're not a
+    # refused value, and dropping them would lose what was said (decision 54).
+    _record(session, _read_wishes(session, args))
     b = can_book_visit_type(catalog, card.caller, vt_id)
     if not b.bookable:
         alternatives = [{"id": vt.id, "name": vt.name, "specialty": vt.specialty}
@@ -221,8 +273,7 @@ def choose_visit_type(session: CallSession, args: dict) -> Outcome:
                         "careful": "Never promise that an alternative visit will lead to a referral."})
     vt = catalog.visit_types[vt_id]
     card.choices.specialty, card.choices.visit_type_id = vt.specialty, vt.id
-    if not card.preferences.visit_description:
-        card.preferences.visit_description = vt.name
+    card.preferences.visit_description = vt.name  # the card says what was agreed, not the first words used
     session.refresh_options()
     return Outcome({"ok": True}, BOOKING)
 
@@ -232,8 +283,8 @@ def choose_option(session: CallSession, args: dict) -> Outcome:
     option_id = args.get("option_id")
     if isinstance(option_id, int) and not isinstance(option_id, bool):
         option_id = str(option_id)  # the AI sometimes sends the number as a number
-    if not isinstance(option_id, str):
-        raise Refused("option_id must be the option number from your instructions.")
+    if not (isinstance(option_id, str) and option_id.strip().isdigit()):
+        raise Refused("option_id must be the option's number only, e.g. \"2\".")
     try:
         card.choose_option(option_id)
     except ValueError as e:
@@ -246,37 +297,36 @@ def choose_option(session: CallSession, args: dict) -> Outcome:
 def confirm_booking(session: CallSession, args: dict) -> Outcome:
     catalog, card, clinic = session.catalog, session.card, session.clinic
     c = card.choices
-    if card.status != "in_progress":
-        raise Refused("This call's booking is already finished; nothing more to confirm.")
     if not (c.provider_id and c.slot):
         raise Refused("Nothing is chosen yet. Call choose_option first, read back, and ask the caller.")
     now = session.now()
     problems = check_booking(catalog, clinic.schedule, card.caller, c.visit_type_id, c.provider_id,
                              c.location_id, c.slot, now)
-    vt = catalog.visit_types[c.visit_type_id]
-    if not problems:
-        try:
-            clinic.schedule.book(c.provider_id, c.slot, vt.duration_min)
-        except SlotTaken:
-            problems = ["That time is no longer available."]
     if problems:
         # Back to choosing: the doctor and place become wishes, and a fresh search runs.
+        # This isn't the caller changing the time, so "soonest" and their latest change are kept.
+        prefs = card.preferences
+        kept = prefs.soonest, prefs.latest
         card.change_choice("time")
+        prefs.soonest, prefs.latest = kept
         session.refresh_options(Note("booking_failed", " ".join(problems) + " Here are other options."))
         return Outcome({"ok": False, "problems": problems}, BOOKING)
 
+    vt = catalog.visit_types[c.visit_type_id]
     read_back = card.read_back(catalog)
     caller, p, loc = card.caller, catalog.providers[c.provider_id], catalog.locations[c.location_id]
+    # Saved to the file first, then marked as taken: a failed write leaves nothing half done.
     clinic.save_booking({
-        "booked_at": datetime.now().isoformat(timespec="seconds"),
+        "booked_at": now.isoformat(timespec="minutes"),  # clinic time, like "start"
         "caller": caller.name, "patient_id": caller.patient_id, "new_patient": caller.is_new_patient,
         "visit_type_id": vt.id, "visit_type": vt.name, "provider_id": p.id, "provider": p.name,
         "location_id": loc.id, "location": loc.name, "start": c.slot.isoformat(),
         "duration_min": vt.duration_min, "read_back": read_back,
     })
+    clinic.schedule.book(c.provider_id, c.slot, vt.duration_min)
     card.status = "booked"
-    session.outcome = (f"The booking is saved: {read_back} Confirm it to the caller in one sentence, "
-                       "thank them and say goodbye.")
+    session.outcome = (f"The booking is saved: {read_back} Confirm the day, time and doctor in one short "
+                       "sentence (not the whole read-back again), thank the caller and say goodbye.")
     return Outcome({"ok": True, "booked": read_back}, END)
 
 
@@ -298,55 +348,60 @@ def turn_down_doctors(session: CallSession, args: dict) -> Outcome:
                         "again with that doctor_id."})
         ids.append(matches[0].provider.id)
     try:
-        stage = card.turn_down_doctors(catalog, ids, on_offer=on_offer, current=current)
+        target = card.turn_down_doctors(catalog, ids, on_offer=on_offer, current=current)
     except ValueError as e:
         raise Refused(str(e)) from e
-    session.refresh_options()
-    return Outcome({"ok": True}, stage)
+    return _after_change(session, target)
+
+
+# The order changes in one change_choice call are applied in: the visit type first (it
+# clears everything), then the weakest wish to the strongest, so the strongest kind
+# sent counts as the newest (find_options applies the newest change first).
+CHANGE_ORDER = ("language", "time", "location", "doctor")
 
 
 def change_choice(session: CallSession, args: dict) -> Outcome:
     card = session.card
-    if card.status != "in_progress":
-        raise Refused("The call is finished (booked or handed to staff); nothing can be changed now.")
-    what = _text(args, "what").lower()
-    if what not in CHANGEABLE:
-        raise Refused(f"what must be one of: {', '.join(CHANGEABLE)}.")
-    new_value = _text(args, "new_value")
-    if what == "doctor":
-        _a_name(new_value, "doctor", TURN_DOWN_HINT)
-    if what == "location":
-        _a_name(new_value, "place", " Put closeness in near.")
-    near = _flag(args, "near")
-    days = _days(args)
-    time_of_day = args.get("time_of_day")
-    if time_of_day is not None and not isinstance(time_of_day, str):
-        raise Refused("time_of_day must be \"morning\", \"afternoon\" or \"\" (to clear it).")
-    if what == "time":
-        if new_value:
-            raise Refused("For a time change, pass days and/or time_of_day, not new_value.")
-        if days is None and time_of_day is None:
-            raise Refused("For a time change, pass days and/or time_of_day.")
-        _check_times(session, days, None if time_of_day is None else time_of_day.strip().lower())
-    try:
-        target = card.change_choice(what, new_value, days=days, time_of_day=time_of_day, near=bool(near))
-    except ValueError as e:
-        raise Refused(str(e)) from e
+    w = _read_wishes(session, args)
+    visit = _text(args, "visit_type")
+    specialty = _specialty(session, args)
+    if specialty and not visit:
+        raise Refused("specialty goes with visit_type. Send what they want now in visit_type too.")
+    time_sent = w.days is not None or w.time_of_day is not None or w.soonest is not None
+    sent = {"language": w.language is not None, "time": time_sent, "location": w.place is not None,
+            "doctor": w.doctor is not None}
+    if not (visit or any(sent.values())):
+        raise Refused("Send at least one field that changes (or \"any\" to drop a wish).")
 
-    if session.stage == IDENTIFY or (target == VISIT_TYPE and session.stage == VISIT_TYPE):
-        return Outcome({"ok": True, "noted": "Recorded. Carry on with this stage."})
-    if target == BOOKING:
-        session.refresh_options()
-    return Outcome({"ok": True}, target)
+    target = None
+    if visit:
+        target = card.change_choice("visit_type", visit)
+        session.listed_specialty = specialty
+    for kind in CHANGE_ORDER:
+        if not sent[kind]:
+            continue
+        if kind == "time":
+            soonest = w.soonest
+            target = card.change_choice("time", days=w.days, time_of_day=w.time_of_day)
+            if soonest is not None:
+                card.preferences.soonest = soonest  # a time change resets it; this call says what it is
+        elif kind == "location":
+            target = card.change_choice("location", w.place, near=w.near)
+        elif kind == "doctor":
+            target = card.change_choice("doctor", w.doctor)
+        else:
+            target = card.change_choice("language", w.language)
+    return _after_change(session, target)
 
 
 def answer_question_tool(session: CallSession, args: dict) -> Outcome:
-    return Outcome(answer_question(session.catalog, args.get("about"), args.get("name")))
+    result = answer_question(session.catalog, _text(args, "about"), _text(args, "name"))
+    return Outcome({"ok": result["found"], **result})
 
 
 HAND_OFF_REASONS = {
-    "reschedule": "The caller wants to reschedule an appointment, which a member of staff handles.",
-    "cancel": "The caller wants to cancel an appointment, which a member of staff handles.",
+    "reschedule": "The caller wants to reschedule an appointment.",
+    "cancel": "The caller wants to cancel an appointment.",
     "speak_to_staff": "The caller asked to speak to a person.",
 }
 
@@ -360,14 +415,16 @@ def hand_off(session: CallSession, args: dict) -> Outcome:
 
 def _hand_to_staff(session: CallSession, why: str) -> Outcome:
     card = session.card
-    if card.status == "in_progress":
+    changed = card.status == "in_progress"
+    if changed:
         card.status = "handed_off"
     booked = f"The booking is saved: {card.read_back(session.catalog)}" if card.status == "booked" else ""
     session.outcome = " ".join(filter(None, [
         booked, why,
-        "Tell the caller you're putting them through to a member of staff, thank them, and say goodbye.",
+        "A member of staff will call the caller back about this. Tell the caller that in one or two short "
+        "sentences, thank them and say goodbye.",
     ]))
-    return Outcome({"ok": True, "handed_off": True}, END)
+    return Outcome({"ok": True, "handed_off": changed}, END)
 
 
 # ---------------------------------------------------------------- the registry
@@ -378,17 +435,19 @@ class Tool:
     run: Callable[[CallSession, dict], Outcome]
     properties: dict = field(default_factory=dict)
     required: list = field(default_factory=list)
-    moves_to: tuple = ()   # stages this tool can move to (code decides which)
+    moves_to: tuple = ()        # stages this tool can move to (code decides which)
+    needs_caller: bool = False  # refused until start_booking has found or registered the caller
+    after_end: bool = False     # still works once the call is booked or handed off
 
 
 def _tools() -> dict:
     tools = [
         Tool("start_booking", (
             "Call once you have the caller's full name, whether they've been a patient with us before, and (for "
-            "returning patients) their date of birth. Also pass anything they've already said they want. "
+            "returning patients) their date of birth. Also send anything they've already said they want. "
             "If it returns ok false with a 'say', say that sentence and follow it (ask again, ask them to spell "
-            "their last name, or offer to register them as a new patient or put them through to staff). "
-            "If they choose to register as new, call again with returning false."),
+            "their last name, or offer to register them as a new patient or have a member of staff call them "
+            "back). If they choose to register as new, call again with returning false."),
             start_booking,
             {"full_name": {"type": "string", "description": "The caller's full name, first and last."},
              "returning": {"type": "boolean", "description": "true if they've been a patient with us before."},
@@ -396,6 +455,7 @@ def _tools() -> dict:
              "spelled_last_name": {"type": "string", "description": (
                  "Only when asked to spell: the letters they spelled, joined (\"WILSON\").")},
              "visit_description": {"type": "string", "description": "What they want, in their words (\"knee MRI\")."},
+             "specialty": SPECIALTY_FIELD,
              **WISH_FIELDS},
             ["full_name", "returning"], (VISIT_TYPE, END)),
         Tool("list_visit_types", (
@@ -403,52 +463,47 @@ def _tools() -> dict:
             "Pick the specialty that fits what the caller wants from the names in your instructions."),
             list_visit_types,
             {"specialty": {"type": "string", "description": "One specialty name from your instructions."}},
-            ["specialty"]),
+            ["specialty"], needs_caller=True),
         Tool("choose_visit_type", (
             "Call when the caller has picked a visit type. If it's refused, explain the reason in plain words "
-            "and offer the alternative it gives. Also pass any new wishes they mentioned in this stage."),
+            "and offer the alternative it gives. Also send any new wishes they mentioned in this stage."),
             choose_visit_type,
-            {"visit_type_id": {"type": "string", "description": "The id from list_visit_types."}, **WISH_FIELDS},
-            ["visit_type_id"], (BOOKING,)),
+            {"visit_type_id": {"type": "string", "description": "The visit type's id from the list."}, **WISH_FIELDS},
+            ["visit_type_id"], (BOOKING,), needs_caller=True),
         Tool("choose_option", (
             "Call when the caller picks one of the options on offer. Returns the read-back sentence to say."),
             choose_option,
-            {"option_id": {"type": "string", "description": "The option number from your instructions."}},
-            ["option_id"]),
+            {"option_id": {"type": "string", "description": "The option number from your instructions, e.g. \"2\"."}},
+            ["option_id"], needs_caller=True),
         Tool("confirm_booking", (
             "Call only after the caller said yes to the read-back. Saves the booking. If the time was taken "
             "meanwhile, fresh options are found."),
-            confirm_booking, {}, [], (END, BOOKING)),
+            confirm_booking, {}, [], (END, BOOKING), needs_caller=True),
         Tool("turn_down_doctors", (
-            "The caller doesn't want certain doctors. \"Someone else\" or \"a different doctor\" while options are "
-            "on offer: on_offer true. \"Not him\" or \"not her\" about the doctor just chosen: current true. "
-            "\"Not Dr. Chen\": doctor_name \"Dr. Chen\". If several doctors match the name, you get their ids: "
-            "call again with doctor_id. Fresh options follow."),
+            "The caller doesn't want certain doctors. \"Not Dr. Chen\": doctor_name \"Dr. Chen\" (works at any "
+            "point in the call). \"Someone else\" or \"a different doctor\" while options are on offer: on_offer "
+            "true. \"Not him\" or \"not her\" about the doctor just chosen: current true. If several doctors "
+            "match a name, you get their ids: call again with doctor_id. Once options are on offer, fresh options "
+            "follow."),
             turn_down_doctors,
             {"doctor_name": {"type": "string", "description": "A doctor's name only (\"Dr. Chen\")."},
              "doctor_id": {"type": "string", "description": "A doctor_id from an earlier which_one reply."},
              "on_offer": {"type": "boolean", "description": "Turn down every doctor in the options on offer."},
              "current": {"type": "boolean", "description": "Turn down the doctor just chosen."}},
-            [], (BOOKING,)),
+            [], (VISIT_TYPE, BOOKING)),
         Tool("change_choice", (
-            "The caller wants a different (or new) visit type, doctor, place, time or language. Send what, plus "
-            "only the fields for that kind:\n"
-            "- visit_type: new_value = what they want now, in their words.\n"
-            "- doctor: new_value = a doctor's name, or \"\" for any doctor." + TURN_DOWN_HINT + "\n"
-            "- location: new_value = a place name, or \"\" for anywhere; near = true for somewhere close to it.\n"
-            "- time: days and/or time_of_day (leave one out to keep it; [] or \"\" clears it). No new_value.\n"
-            "- language: new_value = one language, or \"\" for any.\n"
-            "Once options are on offer, fresh options follow."),
+            "The caller wants something different, or adds a wish. Send only the fields that change, in the same "
+            "form as for start_booking: doctor_name, place (with near), days, time_of_day, soonest, language; or "
+            "visit_type for a different kind of visit (what they want now, in their words, plus specialty if "
+            "clear). Several can go in one call: \"Friday afternoon at Midtown\" is days [\"Friday\"], "
+            "time_of_day \"afternoon\", place \"Midtown\". To drop a wish, send \"any\" (doctor_name \"any\", "
+            "days [\"any\"], time_of_day \"any\"). Once options are on offer, fresh options follow."
+            + TURN_DOWN_HINT),
             change_choice,
-            {"what": {"type": "string", "enum": list(CHANGEABLE)},
-             "new_value": {"type": "string", "description": "See above. Only a name or the visit, never a sentence."},
-             "near": {"type": "boolean", "description": "location only: somewhere close to the place."},
-             "days": {**WISH_FIELDS["days"], "description": (
-                 "time only: ONE day per entry: a weekday name, \"today\", \"tomorrow\" or YYYY-MM-DD. "
-                 "[] clears the day wish.")},
-             "time_of_day": {"type": "string", "enum": [*TIMES_OF_DAY, ""],
-                             "description": "time only: \"morning\", \"afternoon\", or \"\" to clear it."}},
-            ["what"], (VISIT_TYPE, BOOKING)),
+            {"visit_type": {"type": "string", "description": "A different kind of visit, in the caller's words."},
+             "specialty": SPECIALTY_FIELD,
+             **WISH_FIELDS},
+            [], (VISIT_TYPE, BOOKING)),
         Tool("answer_question", (
             "Look up a fact instead of guessing: a location (address, hours, phone, neighbourhood, equipment), "
             "a doctor (specialty, languages, locations, taking new patients?) or a visit type (referral needed? "
@@ -456,13 +511,13 @@ def _tools() -> dict:
             answer_question_tool,
             {"about": {"type": "string", "enum": ["location", "doctor", "visit_type"]},
              "name": {"type": "string", "description": "The location, doctor or visit type name."}},
-            ["about", "name"]),
+            ["about", "name"], after_end=True),
         Tool("hand_off", (
-            "Put the caller through to a member of staff: to reschedule or cancel an appointment, or when they "
-            "ask for a person. Ends the call with a goodbye."),
+            "For things a member of staff handles: rescheduling or cancelling an appointment, or when the caller "
+            "asks for a person. Staff will call them back; this ends the call with a goodbye."),
             hand_off,
             {"reason": {"type": "string", "enum": list(HAND_OFF_REASONS)}},
-            ["reason"], (END,)),
+            ["reason"], (END,), after_end=True),
     ]
     return {t.name: t for t in tools}
 
@@ -470,13 +525,32 @@ def _tools() -> dict:
 TOOLS = _tools()
 
 
+def _check_call(session: CallSession, tool: Tool, args: dict) -> None:
+    unknown = sorted(set(args) - set(tool.properties))
+    if unknown:
+        known = ", ".join(tool.properties) or "none"
+        raise Refused(f"{tool.name} has no field {', '.join(unknown)}. Its fields: {known}.")
+    if session.card.status != "in_progress" and not tool.after_end:
+        raise Refused("The call is finished (booked or handed to staff); only answer_question and hand_off work now.")
+    if tool.needs_caller and session.card.caller is None:
+        raise Refused("Identify the caller first, with start_booking.")
+
+
 def run_tool(session: CallSession, name: str, args: dict) -> Outcome:
-    """Run one tool, turn a refusal into a reply for the AI, and log the call."""
+    """Run one tool, turn a refusal into a reply for the AI, and log the call.
+    An unexpected error is logged too, then raised: it's a bug, not a refusal."""
+    tool = TOOLS.get(name)
+    if tool is None:
+        raise ValueError(f"No tool called {name!r}. Tools: {', '.join(TOOLS)}.")
     args = dict(args or {})
+    entry = {"event": "tool", "stage": session.stage, "tool": name, "args": args}
     try:
-        outcome = TOOLS[name].run(session, args)
+        _check_call(session, tool, args)
+        outcome = tool.run(session, args)
     except Refused as e:
-        outcome = _refused(str(e))
-    session.log({"event": "tool", "stage": session.stage, "tool": name, "args": args,
-                 "result": outcome.result, "next_stage": outcome.next_stage})
+        outcome = Outcome({"ok": False, "error": str(e)})
+    except Exception as e:
+        session.log({**entry, "error": f"{type(e).__name__}: {e}"})
+        raise
+    session.log({**entry, "result": outcome.result, "next_stage": outcome.next_stage})
     return outcome

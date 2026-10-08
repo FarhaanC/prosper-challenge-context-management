@@ -179,8 +179,8 @@ def check_time_wishes(days, time_of_day, now: datetime) -> TimeTests:
                             f"'tomorrow' or a date like {window[7]:%Y-%m-%d}. Put morning or afternoon "
                             "in the time of day.")
         elif not window[0] <= target <= window[-1]:
-            problems.append(f"{target:%A} {target.day} {target:%B} is outside the booking window "
-                            f"({window[0].day} {window[0]:%B} to {window[-1].day} {window[-1]:%B}).")
+            problems.append(f"{target:%A} {target.day} {target:%B} {target.year} is outside the booking window "
+                            f"({window[0].day} {window[0]:%B} to {window[-1].day} {window[-1]:%B} {window[-1].year}).")
         else:
             day_tests.append(lambda day, t=target: day == t)
             labels.append(f"on {target:%A} {target.day} {target:%B}")
@@ -463,6 +463,12 @@ def _known_language(catalog: Catalog, said) -> tuple:
         return "", (f"I couldn't use the language '{words}'. Pass one language name, like 'Spanish', "
                     "or leave it empty for no language wish.")
     return " ".join(w[:1].upper() + w[1:] for w in words.split()), ""  # keeps "ASL" as said
+
+
+def language_problem(catalog: Catalog, said) -> str:
+    """The sentence saying why this language value can't be used, or "" if it can.
+    The tool layer checks a value before recording it, with the same rule find_options uses."""
+    return _known_language(catalog, said)[1]
 
 
 def _sentence_problems(prefs: Preferences) -> list:
