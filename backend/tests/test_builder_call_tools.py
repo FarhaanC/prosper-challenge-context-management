@@ -791,3 +791,27 @@ def test_respond_immediately_must_be_true_or_false():
     d["nodes"][0]["respond_immediately"] = "no"
     with pytest.raises(ValueError, match="'respond_immediately' must be true or false"):
         AgentBuilder.from_dict(d)
+
+
+# ---------------------------------------------------------------- after Farhaan's second voice call
+def test_days_description_says_a_particular_day_is_sent_as_a_date():
+    """'Can we do it for tomorrow?' was sent as "Friday", which means any Friday: the caller
+    was offered next week's Friday. The AI is now told to send "tomorrow" or the date."""
+    for tool in ("start_booking", "choose_visit_type", "change_choice"):
+        days = TOOLS[tool].properties["days"]["description"]
+        assert "send \"today\", \"tomorrow\" or its date as YYYY-MM-DD" in days, tool
+        assert "A weekday name (\"Friday\") means ANY Friday in the next two weeks" in days, tool
+
+
+def test_stage_one_passes_a_doctors_name_on_unchecked():
+    """In the second call, stage 1 looked Dr. Garcia up and asked "which one?", so the code's
+    clear "none of them do skin checks" note was never reached."""
+    identify = agent_dict()["nodes"][0]["task_messages"][0]["content"]
+    assert "don't look the doctor up or ask which one now" in identify
+
+
+def test_speech_to_text_is_english_only():
+    """A name heard on its own was transcribed as Russian in the second call."""
+    with open("bot.py", encoding="utf-8") as f:
+        source = f.read()
+    assert "ElevenLabsRealtimeSTTService.Settings(language=Language.EN)" in source

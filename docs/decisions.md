@@ -5,7 +5,7 @@ Every decision that shaped the work, with the reason. Numbers never change once 
 - **1–21:** made while planning (1–5 Oct), before any code.
 - **22–30:** made while building the rules module (5–6 Oct).
 - **31–42:** made during the independent review rounds of the rules module (6–7 Oct). These were Farhaan's calls where behaviour changed, or a fresh verifier's ruling where the builder disagreed with a test.
-- **43 onward:** made while wiring the stages and tools into the voice agent (8 Oct); 50–57 in its two review rounds; 58 onward after the first voice call.
+- **43 onward:** made while wiring the stages and tools into the voice agent (8 Oct); 50–57 in its two review rounds; 58 onward after the voice calls.
 
 The reviews behind 31 onward are in [`reviews/2026-10-06-rules-module/`](reviews/2026-10-06-rules-module/). The quality process is in [`process.md`](process.md).
 
@@ -90,6 +90,9 @@ The reviews behind 31 onward are in [`reviews/2026-10-06-rules-module/`](reviews
 | 58 | **The greeting is spoken by the code the moment the call connects** ("Hello, you've reached the clinics' scheduling line. How can I help you today?"), and the AI waits for the caller (`respond_immediately: false`, Pipecat's own setting, now in our agent format). | Farhaan (first voice call) | The first call had about 6 s of silence before the first word, 3.7 s of it the AI writing a greeting. A fixed line needs no AI, and saves one AI call per call. |
 | 59 | **New patients' names are spelled back for confirmation** before start_booking ("F, A, R, H, A, A, N, is that right?"). | Farhaan (first voice call) | Speech-to-text heard "Farhan" for "Farhaan": spoken words carry no spelling, and a new patient's name is saved as heard. Returning patients are matched forgivingly and saved as the record has them. |
 | 60 | **Nothing is promised before the options.** Stages 1–2 must not say or suggest that a doctor, place or time is available, or that anything is being booked; stage 2 doesn't ask about preferences. | Farhaan (first voice call) | In the first call the agent said "I'll register you for that skin check with Dr. Garcia", and an extra "any preferences?" question let Dr. Chen replace Dr. Garcia before the code's "no Dr. Garcia does skin checks" note could be said. |
+| 61 | **Speech-to-text is English only.** | Farhaan (second voice call) | Left to guess the language sentence by sentence, it transcribed the caller's name, said on its own, in Russian ("Фархан Чидов"). The agent only speaks English. |
+| 62 | **A particular day is sent as "today", "tomorrow" or its date; a weekday name means any such weekday** (in the next two weeks). Said in the tools' day description. | Farhaan (second voice call) | "Can we do it for tomorrow?" was sent as "Friday", which the code rightly read as any Friday, so the caller was offered next week's Friday. |
+| 63 | **Stage 1 passes a doctor's name on unchecked**: no looking the doctor up, and no "which one?", before the visit is chosen. | Farhaan (second voice call) | In the second call stage 1 asked "which Dr. Garcia?" and moved quietly to dermatology, so the code's clear "none of our Dr. Garcias do skin checks" was never said. Checking the doctor against the visit is the code's job, in the options stage. |
 
 ## How the work is checked (process decisions, 5–6 Oct)
 

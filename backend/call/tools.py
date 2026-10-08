@@ -126,9 +126,11 @@ WISH_FIELDS = {
         "With place: true if the caller wants somewhere close to it (\"near Union Square\"), false if they mean "
         "that place itself (\"the Midtown one\").")},
     "days": {"type": "array", "items": {"type": "string"}, "description": (
-        "Days that suit the caller, ONE day per entry: a weekday name (\"Thursday\"), \"today\", \"tomorrow\", "
-        "or a date YYYY-MM-DD (use the year from 'Now' in your instructions). \"Thursday or Friday\" is "
-        "[\"Thursday\", \"Friday\"]. Never put a time of day here.")},
+        "Days that suit the caller, ONE day per entry. For a particular day (\"tomorrow\", \"this Friday\", "
+        "\"the 9th\", \"next Monday\"), send \"today\", \"tomorrow\" or its date as YYYY-MM-DD, worked out from "
+        "'Now' in your instructions. A weekday name (\"Friday\") means ANY Friday in the next two weeks: send one "
+        "only when the caller means any such day (\"Fridays suit me\"). \"The 9th or the 10th\" is two entries. "
+        "Never put a time of day here.")},
     "time_of_day": {"type": "string", "enum": [*TIMES_OF_DAY, ANY], "description": (
         "\"morning\" (before noon) or \"afternoon\" (noon or later). Leave it out if they didn't say.")},
     "soonest": {"type": "boolean", "description": "true if the caller wants the earliest time possible."},

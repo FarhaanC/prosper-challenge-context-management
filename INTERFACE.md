@@ -1,4 +1,4 @@
-# Interface sheet for the independent tester (voice stages, round-2 fixes)
+# Interface sheet for the independent tester (voice stages, after the voice calls)
 
 How to call the code. This sheet lists names, fields and shapes only; work out expected answers from the plan, the decisions and the raw data, not from the code.
 
@@ -92,7 +92,7 @@ Required: ['full_name', 'returning']. Can move to: ['visit_type', 'end'].
   "items": {
    "type": "string"
   },
-  "description": "Days that suit the caller, ONE day per entry: a weekday name (\"Thursday\"), \"today\", \"tomorrow\", or a date YYYY-MM-DD (use the year from 'Now' in your instructions). \"Thursday or Friday\" is [\"Thursday\", \"Friday\"]. Never put a time of day here."
+  "description": "Days that suit the caller, ONE day per entry. For a particular day (\"tomorrow\", \"this Friday\", \"the 9th\", \"next Monday\"), send \"today\", \"tomorrow\" or its date as YYYY-MM-DD, worked out from 'Now' in your instructions. A weekday name (\"Friday\") means ANY Friday in the next two weeks: send one only when the caller means any such day (\"Fridays suit me\"). \"The 9th or the 10th\" is two entries. Never put a time of day here."
  },
  "time_of_day": {
   "type": "string",
@@ -158,7 +158,7 @@ Required: ['visit_type_id']. Can move to: ['booking'].
   "items": {
    "type": "string"
   },
-  "description": "Days that suit the caller, ONE day per entry: a weekday name (\"Thursday\"), \"today\", \"tomorrow\", or a date YYYY-MM-DD (use the year from 'Now' in your instructions). \"Thursday or Friday\" is [\"Thursday\", \"Friday\"]. Never put a time of day here."
+  "description": "Days that suit the caller, ONE day per entry. For a particular day (\"tomorrow\", \"this Friday\", \"the 9th\", \"next Monday\"), send \"today\", \"tomorrow\" or its date as YYYY-MM-DD, worked out from 'Now' in your instructions. A weekday name (\"Friday\") means ANY Friday in the next two weeks: send one only when the caller means any such day (\"Fridays suit me\"). \"The 9th or the 10th\" is two entries. Never put a time of day here."
  },
  "time_of_day": {
   "type": "string",
@@ -265,7 +265,7 @@ Required: none. Can move to: ['visit_type', 'booking'].
   "items": {
    "type": "string"
   },
-  "description": "Days that suit the caller, ONE day per entry: a weekday name (\"Thursday\"), \"today\", \"tomorrow\", or a date YYYY-MM-DD (use the year from 'Now' in your instructions). \"Thursday or Friday\" is [\"Thursday\", \"Friday\"]. Never put a time of day here."
+  "description": "Days that suit the caller, ONE day per entry. For a particular day (\"tomorrow\", \"this Friday\", \"the 9th\", \"next Monday\"), send \"today\", \"tomorrow\" or its date as YYYY-MM-DD, worked out from 'Now' in your instructions. A weekday name (\"Friday\") means ANY Friday in the next two weeks: send one only when the caller means any such day (\"Fridays suit me\"). \"The 9th or the 10th\" is two entries. Never put a time of day here."
  },
  "time_of_day": {
   "type": "string",
