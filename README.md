@@ -24,6 +24,17 @@ Open the URL it prints (default `http://localhost:7860/client`), click **Connect
 \
 Remember to update the `.env` file accordingly.
 
+**On Windows, without `make`** (from the repo root, PowerShell):
+
+```powershell
+backend\.venv\Scripts\python.exe -m pip install -r backend\requirements.txt -r backend\requirements-dev.txt
+backend\.venv\Scripts\python.exe backend\bot.py
+```
+
+- Install the requirements first: they include `tzdata`, without which Windows Python can't tell San Francisco time and the agent stops at the first call.
+- To keep a copy of the console output (useful for checking a call afterwards), set `$env:PYTHONUTF8 = "1"` first, then add `2>&1 | Tee-Object -FilePath backend\call_logs\console.txt`. Without that setting, writing Pipecat's start-up emoji to a file crashes the agent.
+- Tests: `cd backend`, then `.venv\Scripts\python.exe -m pytest -q`.
+
 ## Layout
 
 | Path | Responsibility |

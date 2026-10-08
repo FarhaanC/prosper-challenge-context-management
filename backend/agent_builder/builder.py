@@ -116,6 +116,8 @@ class AgentBuilder:
         }
         if node.pre_actions:
             node_config["pre_actions"] = node.pre_actions
+        if not node.respond_immediately:
+            node_config["respond_immediately"] = False
         # Explicit post_actions win; otherwise a terminal node ends the call.
         if node.post_actions:
             node_config["post_actions"] = node.post_actions

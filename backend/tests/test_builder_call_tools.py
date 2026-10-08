@@ -764,3 +764,30 @@ def test_agent_file_shape_problems_are_found_at_load(break_it, message):
     with pytest.raises(ValueError, match=message):
         AgentBuilder.from_dict(d)
 
+
+
+# ---------------------------------------------------------------- after Farhaan's first voice call
+def test_the_greeting_is_spoken_by_the_code_at_once(clinic):
+    """The first call had ~6 s of silence: 3.7 s of it was the AI writing a greeting. The code
+    now speaks a fixed greeting the moment the call connects, and the AI waits for the caller."""
+    b = AgentBuilder.from_json(AGENT_FILE)
+    first = b.build_initial_node(clinic.new_call(clock=lambda: NOW))
+    assert first["respond_immediately"] is False
+    (say,) = first["pre_actions"]
+    assert say["type"] == "tts_say" and say["text"].startswith("Hello, you've reached the clinics' scheduling line")
+    assert say["text"] in first["task_messages"][0]["content"]  # the AI knows what was already said
+    assert "respond_immediately" not in b._make_node(b._nodes_by_name["booking"], new_caller_at_booking(clinic))
+
+
+def test_new_patients_names_are_spelled_back_and_nothing_is_promised_early():
+    stages = {n["name"]: n["task_messages"][0]["content"] for n in agent_dict()["nodes"]}
+    assert "spell their first and last name back letter by letter" in stages["identify"]
+    assert "Don't say or suggest that any doctor, place or time is available" in stages["identify"]
+    assert "Don't ask about doctor, place or time preferences here" in stages["visit_type"]
+
+
+def test_respond_immediately_must_be_true_or_false():
+    d = agent_dict()
+    d["nodes"][0]["respond_immediately"] = "no"
+    with pytest.raises(ValueError, match="'respond_immediately' must be true or false"):
+        AgentBuilder.from_dict(d)

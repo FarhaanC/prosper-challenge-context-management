@@ -5,7 +5,7 @@ Every decision that shaped the work, with the reason. Numbers never change once 
 - **1–21:** made while planning (1–5 Oct), before any code.
 - **22–30:** made while building the rules module (5–6 Oct).
 - **31–42:** made during the independent review rounds of the rules module (6–7 Oct). These were Farhaan's calls where behaviour changed, or a fresh verifier's ruling where the builder disagreed with a test.
-- **43 onward:** made while wiring the stages and tools into the voice agent (8 Oct); 50 onward in its two review rounds.
+- **43 onward:** made while wiring the stages and tools into the voice agent (8 Oct); 50–57 in its two review rounds; 58 onward after the first voice call.
 
 The reviews behind 31 onward are in [`reviews/2026-10-06-rules-module/`](reviews/2026-10-06-rules-module/). The quality process is in [`process.md`](process.md).
 
@@ -87,6 +87,9 @@ The reviews behind 31 onward are in [`reviews/2026-10-06-rules-module/`](reviews
 | 55 | **The order of a call is enforced by the code.** Once the call is booked or handed off, only answer_question and hand_off work. Tools that need the caller refuse until start_booking succeeds. Whether a change moves the call depends on the card (no caller yet → stay), not on a stage's name. | Builder (tests T5, T6; review R6) | The AI only sees each stage's tools in a voice call, but the typed test loop (decision 22) and edited agent files shouldn't depend on that. |
 | 56 | **Each stage is told what just happened.** One line written by the code (`{just_happened}`), e.g. "The caller asked for a different kind of visit". Stage 2 thanks the caller only when that line says they were just identified, and the AI says one short sentence before calling a tool. | Farhaan (round-2 review S13) | After a stage reset the AI can't tell a fresh start from a change of mind, and might thank the caller by name mid-call or leave them in silence. |
 | 57 | **Wishes said early aren't undone by later, smaller steps.** Before options are on offer, turning a doctor down only adds to the "not these doctors" list (it isn't a doctor change). Doctors turned down before any visit was agreed survive a change of visit. "As soon as possible" on its own isn't a new day or time wish. | Builder (round-2 review S1–S3) | Each was a way for something the caller said to be silently lost, which decision 11 rules out. |
+| 58 | **The greeting is spoken by the code the moment the call connects** ("Hello, you've reached the clinics' scheduling line. How can I help you today?"), and the AI waits for the caller (`respond_immediately: false`, Pipecat's own setting, now in our agent format). | Farhaan (first voice call) | The first call had about 6 s of silence before the first word, 3.7 s of it the AI writing a greeting. A fixed line needs no AI, and saves one AI call per call. |
+| 59 | **New patients' names are spelled back for confirmation** before start_booking ("F, A, R, H, A, A, N, is that right?"). | Farhaan (first voice call) | Speech-to-text heard "Farhan" for "Farhaan": spoken words carry no spelling, and a new patient's name is saved as heard. Returning patients are matched forgivingly and saved as the record has them. |
+| 60 | **Nothing is promised before the options.** Stages 1–2 must not say or suggest that a doctor, place or time is available, or that anything is being booked; stage 2 doesn't ask about preferences. | Farhaan (first voice call) | In the first call the agent said "I'll register you for that skin check with Dr. Garcia", and an extra "any preferences?" question let Dr. Chen replace Dr. Garcia before the code's "no Dr. Garcia does skin checks" note could be said. |
 
 ## How the work is checked (process decisions, 5–6 Oct)
 

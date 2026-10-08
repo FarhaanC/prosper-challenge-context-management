@@ -28,7 +28,8 @@ DEFAULT_MODEL = "gpt-4o"
 # misspelt key ("tool" for "tools") is an error at start-up, not a stage that can't act.
 AGENT_KEYS = {"name", "initial_node", "nodes", "persona", "voice_id", "model", "global_tools", "history",
               "parallel_tool_calls"}
-NODE_KEYS = {"name", "task_messages", "role_message", "edges", "tools", "pre_actions", "post_actions", "end"}
+NODE_KEYS = {"name", "task_messages", "role_message", "edges", "tools", "pre_actions", "post_actions", "end",
+             "respond_immediately"}
 EDGE_KEYS = {"function", "description", "target", "properties", "required"}
 
 
@@ -61,6 +62,8 @@ def shape_problems(d) -> list:
         if not (isinstance(messages, list) and all(isinstance(m, dict) and isinstance(m.get("content"), str)
                                                    for m in messages)):
             problems.append(f"{where}: 'task_messages' must be a list of messages, each with text 'content'.")
+        if not isinstance(n.get("respond_immediately", True), bool):
+            problems.append(f"{where}: 'respond_immediately' must be true or false.")
         for key in ("edges", "pre_actions", "post_actions"):
             if not isinstance(n.get(key, []), list):
                 problems.append(f"{where}: '{key}' must be a list.")
@@ -109,6 +112,7 @@ class Node:
     pre_actions: list = field(default_factory=list)
     post_actions: list = field(default_factory=list)
     end: bool = False                                   # terminal -> ends the call
+    respond_immediately: bool = True                    # False: the AI waits for the caller (Pipecat's own field)
 
     @classmethod
     def from_dict(cls, d: dict) -> "Node":
@@ -121,6 +125,7 @@ class Node:
             pre_actions=d.get("pre_actions", []),
             post_actions=d.get("post_actions", []),
             end=d.get("end", False),
+            respond_immediately=d.get("respond_immediately", True),
         )
 
 
