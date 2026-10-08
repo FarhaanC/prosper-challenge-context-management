@@ -2,7 +2,7 @@
 
 For Farhaan, before the review call. Part 1 explains how the rules module works, in plain words, by following one phone call. Part 2 lists the questions an interviewer is likely to ask, with short answers. If any answer doesn't make sense to you, say so: per `process.md`, it gets simplified or explained before we move on.
 
-This covers **version 0.1.0** (the rules module). Later steps will add their own sections.
+Parts 1–2 cover **version 0.1.0** (the rules module). Part 3 covers **version 0.2.0** (the stages and tools in the voice agent).
 
 ---
 
@@ -121,7 +121,7 @@ The reviewers had a checklist for exactly this, and the triage files show each c
 **Does it scale?**
 On a generated catalog with 500 locations and 2,000 doctors, a search takes about 0.2–0.6 s, and on the real catalog under 10 ms. What the AI sees doesn't grow. Half a second is noticeable in a voice call, so at that scale I'd precompute which doctor-location pairs are valid for each visit type and caller kind, which is most of the work. The full scale test is planned for Sat 10.
 
-**What isn't done yet?**
+**What isn't done yet?** *(as of 0.1.0; the first two were done in 0.2.0, see Part 3)*
 These are the next step:
 - the voice agent's tools and stages, which call this module;
 - saving bookings to a file;
@@ -132,3 +132,73 @@ The module already has all the logic the tools need.
 **What would you do differently?**
 - Hold decision 23 strictly from day one, and put phrase handling in the AI's tool descriptions, not in code.
 - Write whole-catalog "every note is true" tests from the start. They found more than the example-based tests did.
+
+---
+
+## Part 3 (version 0.2.0): the voice agent, following one real call
+
+This is Farhaan's real test call on 8 Oct, taken from its log.
+
+1. **The call connects.** The code itself says *"Hello, you've reached the clinics' scheduling line. How can I help you today?"*, about 1.4 s later. No AI is needed for a fixed greeting; the first test call had 6 s of silence while the AI wrote one.
+2. **Stage 1, identify.** The caller asks for a skin check with Dr. Garcia. The AI collects the name (spelling it back), whether they're new, and for returning patients the date of birth. Then it calls `start_booking` once with everything said so far: the visit, "Dr. Garcia", and the specialty (Dermatology). The AI is told *not* to look Dr. Garcia up or promise anything; checking is the code's job.
+3. **The move.** The code, not the AI, decides to move to stage 2. The conversation is wiped. The new stage's instructions are built at that moment and contain:
+   - the date;
+   - one line on what just happened ("just identified: thank them by first name");
+   - the booking card;
+   - Dermatology's visit types, each marked bookable or not for *this* caller.
+4. **Stage 2, which visit.** "Skin cancer screening, please" leads to `choose_visit_type`. The code checks the rules, finds the first options using everything on the card, and moves to stage 3 with them already in the instructions. That saves a round trip.
+5. **Stage 3, options.** The instructions include the code's note, *"No doctor matching 'Dr. Garcia' can do this… Doctors who can: Dr. Daniel Chen, Dr. Kenji Kim, Dr. Daniel Smith"*, and three valid options. The agent says *"Unfortunately, Dr. Garcia doesn't offer Skin Cancer Screenings"* and offers them. This is the baseline's mistake, caught.
+6. **"Anything tomorrow?"** The AI sends `change_choice` with the date 2026-10-09. The code clears the old options, searches again and rebuilds stage 3. Option numbers keep counting up, so a stale number can never pick the wrong slot.
+7. **Choosing and confirming.** `choose_option` puts the exact doctor, place and time on the card, and returns a read-back sentence built from the card. The AI says it word for word. After "yes", `confirm_booking` runs every rule again, writes the booking to the file, marks the time as taken, and moves to the end stage, where the AI confirms briefly and says goodbye.
+
+**Size:** the AI's first request in that call was about 1,700 tokens: persona, instructions and the tool descriptions. Each stage only adds the card, one specialty's visit types or three options. It doesn't grow with the catalog.
+
+---
+
+## Part 4 (version 0.2.0): likely questions
+
+### The design
+
+**Why wipe the conversation on every stage move? Doesn't the AI forget things?**
+Anything that matters later is written on the booking card by the code, and each stage's instructions are rebuilt from the card. What's lost is the chit-chat, which keeps what the AI reads small and stops old turns confusing it. We use Pipecat's plain "reset". The "reset with summary" option is deprecated and costs an extra AI call of up to 5 s per move.
+
+**Why does the code decide when to move stage, not the AI?**
+Moves are where mistakes are costly: skipping identification, or booking before the read-back. Each tool's code returns "stay" or "move to X". The AI can't skip a step because it doesn't have the tool for it, and the code refuses out-of-order calls anyway (decision 55). Every stage a tool can move to is checked when the agent file loads.
+
+**Why one tool call at a time?**
+If the AI called two tools in one reply, both could try to move the call, and one move would overwrite the other. Turning parallel calls off costs nothing noticeable, because each tool already gets its own short AI pass.
+
+**Why does change_choice carry several changes at once?**
+"Friday afternoon at Midtown" is one breath. Because the conversation is wiped when the stage is rebuilt, a second change left for a second call was silently lost (round-1 review). Now everything said goes in one call, and is applied in a fixed order.
+
+**Why is the greeting a fixed sentence, not the AI?**
+The first real call had 6 s of silence before anyone spoke, 3.7 s of it the AI writing "hello". A fixed greeting comes out in about 1.3 s and saves an AI call on every phone call.
+
+### What the calls taught us
+
+**Your tests passed. Why did the real calls still find problems?**
+The tests check that the code does what it's told. The calls showed what the AI *says*, which the tests can't. Examples:
+- "I'll register you for that skin check with Dr. Garcia", a false promise;
+- asking "which Dr. Garcia?" itself, so the code's clear warning never came;
+- turning "tomorrow" into "Friday", which means any Friday.
+
+The fixes were to the AI's instructions and tool descriptions, which are part of the design: the AI understands speech; the code follows plain values.
+
+**Is "speech-to-text set to English" a limitation?**
+Yes: the agent only speaks English. Left to guess, the speech service heard a spoken name as Russian. For other languages you'd set the language per line, or detect it once at the start, not per sentence.
+
+**How do you know the name is right?**
+For new patients the agent spells it back and the caller corrects it. In the last call the AI only spelled back the last name, so the first was still wrong. That's recorded as known; the AI-played callers (Sat 10) will show how often it happens. Returning patients are matched forgivingly against the records, and the record's spelling is what's saved.
+
+### Honest limits
+
+**What can still go wrong?**
+- **The goodbye.** Pipecat offers the always-available tools even in the goodbye stage, and there's no per-stage switch. If the AI called one there, the hang-up would cut it off and the caller would hear no goodbye. The wording steers it away (decision 50). It never happened in testing, but it can't be ruled out.
+- **One call at a time.** The bookings file assumes one call at a time. A real system would use a database with proper locking.
+- **Fake hand-offs.** "A member of staff will call you back" isn't wired to anything.
+
+**How was this step checked?**
+- Two independent rounds: a fresh tester and reviewer, then one fresh agent as tester and then reviewer. Together they wrote 632 tests and found 28 problems. Every one has a decision in `triage.md`.
+- Then three real voice calls by Farhaan. Each found something the others couldn't, and each fix is a numbered decision (58–63).
+- In all: 381 builder tests and 3,480 independent tests, all passing.
+
