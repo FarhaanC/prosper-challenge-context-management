@@ -36,3 +36,6 @@ Thumbs.db
 .idea/
 .vscode/
 *.swp
+
+# ---- Test runs: the big made-up catalog is rebuilt by `python -m evals.scale` ----
+docs/results/*/scale/big-catalog/
