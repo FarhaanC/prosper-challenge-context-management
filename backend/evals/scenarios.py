@@ -15,12 +15,13 @@ from our code's output, so a bug in our code can't make its own test pass:
 - Knee MRI (appt_065): needs a referral, existing patients only, and imaging equipment.
   It's offered by prov_014 Linda Ramirez (Mission Bay loc_000, Downtown loc_004) and
   prov_015 Hannah Nguyen (Mission Bay loc_000, Midtown loc_005). Mission Bay has no
-  imaging, so the only valid pairs are Ramirez at Downtown and Nguyen at Midtown.
+  imaging, so the only valid pairs are Ramirez at Downtown and Nguyen at Midtown. A caller who
+  asks for "near Downtown" should get Ramirez at Downtown, which has open times.
   James Wilson (pat_001, born 1984-03-12) has a Radiology referral on file.
 - Dr. Maria Garcia: prov_002 (Pediatrics, Mission Bay) and prov_003 (Family Medicine,
-  North Beach, Midtown, Richmond). Both take new patients. prov_003's check-up visits that
-  allow new patients: New Patient Consultation (appt_000), New Patient Visit (appt_001),
-  Annual Physical (appt_002), Annual Wellness Visit (appt_003).
+  North Beach, Midtown, Richmond). Both take new patients. prov_003's yearly check-ups that
+  allow new patients: Annual Physical (appt_002) and Annual Wellness Visit (appt_003). (Her
+  New Patient Consultation and New Patient Visit are first visits, not a yearly check-up.)
 - OB/GYN: one doctor, prov_036 Linda Nguyen, not taking new patients, so no new patient
   can book any OB/GYN visit.
 """
@@ -56,8 +57,9 @@ SKIN_CHECKS = frozenset({"appt_027", "appt_028"})
 DERMATOLOGISTS_FOR_NEW = frozenset({"prov_001", "prov_027", "prov_035"})
 KNEE_MRI = frozenset({"appt_065"})
 KNEE_MRI_PAIRS = frozenset({("prov_014", "loc_004"), ("prov_015", "loc_005")})
+KNEE_MRI_DOWNTOWN = frozenset({("prov_014", "loc_004")})
 MARIA_GARCIA_FAMILY = frozenset({"prov_003"})
-CHECK_UPS = frozenset({"appt_000", "appt_001", "appt_002", "appt_003"})
+YEARLY_CHECK_UPS = frozenset({"appt_002", "appt_003"})
 
 _JAMES = ("Your name is James Wilson, and you've been a patient here before. Your date of birth is "
           "March 12th, 1984. ")
@@ -83,7 +85,7 @@ SCENARIOS = [
         "james_knee_mri_downtown", "James Wilson: a knee MRI near Downtown (only 2 valid doctor-place pairs)",
         _JAMES + "Your doctor referred you for a knee MRI, and you'd like it somewhere near Downtown. Any day is "
         "fine: accept the first option offered. " + _THEN_BOOK,
-        Expected(BOOKED, KNEE_MRI, pairs=KNEE_MRI_PAIRS), patient_id="pat_001"),
+        Expected(BOOKED, KNEE_MRI, pairs=KNEE_MRI_DOWNTOWN), patient_id="pat_001"),
     Scenario(
         "james_changes_to_mri", "James Wilson: a Garcia skin check, then 'actually, a knee MRI'",
         _JAMES + "Start by asking for a skin check with Dr. Garcia. Once the agent has started on that (it has "
@@ -99,7 +101,7 @@ SCENARIOS = [
         "offered more than one Dr. Maria Garcia, choose the family medicine one. If asked what kind of check-up, "
         "say a yearly physical, and you don't mind which of the similar ones. Any day is fine: accept the first "
         "option with the family medicine Dr. Maria Garcia. " + _THEN_BOOK,
-        Expected(BOOKED, CHECK_UPS, MARIA_GARCIA_FAMILY), new_patient_name="Priya Nair"),
+        Expected(BOOKED, YEARLY_CHECK_UPS, MARIA_GARCIA_FAMILY), new_patient_name="Priya Nair"),
     Scenario(
         "obgyn_new_then_person", "New patient: an OB/GYN visit (no OB/GYN takes new patients), then 'a person'",
         "Your name is Sofia Reyes (spelled S, O, F, I, A and R, E, Y, E, S). You have never been a patient "

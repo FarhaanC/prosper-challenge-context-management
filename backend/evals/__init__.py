@@ -1,4 +1,5 @@
-"""The typed test runs: AI-played callers against three versions of the agent.
+"""The typed test runs: AI-played callers against three versions of the agent (and ours again on the
+smaller model, decision 68).
 
 Decision 22: a small loop of our own, not a text-only Pipecat pipeline. It uses the
 same agent file (clinic_agent.json), the same stage instructions and the same tool
@@ -14,6 +15,7 @@ code (call/) as the voice agent, and copies what Pipecat Flows does in a call:
     budget.py        prices, and the spending record with the $7 stop (decision 84)
     ai.py            one OpenAI request, timed, with rate-limit waits not counted
     agents.py        the versions: ours (stages) and naive (with or without rule checks)
+    scale.py         the scale test: a big made-up catalog
     caller.py        the AI that plays the caller (decision 85: gpt-4o-mini)
     scenarios.py     the six scenarios and their expected outcomes (decision 87)
     scoring.py       pass or fail, checked by code against what was saved

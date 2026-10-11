@@ -89,7 +89,6 @@ class _Agent:
         self.tools: list = []
         self.one_tool_at_a_time = True
         self.ended = False
-        self.tools_called: list = []
 
     def add_spoken_line(self, text: str) -> None:
         """A line the code says outside a turn (the silence check-in): it joins the conversation."""
@@ -127,7 +126,6 @@ class _Agent:
         call = reply.tool_calls[0]
         self.messages.append({"role": "assistant", "tool_calls": [
             {"id": call.id, "type": "function", "function": {"name": call.name, "arguments": call.arguments}}]})
-        self.tools_called.append(call.name)
         return call
 
     def _give_result(self, call, result: dict) -> None:
@@ -228,17 +226,32 @@ class OurAgent(_Agent):
         self.ended = True
 
     def outcome(self) -> dict:
-        path = self.clinic.bookings_file
+        """What the call ended with, read from the booking card (decision 20): its status, and once it's
+        booked, the booking confirm_booking saved from it (the same fields)."""
+        card = self.session.card
         bookings = []
-        if path and path.exists():
-            bookings = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
-        return {"status": self.session.card.status, "bookings": bookings,
-                "hand_off_called": "hand_off" in self.tools_called,
-                "name_confirmed": self.session.card.caller.name_confirmed if self.session.card.caller else None}
+        if card.status == "booked":
+            c = card.choices
+            bookings.append({"caller": card.caller.name, "patient_id": card.caller.patient_id,
+                             "visit_type_id": c.visit_type_id, "provider_id": c.provider_id,
+                             "location_id": c.location_id, "start": c.slot.isoformat(),
+                             "duration_min": self.clinic.catalog.visit_types[c.visit_type_id].duration_min})
+        return {"status": card.status, "bookings": bookings,
+                "name_confirmed": card.caller.name_confirmed if card.caller else None}
 
 
 # ---------------------------------------------------------------- naive
-GREETING = "Hello, you've reached the clinics' scheduling line. How can I help you today?"
+def _greeting(agent_file: Path = AGENT_FILE) -> str:
+    """The line the code says when a call connects, taken from the agent file, so every version greets
+    the caller the same way."""
+    config = json.loads(Path(agent_file).read_text(encoding="utf-8"))
+    first = next(n for n in config["nodes"] if n["name"] == config["initial_node"])
+    return " ".join(a["text"] for a in first.get("pre_actions", []) if a.get("type") == "tts_say")
+
+
+GREETING = _greeting()
+HAND_OFF_REASONS = TOOLS["hand_off"].properties["reason"]["enum"]   # the same reasons ours accepts
+MAX_TIMES = 6   # open times find_open_times gives back at most
 
 NAIVE_PERSONA = (
     "You are a warm, efficient scheduling assistant for a group of healthcare clinics in San Francisco. Your "
@@ -275,15 +288,18 @@ NAIVE_TOOLS = [
         "full_name": {"type": "string", "description": "First and last name."},
         "date_of_birth": {"type": "string", "description": "YYYY-MM-DD."}}, ["full_name", "date_of_birth"]),
     tool_schema("find_open_times", (
-        "Open appointment times for one doctor and visit type over the next two weeks, with the location the "
-        "doctor is at on each day. Returns up to 6 times."), {
-        "provider_id": {"type": "string", "description": "The doctor's id from the catalog."},
-        "visit_type_id": {"type": "string", "description": "The visit type's id from the catalog (for its length)."},
+        "Open appointment times for a visit type over the next two weeks, soonest first: for one doctor, or, "
+        "without provider_id, for every doctor who offers that visit type. Each time comes with the doctor and "
+        f"the location the doctor is at that day. Returns up to {MAX_TIMES} times (at most 2 per doctor when it's "
+        "for every doctor)."), {
+        "visit_type_id": {"type": "string", "description": "The visit type's id from the catalog."},
+        "provider_id": {"type": "string", "description": "Only this doctor (an id from the catalog). Leave out "
+                                                          "for every doctor who offers the visit type."},
         "days": {"type": "array", "items": {"type": "string"},
                  "description": "Only these dates, YYYY-MM-DD. Leave out for any day."},
         "time_of_day": {"type": "string", "enum": ["morning", "afternoon"],
                         "description": "Only mornings (before noon) or afternoons. Leave out for any time."}},
-        ["provider_id", "visit_type_id"]),
+        ["visit_type_id"]),
     tool_schema("book_appointment", "Book the appointment, after the caller said yes to the read-back.", {
         "patient_name": {"type": "string", "description": "The caller's full name."},
         "patient_id": {"type": "string", "description": "Returning patients: the id find_patient gave."},
@@ -293,9 +309,8 @@ NAIVE_TOOLS = [
         "start": {"type": "string", "description": "The start time exactly as find_open_times gave it."}},
         ["patient_name", "visit_type_id", "provider_id", "location_id", "start"]),
     tool_schema("hand_off", "Pass the call to staff, who will call the caller back.", {
-        "reason": {"type": "string", "enum": ["reschedule", "cancel", "speak_to_staff"]}}, ["reason"]),
+        "reason": {"type": "string", "enum": HAND_OFF_REASONS}}, ["reason"]),
 ]
-MAX_TIMES = 6
 
 
 def naive_instructions(clinic: Clinic, now: datetime, data_dir: Path = DATA_DIR) -> str:
@@ -309,11 +324,6 @@ def naive_instructions(clinic: Clinic, now: datetime, data_dir: Path = DATA_DIR)
         rules="\n".join(f"- {r}" for r in raw["policies"]),
         catalog=json.dumps(raw, **compact), places=json.dumps(extras["locations"], **compact),
         visit_notes=json.dumps(notes, **compact))
-
-
-def _known(table: dict, key):
-    """The catalog entry for an id the AI sent, or None (also for a list or other odd value)."""
-    return table.get(key) if isinstance(key, str) else None
 
 
 class NaiveAgent(_Agent):
@@ -361,28 +371,43 @@ class NaiveAgent(_Agent):
         return {"found": True, "patient_id": c.patient_id, "name": c.name, "referrals_on_file": c.referrals_on_file}
 
     def _find_open_times(self, args: dict) -> dict:
+        """The same fake schedule ours uses, with no rule checks: the doctors are the ones the catalog lists
+        for the visit type (or the one asked for), each at the location the schedule puts them that day."""
         catalog, schedule = self.clinic.catalog, self.clinic.schedule
-        provider, vt = _known(catalog.providers, args.get("provider_id")), _known(catalog.visit_types,
-                                                                                 args.get("visit_type_id"))
-        if provider is None or vt is None:
-            return {"ok": False, "error": "Send a provider_id and a visit_type_id from the catalog."}
+        vt_id, provider_id = args.get("visit_type_id"), args.get("provider_id")
+        vt = catalog.visit_types.get(vt_id) if isinstance(vt_id, str) else None
+        if provider_id is None:
+            doctors = catalog.providers_offering(vt.id) if vt else []
+        else:
+            doctor = catalog.providers.get(provider_id) if isinstance(provider_id, str) else None
+            doctors = [doctor] if doctor else []
+        if vt is None or not doctors:
+            return {"ok": False, "error": "Send a visit_type_id from the catalog, and a provider_id from the "
+                                          "catalog or none."}
         wanted = set(args.get("days") or [])
         part = args.get("time_of_day")
-        times = []
-        for day in booking_days(self.now):
-            if wanted and day.isoformat() not in wanted:
-                continue
-            location_id = schedule.location_on(provider.id, day)
-            if location_id is None:
-                continue
-            for start in schedule.open_slots_on(provider.id, location_id, vt.duration_min, day, self.now):
-                if part and (start.hour < 12) != (part == "morning"):
+        each = MAX_TIMES if len(doctors) == 1 else 2   # several doctors: a few times from each
+        found = []
+        for doctor in doctors:
+            mine = []
+            for day in booking_days(self.now):
+                location_id = schedule.location_on(doctor.id, day)
+                if (wanted and day.isoformat() not in wanted) or location_id is None:
                     continue
-                times.append({"start": start.isoformat(timespec="minutes"), "spoken": spoken_time(start),
-                              "location_id": location_id, "location": catalog.locations[location_id].name})
-                if len(times) == MAX_TIMES:
-                    return {"ok": True, "times": times}
-        return {"ok": True, "times": times}
+                for start in schedule.open_slots_on(doctor.id, location_id, vt.duration_min, day, self.now):
+                    if part and (start.hour < 12) != (part == "morning"):
+                        continue
+                    mine.append((start, doctor, location_id))
+                    if len(mine) == each:
+                        break
+                if len(mine) == each:
+                    break
+            found += mine
+        found.sort(key=lambda x: (x[0], x[1].id))
+        return {"ok": True, "times": [
+            {"start": start.isoformat(timespec="minutes"), "spoken": spoken_time(start), "provider_id": doctor.id,
+             "doctor": doctor.name, "location_id": location_id, "location": catalog.locations[location_id].name}
+            for start, doctor, location_id in found[:MAX_TIMES]]}
 
     def _book(self, args: dict) -> dict:
         record = {k: args.get(k) for k in ("patient_name", "patient_id", "visit_type_id", "provider_id",
@@ -415,10 +440,11 @@ class NaiveAgent(_Agent):
                              record.get("provider_id"), record.get("location_id"), start, self.now)
 
     def _hand_off(self, args: dict) -> dict:
+        if args.get("reason") not in HAND_OFF_REASONS:  # refused as ours refuses it
+            return {"ok": False, "error": f"reason must be one of: {', '.join(HAND_OFF_REASONS)}."}
         if self.status == "in_progress":
             self.status = "handed_off"
         return {"ok": True}
 
     def outcome(self) -> dict:
-        return {"status": self.status, "bookings": self.bookings,
-                "hand_off_called": "hand_off" in self.tools_called, "name_confirmed": None}
+        return {"status": self.status, "bookings": self.bookings, "name_confirmed": None}

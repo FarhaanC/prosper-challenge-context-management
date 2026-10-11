@@ -1,7 +1,8 @@
 """The results tables and readable transcripts, rebuilt from the saved runs.
 
-Only finished runs count (the caller hung up, the agent said goodbye, or the turn limit
-was reached); runs cut short by the budget stop or an error are listed but left out.
+Only finished, scored runs count (the caller hung up, the agent said goodbye, or the turn
+limit was reached); runs cut short by the budget stop or an error, or whose scoring failed,
+are listed but left out.
 """
 
 from __future__ import annotations
@@ -41,26 +42,26 @@ def _row(label: str, runs: list) -> str:
             f"| ${sum(x['agent_cost'] for x in t) / len(runs):.3f} |")
 
 
-TABLE_HEAD = ("| Version | Passed | Bad bookings | Input tokens per call | Input tokens per AI pass | Of which "
+TABLE_HEAD = ("| Version | Scenarios passed | Bad bookings | Input tokens per call | Input tokens per AI pass | Of which "
               "cached | AI passes per call | Slowest reply: worst (typical) | Agent cost per call |\n"
               "| --- | --- | --- | --- | --- | --- | --- | --- | --- |")
 
 
 def build_results(results_dir: Path, ledger: Ledger) -> Path:
     runs = load_runs(results_dir)
-    done = [r for r in runs if r["ended_by"] in FINISHED]
-    stopped = [r for r in runs if r["ended_by"] not in FINISHED]
+    done = [r for r in runs if r["ended_by"] in FINISHED and r.get("score")]
+    stopped = [r for r in runs if r not in done]
     by_version = defaultdict(list)
     for r in done:
         if r["scenario"] != CHECK_IN_SCENARIO.id:
             by_version[r["version"]].append(r)
 
-    out = ["# Test results: AI-played callers against three versions of the agent", "",
+    out = ["# Test results: AI-played callers against three versions of the agent (and ours on a smaller model)", "",
            "Built by `python -m evals.run results` from the saved runs in `runs/`. How the runs work, and why: "
            "`docs/decisions.md` 16, 20, 22, 68, 84-88. Each run is a typed call: an AI (gpt-4o-mini) plays the "
            "caller from a short persona; the agent is one of the versions below; the result is checked by code "
            "against what was saved.", "",
-           "**Reading the columns.** *Passed*: the expected outcome, checked in code. *Bad bookings*: saved "
+           "**Reading the columns.** *Scenarios passed*: the expected outcome, checked in code. *Bad bookings*: saved "
            "bookings that break a booking rule for the real caller. *Input tokens*: what the AI read, from "
            "OpenAI's usage figures (a token is roughly 3/4 of a word); *cached* is the part OpenAI had already "
            "seen and charges half for. *AI passes*: each time the AI read everything and replied. *Slowest "
@@ -68,10 +69,17 @@ def build_results(results_dir: Path, ledger: Ledger) -> Path:
            "(a voice call adds about 1 s of speech); worst run, and the middle run in brackets. *Agent cost*: "
            "the agent's AI only, not the AI playing the caller.", ""]
 
+    # Round 1 compares the versions on the same scenarios only: a scenario counts once every version that
+    # has run has finished it (a budget stop part-way through could otherwise compare different sets).
     first = {v: [r for r in by_version[v] if r["run"] == 1] for v in ORDER}
-    if any(first.values()):
-        out += ["## All versions, each scenario once (round 1)", "", TABLE_HEAD]
-        out += [_row(LABELS[v], first[v]) for v in ORDER if first[v]]
+    ran = [v for v in ORDER if first[v]]
+    shared = set.intersection(*[{r["scenario"] for r in first[v]} for v in ran]) if ran else set()
+    if shared:
+        out += ["## All versions, on the same scenarios, each once (round 1)", "", TABLE_HEAD]
+        out += [_row(LABELS[v], [r for r in first[v] if r["scenario"] in shared]) for v in ran]
+        left_out = sorted({r["scenario"] for v in ran for r in first[v]} - shared)
+        if left_out:
+            out.append(f"\nLeft out because not every version has run them: {', '.join(left_out)}.")
         out.append("")
     if any(len(by_version[v]) > len(first[v]) for v in ("ours", "ours_mini")):
         out += ["## Our agent over every run (up to 3 per scenario)", "", TABLE_HEAD]
@@ -102,9 +110,12 @@ def build_results(results_dir: Path, ledger: Ledger) -> Path:
             for r in failed] or ["None."]
     out.append("")
     if stopped:
-        out += ["## Runs cut short (not counted)", ""]
-        out += [f"- {r['version']}, {r['scenario']}, run {r['run']}: {r['ended_by']}" for r in stopped]
+        out += ["## Runs not counted", ""]
+        out += [f"- {r['version']}, {r['scenario']}, run {r['run']}: "
+                + (r["ended_by"] if r["ended_by"] not in FINISHED else "scoring failed (see score_error)")
+                for r in stopped]
         out.append("")
+    out += DIFFERENCES
 
     by_model = defaultdict(float)
     if ledger.path.exists():
@@ -122,6 +133,25 @@ def build_results(results_dir: Path, ledger: Ledger) -> Path:
     return path
 
 
+DIFFERENCES = [
+    "## What else differs, besides what each version is given", "",
+    "Said here so nobody has to find it in the code (independent review, 12 Oct, R7 and R15):", "",
+    "- **Ours spells new patients' names back** letter by letter (decisions 59, 77). That's extra turns and tokens "
+    "the naive versions don't spend.",
+    "- **Ours ends the call itself** after its goodbye; the naive versions can't, so a caller who says goodbye "
+    "without hanging up can cost them one more AI pass.",
+    "- **Searching**: ours finds valid options in one code call; the naive versions' find_open_times returns times "
+    "for one doctor, or for every doctor the catalog lists for a visit type, with no rule checks.",
+    "", "## How these typed calls differ from a voice call", "",
+    "- No speech: no mishearing, no talking over each other, no silence (the check-in is said by the loop in one "
+    "run only).",
+    "- Timing is to the whole written reply; in a call the voice starts after the first sentence, and speech adds "
+    "about 1 s.",
+    "- When the AI says something and calls a tool in one reply, the loop keeps them as two messages; Pipecat may "
+    "keep one. A few tokens.",
+    "- If the AI asks for two tools at once (it's told one at a time), the loop runs the first and notes it.", ""]
+
+
 def _write_transcripts(results_dir: Path, runs: list) -> None:
     folder = results_dir / "transcripts"
     folder.mkdir(parents=True, exist_ok=True)
@@ -131,8 +161,10 @@ def _write_transcripts(results_dir: Path, runs: list) -> None:
     for version, mine in by_version.items():
         lines = [f"# Transcripts: {LABELS[version]}", ""]
         for r in sorted(mine, key=lambda r: (r["scenario"], r["run"])):
-            verdict = ("not counted: " + r["ended_by"] if r["ended_by"] not in FINISHED
-                       else "PASS" if r["score"]["passed"] else "FAIL: " + " ".join(r["score"]["reasons"]))
+            if r["ended_by"] not in FINISHED or not r.get("score"):
+                verdict = "not counted: " + (r["ended_by"] if r["ended_by"] not in FINISHED else "scoring failed")
+            else:
+                verdict = "PASS" if r["score"]["passed"] else "FAIL: " + " ".join(r["score"]["reasons"])
             lines += [f"## {r['title']} (run {r['run']})", "", f"**{verdict}**", ""]
             if r["greeting"]:
                 lines += _agent_lines(r["greeting"])

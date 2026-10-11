@@ -1,9 +1,9 @@
 """One typed call: the AI-played caller and an agent taking turns until the call ends.
 
 The call ends when the caller hangs up, when the agent's end stage has said goodbye,
-or after MAX_CALLER_TURNS caller lines (a stuck call, scored as not finished). Running
-out of budget or credit ends it too; such a run is kept, marked, and left out of the
-results.
+or after MAX_CALLER_TURNS caller lines (a stuck call: it counts, as a fail). Running out
+of budget or credit, or a bug in this loop, ends it too; such a run is kept, marked, and
+left out of the results.
 """
 
 from __future__ import annotations
@@ -18,8 +18,7 @@ from .caller import CallerAI, heard
 
 MAX_CALLER_TURNS = 30
 
-FINISHED = ("caller_hung_up", "agent_ended", "turn_limit")   # the run counts in the results
-STOPPED = ("budget_stop", "out_of_credit", "error")          # it doesn't
+FINISHED = ("caller_hung_up", "agent_ended", "turn_limit")   # the run counts in the results; anything else doesn't
 
 
 def run_conversation(agent, caller: CallerAI, check_in_after_read_back: bool = False,

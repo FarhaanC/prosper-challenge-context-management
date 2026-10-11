@@ -18,7 +18,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Callable, Optional
 
-from .budget import NO_USAGE, ONE_REPLY_DOLLARS, Ledger, Usage
+from .budget import NO_USAGE, ONE_REPLY_DOLLARS, Ledger, Usage, dollars
 
 MAX_WAITS = 8          # rate-limit or connection waits for one request before giving up
 LONGEST_WAIT = 60.0    # seconds; OpenAI's own retry-after is used when it gives one
@@ -71,10 +71,13 @@ def _wait_from(error) -> Optional[float]:
 class OpenAIChat:
     """Asks one model for replies. `label` names the spender in the spending record."""
 
-    def __init__(self, client, model: str, ledger: Ledger, label: str,
+    def __init__(self, client, model: str, ledger: Ledger, label: str, max_tokens: Optional[int] = None,
                  sleep: Callable[[float], None] = time.sleep, say: Callable[[str], None] = print):
+        """`max_tokens` caps each reply's length: set for the caller, left unset for the agents, as in the
+        voice agent."""
         self.client = client
         self.model = model
+        self.max_tokens = max_tokens
         self.ledger = ledger
         self.label = label
         self._sleep = sleep
@@ -83,8 +86,11 @@ class OpenAIChat:
     def reply(self, messages: list, tools: Optional[list] = None, one_tool_at_a_time: bool = True) -> Reply:
         import openai
 
+        dollars(self.model, NO_USAGE)  # an unpriced model is refused here, before anything is paid for
         self.ledger.check_room(ONE_REPLY_DOLLARS, f"the next {self.label} reply")
         params = {"model": self.model, "messages": messages}
+        if self.max_tokens:
+            params["max_tokens"] = self.max_tokens
         if tools:
             params["tools"] = tools
             if one_tool_at_a_time:

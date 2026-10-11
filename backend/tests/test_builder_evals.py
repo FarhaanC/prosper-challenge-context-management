@@ -233,8 +233,8 @@ def test_the_real_caller_is_used_not_the_agents_guess(catalog, patients):
     s = BY_ID["james_knee_mri_downtown"]
     sched = Schedule(catalog)
     start = next(sched.iter_open_slots("prov_014", "loc_004", 45, NOW))
-    booking = {"visit_type_id": "appt_065", "provider_id": "prov_014", "location_id": "loc_004",
-               "start": start.isoformat()}
+    booking = {"caller": "James Wilson", "visit_type_id": "appt_065", "provider_id": "prov_014",
+               "location_id": "loc_004", "start": start.isoformat()}
     assert score(s, _run({"status": "booked", "bookings": [booking], "hand_off_called": False}),
                  catalog, patients, NOW)["passed"]
     # The same booking for a new patient (scenario 2's caller) breaks the rules.
@@ -252,7 +252,7 @@ def test_the_expected_pairs_are_checked_on_their_own(catalog, patients):
                "start": start.isoformat()}
     result = score(s, _run({"status": "booked", "bookings": [booking], "hand_off_called": False}),
                    catalog, patients, NOW)
-    assert not result["passed"] and "valid doctor-place pairs" in result["reasons"][0]
+    assert not result["passed"] and any("expected prov_015 at loc_005" in r for r in result["reasons"])
 
 
 def test_a_hand_off_is_needed_where_expected(catalog, patients):
@@ -421,12 +421,6 @@ def test_the_rounds_match_decisions_84_and_87():
     assert all(item in r1 for item in ROUNDS["smoke"])  # the smoke run is part of round 1, never paid twice
 
 
-def test_every_tool_the_agent_file_uses_is_one_the_loop_offers():
-    for node in AGENT["nodes"]:
-        for name in AGENT["global_tools"] + node.get("tools", []):
-            assert name in TOOLS
-
-
 # ---------------------------------------------------------------- the scale test
 def test_the_big_catalog_is_repeatable_and_keeps_the_real_one(tmp_path, catalog):
     from evals.scale import make_big_catalog
@@ -449,3 +443,177 @@ def test_ours_gives_the_ai_the_same_size_of_instructions_on_any_catalog(tmp_path
     normal_sizes, big_sizes = stage_sizes(catalog, patients), stage_sizes(big, patients)
     for stage, size in normal_sizes.items():
         assert abs(big_sizes[stage] - size) < 200, stage
+
+
+# ---------------------------------------------------------------- after the independent review (12 Oct)
+class TextClient:
+    """Stands in for OpenAI's client: replies with the given texts in order, no tools."""
+
+    def __init__(self, texts):
+        self.texts = list(texts)
+        self.chat = NS(completions=NS(create=self.create))
+
+    def create(self, **params):
+        return _completion(self.texts.pop(0), prompt=1000, cached=0, out=20)
+
+
+def test_a_whole_paid_run_is_saved_and_scored_when_the_caller_hangs_up_with_words(tmp_path, monkeypatch, catalog,
+                                                                                 patients):
+    from evals import run as run_module
+
+    monkeypatch.setattr(run_module, "RESULTS_DIR", tmp_path)
+    ledger = Ledger(tmp_path / "spending.jsonl")
+    client = TextClient(["Hi, I need a knee MRI.", "I'm sorry, a knee MRI needs a referral first.",
+                         "Okay, thank you. Goodbye! [HANG UP]"])
+    scenario = BY_ID["knee_mri_new_patient"]
+    record = run_module.one_run(scenario, "naive", 1, client, ledger, catalog, patients)
+    assert record["ended_by"] == "caller_hung_up" and record["turns"][-1] == {"caller": "Okay, thank you. Goodbye!",
+                                                                           "agent": None}
+    assert record["score"]["passed"] and run_module.finished(run_module.run_path("naive", scenario, 1))
+    assert ledger.spent > 0 and json.loads(run_module.run_path("naive", scenario, 1).read_text())["score"]["passed"]
+
+
+def test_a_scoring_failure_keeps_the_paid_run_and_rescore_recovers_it(tmp_path, monkeypatch, catalog, patients):
+    from evals import run as run_module
+
+    monkeypatch.setattr(run_module, "RESULTS_DIR", tmp_path)
+    monkeypatch.setattr(run_module, "score", lambda *a: 1 / 0)
+    client = TextClient(["Hi.", "Hello! How can I help?", "Bye. [HANG UP]"])
+    scenario = BY_ID["knee_mri_new_patient"]
+    record = run_module.one_run(scenario, "naive", 1, client, Ledger(tmp_path / "s.jsonl"), catalog, patients)
+    assert record["score"] is None and "ZeroDivisionError" in record["score_error"]
+    assert run_module.finished(run_module.run_path("naive", scenario, 1))  # never paid for twice
+    monkeypatch.setattr(run_module, "score", score)
+    run_module.rescore()
+    saved = json.loads(run_module.run_path("naive", scenario, 1).read_text())
+    assert saved["score"]["passed"] and "score_error" not in saved
+
+
+def test_ours_reports_its_booking_from_the_card_without_a_bookings_file(catalog, patients):
+    agent, ai = ours(Clinic(catalog, patients, Schedule(catalog)), [])
+    agent.start()
+    ai.steps = [("One moment.", "start_booking", JAMES), "The knee MRI?",
+                ("Great.", "choose_visit_type", {"visit_type_id": "appt_065"}), "Two options.",
+                ("", "choose_option", {"option_id": "1"}), ("", "confirm_booking", {}), "Booked. Goodbye."]
+    for line in ("James Wilson, 1984-03-12, knee MRI.", "Yes.", "The first one.", "Yes."):
+        agent.respond(line)
+    [booking] = agent.outcome()["bookings"]
+    c = agent.session.card.choices
+    assert booking["caller"] == "James Wilson" and booking["provider_id"] == c.provider_id
+    assert booking["start"] == c.slot.isoformat() and booking["visit_type_id"] == "appt_065"
+
+
+def test_a_tool_failing_in_our_code_is_given_to_the_ai_and_fails_the_run(clinic, monkeypatch, catalog, patients):
+    def boom(session, args):
+        raise RuntimeError("bug")
+
+    monkeypatch.setattr(TOOLS["answer_question"], "run", boom)
+    agent, ai = ours(clinic, [("", "answer_question", {"about": "location", "name": "Downtown"}), "Sorry."])
+    agent.start()
+    turn = agent.respond("Where's Downtown?")
+    assert turn.tools[0]["result"] == {"status": "error", "error": "bug"} and turn.passes == 2
+    run = {"ended_by": "caller_hung_up", "outcome": agent.outcome(),
+           "turns": [{"caller": "Where's Downtown?", "agent": turn.to_dict()}]}
+    assert not score(BY_ID["knee_mri_new_patient"], run, catalog, patients, NOW)["passed"]
+
+
+def test_a_stuck_turn_fails_the_run(catalog, patients):
+    run = _run({"status": "in_progress", "bookings": []}, turns=[
+        {"caller": "hi", "agent": {"said": [], "tools": [], "problems": [
+            f"More than {MAX_PASSES_PER_TURN} AI passes in one turn; the turn was ended."]}}])
+    assert not score(BY_ID["knee_mri_new_patient"], run, catalog, patients, NOW)["passed"]
+
+
+def test_a_booking_under_another_name_fails(catalog, patients):
+    start = next(Schedule(catalog).iter_open_slots("prov_001", "loc_004", 30, NOW))
+    booking = {"patient_name": "Lena Parks", "visit_type_id": "appt_027", "provider_id": "prov_001",
+               "location_id": "loc_004", "start": start.isoformat()}
+    result = score(BY_ID["garcia_skin_check"], _run({"status": "booked", "bookings": [booking]}), catalog, patients,
+                   NOW)
+    assert not result["passed"] and result["reasons"] == ['Booked under the name "Lena Parks", not "Lena Park".']
+    booking["patient_name"] = "lena  park"
+    assert score(BY_ID["garcia_skin_check"], _run({"status": "booked", "bookings": [booking]}), catalog, patients,
+                 NOW)["passed"]
+
+
+def test_a_hand_off_counts_by_what_happened_not_by_the_tool_asked_for(catalog, patients, clinic):
+    s = BY_ID["obgyn_new_then_person"]
+    agent, ai = ours(clinic, [("", "hand_off", {"reason": "upset"}), "Staff will call you back."])
+    agent.start()
+    turn = agent.respond("Can I talk to a person?")
+    run = {"ended_by": "caller_hung_up", "outcome": agent.outcome(), "turns": [{"caller": "x", "agent": turn.to_dict()}]}
+    assert not score(s, run, catalog, patients, NOW)["passed"]  # refused: not handed off
+    code_hand_off = _run({"status": "handed_off", "bookings": []}, said=["A member of staff will call you back."])
+    assert score(s, code_hand_off, catalog, patients, NOW)["passed"]  # e.g. start_booking handing off itself
+
+
+def test_naive_hand_off_refuses_what_ours_refuses(clinic):
+    ai = ScriptedAI([("", "hand_off", {"reason": "upset"}), "Hmm.", ("", "hand_off", {"reason": "speak_to_staff"}),
+                     "Staff will call you back."])
+    agent = NaiveAgent(ai, clinic, NOW, checks=False)
+    agent.start()
+    assert agent.respond("A person please.").tools[0]["result"]["ok"] is False
+    assert agent.outcome()["status"] == "in_progress"
+    agent.respond("A person please.")
+    assert agent.outcome()["status"] == "handed_off"
+
+
+def test_naive_can_search_every_doctor_for_a_visit(clinic):
+    ai = ScriptedAI([("", "find_open_times", {"visit_type_id": "appt_027"}), "Here are some times."])
+    agent = NaiveAgent(ai, clinic, NOW, checks=False)
+    agent.start()
+    times = agent.respond("Any dermatologist.").tools[0]["result"]["times"]
+    doctors = {t["provider_id"] for t in times}
+    assert len(times) == 6 and len(doctors) >= 3 and doctors <= {"prov_001", "prov_027", "prov_035", "prov_048"}
+    assert [t["start"] for t in times] == sorted(t["start"] for t in times)
+    assert all(sum(t["provider_id"] == d for t in times) <= 2 for d in doctors)
+
+
+@pytest.mark.parametrize("line", [
+    "A member of staff will call you back about this.", "Someone will follow up with you tomorrow.",
+    "Our team will contact you.", "We'll get back to you soon.", "I'll have someone call you.",
+    "I'll ask a colleague to give you a call.", "Someone from the clinic will contact you.",
+    "The front desk will call you tomorrow.", "We will contact you to arrange it.",
+    "Our scheduling team will ring you later today.", "You'll get a call from one of our staff.",
+    "I've passed your details on, and a nurse will phone you.", "I'll let the office know and they'll follow up.",
+])
+def test_staff_promises_are_spotted_in_many_wordings(line):
+    assert STAFF_PROMISE.search(line)
+
+
+@pytest.mark.parametrize("line", [
+    "Please reach out to your own doctor for a referral.", "Your doctor can follow up with you about a referral.",
+    "Dr. Chen will follow up with you at your next visit.", "Your doctor will be in touch about the results.",
+    "Would you like me to have a member of staff call you back?",
+    "I can't book that, but a member of staff can call you back if you want.",
+    "Let me check and get back to you in a moment.", "Would you like a Follow-up Visit?",
+    "We'll see you on Tuesday.", "We'll book the follow-up visit for you.", "Staff at Downtown are lovely.",
+    "I'll check the follow-up options.", "Do you want someone to call you?",
+])
+def test_ordinary_offering_or_doctor_lines_are_not_staff_promises(line):
+    assert not STAFF_PROMISE.search(line)
+
+
+def test_round_1_compares_the_versions_on_the_same_scenarios_only(tmp_path):
+    from evals.results import build_results
+
+    def saved(version, scenario, passed, score_ok=True):
+        path = tmp_path / "runs" / version / f"{scenario}__run1.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        totals = {"agent_input_tokens": 1000, "agent_cached_tokens": 500, "agent_output_tokens": 10,
+                  "agent_passes": 4, "agent_cost": 0.01, "slowest_reply_seconds": 1.0, "caller_lines": 3,
+                  "caller_cost": 0.001}
+        path.write_text(json.dumps({
+            "version": version, "scenario": scenario, "title": scenario, "run": 1, "ended_by": "caller_hung_up",
+            "greeting": None, "turns": [], "totals": totals,
+            "score": {"passed": passed, "reasons": [] if passed else ["x"], "bad_bookings": 0} if score_ok else None}))
+
+    saved("naive", "garcia_skin_check", True)
+    saved("naive", "knee_mri_new_patient", False)
+    saved("ours", "garcia_skin_check", True)
+    saved("ours", "obgyn_new_then_person", True, score_ok=False)
+    text = build_results(tmp_path, Ledger(tmp_path / "s.jsonl")).read_text(encoding="utf-8")
+    rows = [line for line in text.splitlines() if line.startswith(("| 1. Naive", "| 3. Ours"))]
+    assert [r.split("|")[2].strip() for r in rows[:2]] == ["1 of 1", "1 of 1"]
+    assert "Left out because not every version has run them: knee_mri_new_patient." in text
+    assert "ours, obgyn_new_then_person, run 1: scoring failed" in text

@@ -10,6 +10,7 @@ from .ai import OpenAIChat
 from .agents import AgentTurn
 
 HANG_UP = "[HANG UP]"
+LONGEST_LINE = 200   # tokens: a caller's line is a sentence or two; the cap only stops a runaway reply
 
 CALLER_RULES = f"""You are role-playing a person who is phoning a healthcare clinic's scheduling line. You are the CALLER, not the assistant: the other side of this conversation is the clinic's scheduling agent.
 

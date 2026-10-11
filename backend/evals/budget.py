@@ -68,12 +68,14 @@ class Ledger:
         self.stop_at = stop_at
         self.spent = 0.0
         if self.path.exists():
-            for line in self.path.read_text(encoding="utf-8").splitlines():
-                if line.strip():
+            for number, line in enumerate(self.path.read_text(encoding="utf-8").splitlines(), start=1):
+                if not line.strip():
+                    continue
+                try:
                     self.spent += json.loads(line)["dollars"]
-
-    def room(self) -> float:
-        return self.stop_at - self.spent
+                except (ValueError, KeyError) as e:
+                    raise ValueError(f"{self.path}, line {number}, can't be read (perhaps cut off when a run was "
+                                     "stopped): fix or remove that line by hand. Spending is never guessed.") from e
 
     def check_room(self, needed: float, what: str) -> None:
         if self.spent + needed > self.stop_at:

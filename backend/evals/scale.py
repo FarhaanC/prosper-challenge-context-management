@@ -1,7 +1,7 @@
-"""The scale test: does the design still work with a much bigger catalog?
+r"""The scale test: does the design still work with a much bigger catalog?
 
-    .venv\\Scripts\\python.exe -m evals.scale            # everything (about $0.30 of OpenAI)
-    .venv\\Scripts\\python.exe -m evals.scale --free     # everything that costs nothing
+    .venv\Scripts\python.exe -m evals.scale            # everything (about $0.30 of OpenAI)
+    .venv\Scripts\python.exe -m evals.scale --free     # everything that costs nothing
 
 1. A big fake catalog: the real 8 locations and 50 doctors, plus made-up ones up to
    500 locations and 2,000 doctors, with the same 82 visit types and booking rules.
@@ -37,14 +37,15 @@ from .ai import OpenAIChat, openai_client
 from .budget import Ledger
 from .caller import CallerAI
 from .conversation import FINISHED, run_conversation
-from .run import CALLER_MODEL, NOW, RESULTS_DIR
+from .caller import LONGEST_LINE
+from .run import CALLER_MODEL, NOW, RESULTS_DIR, add_score, finished, save
 from .scenarios import BOOKED, BY_ID, Expected
-from .scoring import score
 
 SCALE_DIR = RESULTS_DIR / "scale"
 BIG_LOCATIONS, BIG_DOCTORS = 500, 2000
 SEED = 2026
 GPT_4O_LIMIT = 128_000   # tokens gpt-4o can read in one request
+ONE_SCALE_RUN = 0.40     # dollars one conversation of ours on the big catalog may cost (normal: about $0.10-0.25)
 
 FIRST_NAMES = ["Aisha", "Ben", "Carla", "David", "Elena", "Farid", "Grace", "Hiro", "Ines", "Jamal", "Kavya", "Liam",
                "Mei", "Noah", "Olga", "Pedro", "Quinn", "Rosa", "Sam", "Tara", "Umar", "Vera", "Wen", "Yusuf", "Zoe"]
@@ -173,33 +174,28 @@ def naive_size_in_tokens(client, model: str, instructions: str) -> dict:
 
 
 def run_ours_on_big(big: Catalog, patients: PatientDirectory, client, ledger: Ledger) -> list:
-    """Two scenarios, one run each, scored for what still holds on any catalog: the right visit type,
-    a booking that passes every rule, and (Garcia) no doctor called Garcia."""
+    """Two scenarios, one run each, scored for what still holds on any catalog: the right visit type, under
+    the caller's name, and a booking that passes every rule."""
     rows = []
     for scenario_id in ("garcia_skin_check", "james_knee_mri_downtown"):
         scenario = BY_ID[scenario_id]
         scenario = replace(scenario, expected=Expected(BOOKED, scenario.expected.visit_types))
         path = SCALE_DIR / "runs" / f"{scenario_id}.json"
-        if path.exists() and json.loads(path.read_text(encoding="utf-8"))["ended_by"] in FINISHED:
+        if finished(path):
             rows.append(json.loads(path.read_text(encoding="utf-8")))
             continue
-        ledger.check_room(0.40, f"ours on the big catalog ({scenario_id})")
+        ledger.check_room(ONE_SCALE_RUN, f"ours on the big catalog ({scenario_id})")
         clinic = Clinic(big, patients, Schedule(big))
         agent = OurAgent(OpenAIChat(client, "gpt-4o", ledger, f"agent: scale {scenario_id}"), clinic, NOW)
-        caller = CallerAI(OpenAIChat(client, CALLER_MODEL, ledger, f"caller: scale {scenario_id}"),
-                          scenario.persona)
+        caller = CallerAI(OpenAIChat(client, CALLER_MODEL, ledger, f"caller: scale {scenario_id}",
+                                     max_tokens=LONGEST_LINE), scenario.persona)
         record = {"version": "ours", "model": "gpt-4o", "scenario": scenario_id, "catalog": "big",
                   **run_conversation(agent, caller)}
-        if record["ended_by"] in FINISHED:
-            record["score"] = score(scenario, record, big, patients, NOW)
-            if scenario_id == "garcia_skin_check":
-                garcia = [b for b in record["outcome"]["bookings"]
-                          if "garcia" in big.providers[b["provider_id"]].name.lower()]
-                if garcia:
-                    record["score"]["passed"] = False
-                    record["score"]["reasons"].append("Booked a Dr. Garcia for a skin check.")
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(record, indent=1, ensure_ascii=False), encoding="utf-8")
+        save(path, record)  # saved before scoring, as in run.py
+        if record["ended_by"] in FINISHED:
+            add_score(record, scenario, big, patients)  # no Garcia does skin checks here either: rule 2 catches one
+            save(path, record)
         rows.append(record)
     return rows
 
@@ -287,8 +283,9 @@ def main(argv=None) -> None:
             ledger = Ledger(RESULTS_DIR / "spending.jsonl")
             runs = run_ours_on_big(big, patients, client, ledger)
             report["ours_on_big"] = [{"scenario": r["scenario"], "ended_by": r["ended_by"],
-                                      "passed": r.get("score", {}).get("passed"),
-                                      "reasons": r.get("score", {}).get("reasons", []), **r["totals"]} for r in runs]
+                                      "passed": (r.get("score") or {}).get("passed"),
+                                      "reasons": (r.get("score") or {}).get("reasons", []), **r["totals"]}
+                                     for r in runs]
     else:
         print("No OPENAI_API_KEY in backend/.env: the token count and the paid runs are skipped.")
     (SCALE_DIR / "scale.json").write_text(json.dumps(report, indent=1), encoding="utf-8")
