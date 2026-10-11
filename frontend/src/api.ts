@@ -17,7 +17,7 @@ export type Arrow = {
 /** One stage of the call ("node" in the agent file). */
 export type Stage = {
   name: string;
-  task_messages: Message[];
+  task_messages?: Message[]; // optional in the agent format; a missing list means no instructions
   role_message?: string | null;
   edges?: Arrow[];
   tools?: string[];

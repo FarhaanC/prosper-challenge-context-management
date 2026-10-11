@@ -170,7 +170,7 @@ if __name__ == "__main__":
     from editor_api import editor_routes
 
     # The editor (Phase 1) is served by this same program: http://localhost:7860/editor
-    app.include_router(editor_routes(AGENT_FLOW))
+    app.include_router(editor_routes(AGENT_FLOW, catalog=CLINIC.catalog))
     if EDITOR_FILES.exists():
         app.mount("/editor", StaticFiles(directory=EDITOR_FILES, html=True), name="editor")
     else:

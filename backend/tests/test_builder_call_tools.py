@@ -552,12 +552,12 @@ def test_agent_file_loads_and_resets_history():
     (lambda d: d["nodes"][0]["task_messages"][0].update(content="{secret}"), "unknown placeholder"),
     (lambda d: d["nodes"][0]["task_messages"][0].update(content="{Options}"), "unknown placeholder"),
     (lambda d: d["nodes"][0]["task_messages"][0].update(content="{booking card}"), "unknown placeholder"),
-    (lambda d: d.update(persona="Today is {today}."), "only work in task messages"),
-    (lambda d: d["nodes"].pop(), "can move to stage 'end'"),
+    (lambda d: d.update(persona="Today is {today}."), "only work in a stage's instructions"),
+    (lambda d: d["nodes"].pop(), "no stage called 'end', but the code of confirm_booking, hand_off, start_booking"),
     (lambda d: d.update(history="forget"), "history must be"),
     (lambda d: d.update(parallel_tool_calls="no"), "parallel_tool_calls must be true or false"),
     (lambda d: d.update(global_tools="hand_off"), "must be a list of tool names"),
-    (lambda d: d["nodes"].append(dict(d["nodes"][0])), "Two nodes are called 'identify'"),
+    (lambda d: d["nodes"].append(dict(d["nodes"][0])), "Two stages are called 'identify'"),
     (lambda d: d["nodes"][0]["tools"].append("hand_off"), "list it once"),
     (lambda d: d["nodes"][0]["tools"].append("start_booking"), "listed twice"),
     (lambda d: (d.update(global_tools=[]), d["nodes"][3].update(tools=[])), "has no tools"),
@@ -753,7 +753,7 @@ def test_the_hand_off_goodbye_is_worded_as_done(clinic):
 
 
 @pytest.mark.parametrize("break_it, message", [
-    (lambda d: d["nodes"][2].update(tool=d["nodes"][2].pop("tools")), "Node 'booking': unknown key 'tool'"),
+    (lambda d: d["nodes"][2].update(tool=d["nodes"][2].pop("tools")), "Stage 'booking': unknown key 'tool'"),
     (lambda d: d.update(global_tool=d.pop("global_tools")), "Unknown key 'global_tool'"),
     (lambda d: d["nodes"][0].update(role_messages=[{"role": "system", "content": "x"}]), "unknown key 'role_messages'"),
     (lambda d: d.update(history=["reset"]), "'history' must be text"),

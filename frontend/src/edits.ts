@@ -1,7 +1,7 @@
 // Every change the editor can make to the agent. Each function takes the agent and returns a
 // new, changed copy (React redraws when it gets a new object; the old one is never modified).
 
-import type { Agent, Stage } from "./api";
+import type { Agent, Stage, Tool } from "./api";
 
 /** Change some fields of one stage. Renaming also updates the arrows and the start stage. */
 export function updateStage(agent: Agent, name: string, change: Partial<Stage>): Agent {
@@ -26,22 +26,23 @@ export function addStage(agent: Agent): { agent: Agent; name: string } {
   return { agent: { ...agent, nodes: [...agent.nodes, stage] }, name };
 }
 
-/** Remove a stage and the solid arrows into it. Tools that can still move there are left for
- *  Save's checks to report, so nothing is changed silently. */
+/** Remove a stage. Arrows into it and tools that move there are kept as they are, so Save
+ *  lists them as problems: nothing the person wrote disappears without them seeing it. */
 export function deleteStage(agent: Agent, name: string): Agent {
-  return {
-    ...agent,
-    nodes: agent.nodes
-      .filter((s) => s.name !== name)
-      .map((s) => (s.edges ? { ...s, edges: s.edges.filter((a) => a.target !== name) } : s)),
-  };
+  return { ...agent, nodes: agent.nodes.filter((s) => s.name !== name) };
 }
 
-/** A new solid arrow, from dragging one box onto another. Its name and wording are editable. */
-export function addArrow(agent: Agent, from: string, to: string): Agent {
+/** A new solid arrow, from dragging one box onto another. The AI calls an arrow like a tool,
+ *  so its name may only use letters, digits, _ and -, and must be new in this stage. The name
+ *  and wording can be changed in the side panel. */
+export function addArrow(agent: Agent, from: string, to: string, tools: Tool[]): Agent {
   const stage = agent.nodes.find((s) => s.name === from);
   if (!stage) return agent;
-  const arrow = { function: `go_to_${to}`, description: `Call this to move the conversation to ${to}.`, target: to };
+  const taken = new Set([...(stage.edges ?? []).map((a) => a.function), ...tools.map((t) => t.name)]);
+  const base = `go_to_${to.replace(/[^A-Za-z0-9_-]+/g, "_")}`.slice(0, 60);
+  let name = base;
+  for (let n = 2; taken.has(name); n++) name = `${base}_${n}`;
+  const arrow = { function: name, description: `Call this to move the conversation to ${to}.`, target: to };
   return updateStage(agent, from, { edges: [...(stage.edges ?? []), arrow] });
 }
 

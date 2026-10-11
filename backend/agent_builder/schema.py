@@ -17,11 +17,25 @@
 # Keys the format doesn't know are refused at load (shape_problems).
 #
 
+import re
 from dataclasses import dataclass, field
 from typing import Optional
 
 DEFAULT_VOICE_ID = "21m00Tcm4TlvDq8ikWAM"  # ElevenLabs "Rachel"
 DEFAULT_MODEL = "gpt-4o"
+
+
+class AgentFileProblems(ValueError):
+    """An agent file the voice agent can't run. `problems` lists every problem, one sentence
+    each, in the editor's words (stage, arrow, tool); the message lists them too."""
+
+    def __init__(self, problems: list):
+        self.problems = list(problems)
+        super().__init__("The agent file has problems:\n- " + "\n- ".join(self.problems))
+
+
+# An arrow becomes a tool the AI can call, and OpenAI only accepts these names.
+ARROW_NAME = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 
 
 # The keys each level of an agent file may have. Anything else is refused at load, so a
@@ -47,12 +61,12 @@ def shape_problems(d) -> list:
             problems.append(f"'{key}' must be text.")
     nodes = d.get("nodes")
     if not isinstance(nodes, list):
-        return problems + ["'nodes' must be a list."]
+        return problems + ["The stages ('nodes') must be a list."]
     for i, n in enumerate(nodes):
         if not isinstance(n, dict):
-            problems.append(f"Node #{i} must be an object.")
+            problems.append(f"Stage #{i} must be an object.")
             continue
-        where = f"Node '{n.get('name', f'#{i}')}'"
+        where = f"Stage '{n.get('name', f'#{i}')}'"
         problems += [f"{where}: unknown key '{k}'." for k in sorted(set(n) - NODE_KEYS)]
         if not isinstance(n.get("name"), str):
             problems.append(f"{where}: 'name' must be text.")
@@ -69,12 +83,12 @@ def shape_problems(d) -> list:
                 problems.append(f"{where}: '{key}' must be a list.")
         for j, e in enumerate(n.get("edges", []) if isinstance(n.get("edges", []), list) else []):
             if not isinstance(e, dict):
-                problems.append(f"{where}: edge #{j} must be an object.")
+                problems.append(f"{where}: arrow #{j} must be an object.")
                 continue
-            problems += [f"{where}, edge #{j}: unknown key '{k}'." for k in sorted(set(e) - EDGE_KEYS)]
+            problems += [f"{where}, arrow #{j}: unknown key '{k}'." for k in sorted(set(e) - EDGE_KEYS)]
             missing = [k for k in ("function", "description", "target") if not isinstance(e.get(k), str)]
             if missing:
-                problems.append(f"{where}, edge #{j}: {', '.join(missing)} must be text.")
+                problems.append(f"{where}, arrow #{j}: its {', '.join(missing)} must be text.")
     return problems
 
 
@@ -147,7 +161,7 @@ class AgentConfig:
     def from_dict(cls, d: dict) -> "AgentConfig":
         problems = shape_problems(d)
         if problems:
-            raise ValueError("The agent file has problems:\n- " + "\n- ".join(problems))
+            raise AgentFileProblems(problems)
         return cls(
             name=d["name"],
             initial_node=d["initial_node"],

@@ -14,6 +14,7 @@ import {
   type Connection,
   type Node,
   type NodeChange,
+  type ReactFlowInstance,
 } from "@xyflow/react";
 import { loadAgent, loadPlaceholders, loadTools, saveAgent, type Agent, type Stage, type Tool } from "./api";
 import { boxTypes } from "./Boxes";
@@ -26,12 +27,9 @@ import { AgentPanel, StagePanel } from "./Panels";
 // developing with `npm run dev` the editor is on another port, so we point at the agent directly.
 const CALL_PAGE = import.meta.env.DEV ? "http://localhost:7860/client/" : "/client/";
 
-type Status =
-  | { kind: "idle" }
-  | { kind: "saving" }
-  | { kind: "saved" }
-  | { kind: "problems"; problems: string[] }
-  | { kind: "error"; message: string };
+/** What the last Save said: nothing yet, saved, or the problems it found (kept on screen while
+ *  the person fixes them, until the next Save), or an error reaching the server. */
+type SaveOutcome = { kind: "none" } | { kind: "saved" } | { kind: "problems"; problems: string[] } | { kind: "error"; message: string };
 
 export default function App() {
   const [agent, setAgent] = useState<Agent | null>(null);
@@ -39,10 +37,14 @@ export default function App() {
   const [tools, setTools] = useState<Tool[]>([]);
   const [placeholders, setPlaceholders] = useState<Record<string, string>>({});
   const [selected, setSelected] = useState<string | null>(null); // a stage name, or null for agent settings
-  const [status, setStatus] = useState<Status>({ kind: "idle" });
+  const [outcome, setOutcome] = useState<SaveOutcome>({ kind: "none" });
+  const [saving, setSaving] = useState(false);
+  const [renameProblem, setRenameProblem] = useState(""); // shown under its own heading, not as a Save problem
+  const [loadError, setLoadError] = useState("");
   const [showCall, setShowCall] = useState(false);
   const [positions, setPositions] = useState<Positions>(loadPositions);
   const [nodes, setNodes] = useState<Node[]>([]);
+  const [flow, setFlow] = useState<ReactFlowInstance | null>(null);
 
   // Load everything once when the page opens.
   useEffect(() => {
@@ -53,25 +55,30 @@ export default function App() {
         setTools(t);
         setPlaceholders(p);
       })
-      .catch((e) => setStatus({ kind: "error", message: `Couldn't load the agent: ${e}` }));
+      .catch((e) => setLoadError(`Couldn't load the agent: ${e}`));
   }, []);
 
-  // Boxes: rebuilt from the agent whenever it changes, keeping what React Flow measured and
-  // whether a box is selected (React Flow needs those to draw arrows and highlights).
+  // Boxes: rebuilt from the agent whenever it (or the selection) changes, keeping what React
+  // Flow measured about each box, which it needs to draw the arrows.
   useEffect(() => {
     if (!agent) return;
     setNodes((previous) => {
       const before = new Map(previous.map((n) => [n.id, n]));
-      return buildNodes(agent, positions).map((n) => {
+      return buildNodes(agent, positions, selected).map((n) => {
         const old = before.get(n.id);
-        return old ? { ...old, data: n.data, position: n.position } : n;
+        return old ? { ...old, data: n.data, position: n.position, selected: n.selected } : n;
       });
     });
-  }, [agent, positions]);
+  }, [agent, positions, selected]);
 
   const edges = useMemo(() => (agent ? buildEdges(agent, tools) : []), [agent, tools]);
 
-  const onNodesChange = useCallback((changes: NodeChange[]) => setNodes((ns) => applyNodeChanges(changes, ns)), []);
+  // Which box is highlighted is decided by `selected` alone (the stage in the side panel), so
+  // React Flow's own selection changes are left out.
+  const onNodesChange = useCallback(
+    (changes: NodeChange[]) => setNodes((ns) => applyNodeChanges(changes.filter((c) => c.type !== "select"), ns)),
+    [],
+  );
 
   // When a box is dropped after dragging, remember where (in this browser only).
   const onNodeDragStop = useCallback((_: unknown, node: Node) => {
@@ -82,37 +89,46 @@ export default function App() {
     });
   }, []);
 
-  const edit = (next: Agent) => {
-    setAgent(next);
-    if (status.kind !== "idle") setStatus({ kind: "idle" });
-  };
+  // Show every box again when a stage is added or removed, or the call panel opens or closes.
+  const stageCount = agent?.nodes.length ?? 0;
+  useEffect(() => {
+    const timer = setTimeout(() => flow?.fitView({ duration: 200 }), 50); // after the boxes are drawn
+    return () => clearTimeout(timer);
+  }, [flow, stageCount, showCall]);
 
   if (!agent) {
-    return <div className="loading">{status.kind === "error" ? status.message : "Loading the agent…"}</div>;
+    return <div className="loading">{loadError || "Loading the agent…"}</div>;
   }
 
+  const edit = (next: Agent) => {
+    setAgent(next);
+    setRenameProblem("");
+    if (outcome.kind === "saved") setOutcome({ kind: "none" });
+  };
   const stage = agent.nodes.find((s) => s.name === selected);
   const dirty = JSON.stringify(agent) !== savedJson;
 
   const save = async () => {
-    setStatus({ kind: "saving" });
+    setSaving(true);
     try {
       const result = await saveAgent(agent);
       if (result.ok) {
         setSavedJson(JSON.stringify(agent));
-        setStatus({ kind: "saved" });
+        setOutcome({ kind: "saved" });
       } else {
-        setStatus({ kind: "problems", problems: result.problems });
+        setOutcome({ kind: "problems", problems: result.problems });
       }
     } catch (e) {
-      setStatus({ kind: "error", message: String(e) });
+      setOutcome({ kind: "error", message: String(e) });
+    } finally {
+      setSaving(false);
     }
   };
 
-  const renameStage = (oldName: string, newName: string) => {
+  const renameStage = (oldName: string, newName: string): boolean => {
     if (agent.nodes.some((s) => s.name === newName)) {
-      setStatus({ kind: "problems", problems: [`There's already a stage called '${newName}'.`] });
-      return;
+      setRenameProblem(`There's already a stage called '${newName}', so '${oldName}' keeps its name.`);
+      return false;
     }
     edit(updateStage(agent, oldName, { name: newName }));
     setSelected(newName);
@@ -122,32 +138,45 @@ export default function App() {
       setPositions(next);
       savePositions(next);
     }
+    return true;
   };
 
   return (
     <div className="app">
       <header className="topbar">
         <h1>{agent.name}</h1>
-        <button onClick={() => { const r = addStage(agent); edit(r.agent); setSelected(r.name); }}>
+        <button
+          onClick={() => {
+            const added = addStage(agent);
+            edit(added.agent);
+            setSelected(added.name);
+          }}
+        >
           + Stage
         </button>
-        <button className="primary" disabled={!dirty || status.kind === "saving"} onClick={save}>
-          {status.kind === "saving" ? "Saving…" : "Save"}
+        <button className="primary" disabled={!dirty || saving} onClick={save}>
+          {saving ? "Saving…" : "Save"}
         </button>
         <button onClick={() => setShowCall((v) => !v)}>{showCall ? "Close call" : "Test call"}</button>
         <span className="status">
-          {status.kind === "saved" && "Saved. The next call uses it."}
-          {status.kind === "error" && <span className="error-text">{status.message}</span>}
-          {status.kind === "idle" && dirty && "Unsaved changes"}
+          {outcome.kind === "saved" && !dirty && "Saved. The next call uses it."}
+          {outcome.kind === "error" && <span className="error-text">{outcome.message}</span>}
+          {dirty && "Unsaved changes"}
         </span>
       </header>
 
-      {status.kind === "problems" && (
+      {renameProblem && (
         <div className="problems">
-          <strong>Not saved. Fix these first:</strong>
+          <strong>Can't rename the stage:</strong> {renameProblem}
+        </div>
+      )}
+
+      {outcome.kind === "problems" && (
+        <div className="problems">
+          <strong>Not saved. Fix these, then Save again{dirty ? " (this list is from the last Save)" : ""}:</strong>
           <ul>
-            {status.problems.map((p) => (
-              <li key={p}>{p}</li>
+            {outcome.problems.map((p, i) => (
+              <li key={i}>{p}</li>
             ))}
           </ul>
         </div>
@@ -159,11 +188,12 @@ export default function App() {
             nodes={nodes}
             edges={edges}
             nodeTypes={boxTypes}
+            onInit={setFlow}
             onNodesChange={onNodesChange}
             onNodeDragStop={onNodeDragStop}
             onNodeClick={(_, n) => setSelected(n.id === ALWAYS ? null : n.id)}
             onPaneClick={() => setSelected(null)}
-            onConnect={(c: Connection) => c.source !== ALWAYS && edit(addArrow(agent, c.source, c.target))}
+            onConnect={(c: Connection) => edit(addArrow(agent, c.source, c.target, tools))}
             fitView
           >
             <Background />

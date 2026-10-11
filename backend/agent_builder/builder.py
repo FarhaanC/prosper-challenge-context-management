@@ -33,7 +33,7 @@ from pipecat_flows import ContextStrategy, ContextStrategyConfig, FlowManager, F
 
 from call import PLACEHOLDER, PLACEHOLDERS, TOOLS, CallSession, run_tool
 
-from .schema import AgentConfig, Edge, Node
+from .schema import ARROW_NAME, AgentConfig, AgentFileProblems, Edge, Node
 
 HISTORY = {"keep": ContextStrategy.APPEND, "reset": ContextStrategy.RESET}
 
@@ -72,45 +72,52 @@ class AgentBuilder:
         """Every problem in the agent file, listed at once, at start-up rather than mid-call."""
         c = self.config
         if not c.nodes:
-            raise ValueError("Agent has no nodes.")
+            raise AgentFileProblems(["The agent has no stages."])
         problems = []
         names = [n.name for n in c.nodes]
         for name in sorted({n for n in names if names.count(n) > 1}):
-            problems.append(f"Two nodes are called '{name}'.")
+            problems.append(f"Two stages are called '{name}'.")
         if c.initial_node not in names:
-            problems.append(f"initial_node '{c.initial_node}' is not a defined node.")
+            problems.append(f"The start stage '{c.initial_node}' doesn't exist.")
         if c.history not in HISTORY:
             problems.append(f"history must be one of {', '.join(HISTORY)}, not {c.history!r}.")
         if not isinstance(c.parallel_tool_calls, bool):
             problems.append(f"parallel_tool_calls must be true or false, not {c.parallel_tool_calls!r}.")
-        problems += _tool_list_problems(c.global_tools, "global_tools")
+        problems += _tool_list_problems(c.global_tools, "The always-available tools", key="global_tools")
         problems += _placeholder_problems(c.persona, "The persona", allowed=False)
         for node in c.nodes:
             for edge in node.edges:
                 if edge.target not in names:
-                    problems.append(f"Edge '{edge.function}' in node '{node.name}' targets unknown node "
-                                    f"'{edge.target}'.")
-            problems += _tool_list_problems(node.tools, f"Node '{node.name}' tools")
-            if isinstance(node.tools, list) and isinstance(c.global_tools, list):
+                    problems.append(f"Arrow '{edge.function}' in stage '{node.name}' goes to '{edge.target}', "
+                                    "which isn't a stage.")
+            problems += _arrow_name_problems(node, c.global_tools)
+            problems += _tool_list_problems(node.tools, f"Stage '{node.name}' tools")
+            if _names_list(node.tools) and _names_list(c.global_tools):
                 for tool in sorted(set(node.tools) & set(c.global_tools)):
-                    problems.append(f"Tool '{tool}' is in node '{node.name}' and in global_tools; list it once.")
-            problems += _placeholder_problems(node.role_message or "", f"Node '{node.name}' role_message",
+                    problems.append(f"Tool '{tool}' is in stage '{node.name}' and always available; list it once.")
+            problems += _placeholder_problems(node.role_message or "", f"Stage '{node.name}' role (role_message)",
                                               allowed=False)
             for message in node.task_messages:
-                problems += _placeholder_problems(message.get("content", ""), f"Node '{node.name}'")
+                problems += _placeholder_problems(message.get("content", ""), f"Stage '{node.name}'")
             if c.parallel_tool_calls is False and not (node.edges or node.tools or c.global_tools):
                 # OpenAI refuses the one-at-a-time setting on a request with no tools.
-                problems.append(f"Node '{node.name}' has no tools, which parallel_tool_calls false doesn't allow.")
-        # Code-decided moves: every stage a tool can move to must exist.
-        used = set(c.global_tools if isinstance(c.global_tools, list) else [])
+                problems.append(f"Stage '{node.name}' has no tools or arrows, which one tool call at a time "
+                                "(parallel_tool_calls false) doesn't allow.")
+        # Code-decided moves: every stage a tool can move to must exist. One sentence per missing
+        # stage, naming the tools that need it, so the fix (keep that name) is clear.
+        used = set(c.global_tools if _names_list(c.global_tools) else [])
         for node in c.nodes:
-            used |= set(node.tools if isinstance(node.tools, list) else [])
+            used |= set(node.tools if _names_list(node.tools) else [])
+        needed: dict = {}
         for tool in sorted(t for t in used if t in TOOLS):
             for stage in TOOLS[tool].moves_to:
                 if stage not in names:
-                    problems.append(f"Tool '{tool}' can move to stage '{stage}', which isn't a node.")
+                    needed.setdefault(stage, []).append(tool)
+        for stage, tools in sorted(needed.items()):
+            problems.append(f"There's no stage called '{stage}', but the code of {', '.join(tools)} moves the call "
+                            f"there: keep a stage with that name.")
         if problems:
-            raise ValueError("The agent file has problems:\n- " + "\n- ".join(problems))
+            raise AgentFileProblems(problems)
 
     # ---- compilation -------------------------------------------------------
     def build_initial_node(self, session: Optional[CallSession] = None) -> NodeConfig:
@@ -205,9 +212,32 @@ class AgentBuilder:
         )
 
 
-def _tool_list_problems(tools, where: str) -> list:
-    if not (isinstance(tools, list) and all(isinstance(t, str) for t in tools)):
-        return [f"{where} must be a list of tool names."]
+def _names_list(value) -> bool:
+    return isinstance(value, list) and all(isinstance(v, str) for v in value)
+
+
+def _arrow_name_problems(node: Node, global_tools) -> list:
+    """An arrow is a tool the AI calls, so its name must be one the AI service accepts, and
+    can't be shared with another arrow in the stage or with a tool the stage already has."""
+    problems = []
+    names = [edge.function for edge in node.edges]
+    taken = set(TOOLS) | set(node.tools if _names_list(node.tools) else []) | set(
+        global_tools if _names_list(global_tools) else [])
+    for name in names:
+        if not ARROW_NAME.match(name):
+            problems.append(f"Arrow '{name}' in stage '{node.name}': a name can only use letters, digits, _ and - "
+                            "(no spaces), and must have 1 to 64 of them.")
+        elif name in taken:
+            problems.append(f"Arrow '{name}' in stage '{node.name}' has the same name as a tool; rename the arrow.")
+    for name in sorted({n for n in names if names.count(n) > 1}):
+        problems.append(f"Stage '{node.name}' has two arrows called '{name}'; rename one.")
+    return problems
+
+
+def _tool_list_problems(tools, where: str, key: str = "") -> list:
+    """`key`: the file's own name for the list, said too when the whole list is the wrong kind."""
+    if not _names_list(tools):
+        return [f"{key} must be a list of tool names ({where.lower()})." if key else f"{where} must be a list of tool names."]
     problems = [f"{where}: '{t}' is listed twice." for t in sorted({t for t in tools if tools.count(t) > 1})]
     problems += [f"{where}: '{t}' isn't in the tool registry." for t in tools if t not in TOOLS]
     return problems
@@ -219,6 +249,7 @@ def _placeholder_problems(text: str, where: str, allowed: bool = True) -> list:
         return [f"{where} contains doubled braces; braces are only for placeholders like {{today}}."]
     found = PLACEHOLDER.findall(text or "")
     if found and not allowed:
-        return [f"{where} contains {{{found[0]}}}; placeholders only work in task messages."]
+        return [f"{where} contains {{{found[0]}}}; placeholders only work in a stage's instructions "
+                "(task messages)."]
     return [f"{where} uses unknown placeholder {{{p}}}; known: {', '.join(PLACEHOLDERS)}."
             for p in found if p not in PLACEHOLDERS]

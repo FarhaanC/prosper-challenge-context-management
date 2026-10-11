@@ -1,10 +1,11 @@
 """Builder tests for the editor's server (editor_api.py) and the token counts in the call log
-(agent_builder/token_log.py, decision 45). The browser side was checked by hand and in a
-headless browser; see docs/build-log.md."""
+(agent_builder/token_log.py, decision 45). The browser side is covered by the independent
+browser tests (tests_independent/editor/browser), which need Playwright."""
 
 import asyncio
 import json
 import shutil
+from pathlib import Path
 
 import pytest
 from fastapi import FastAPI
@@ -16,11 +17,13 @@ from agent_builder import TokenLog
 from call import TOOLS
 from editor_api import editor_routes
 
+BACKEND = Path(__file__).resolve().parent.parent
+
 
 @pytest.fixture
 def setup(tmp_path):
     agent_file = tmp_path / "agent.json"
-    shutil.copy("clinic_agent.json", agent_file)
+    shutil.copy(BACKEND / "clinic_agent.json", agent_file)
     logs = tmp_path / "logs"
     logs.mkdir()
     app = FastAPI()
@@ -33,11 +36,15 @@ def test_load_gives_the_agent_file_as_it_is(setup):
     assert client.get("/api/editor/agent").json() == json.loads(agent_file.read_text(encoding="utf-8"))
 
 
-def test_saving_an_unchanged_agent_changes_nothing_in_the_file(setup):
+@pytest.mark.parametrize("line_end", [b"\n", b"\r\n"])
+def test_saving_an_unchanged_agent_changes_nothing_in_the_file(setup, line_end):
+    """Byte for byte, with either kind of line ending (a Windows checkout has \r\n)."""
     client, agent_file, _ = setup
-    before = agent_file.read_text(encoding="utf-8")
+    agent_file.write_bytes(agent_file.read_bytes().replace(b"\r\n", b"\n").replace(b"\n", line_end))
+    before = agent_file.read_bytes()
     assert client.post("/api/editor/agent", json=json.loads(before)).json() == {"ok": True}
-    assert agent_file.read_text(encoding="utf-8") == before, "same layout, so git shows only real edits"
+    assert agent_file.read_bytes() == before, "same layout, so git shows only real edits"
+    assert not list(agent_file.parent.glob("*.saving")), "no temporary file left behind"
 
 
 def test_an_edited_instruction_is_saved(setup):
@@ -50,8 +57,15 @@ def test_an_edited_instruction_is_saved(setup):
 
 
 @pytest.mark.parametrize("break_it, says", [
-    (lambda a: a["nodes"][3].update(name="finish"), "Tool 'hand_off' can move to stage 'end', which isn't a node."),
-    (lambda a: a.update(initial_node="nowhere"), "initial_node 'nowhere' is not a defined node."),
+    (lambda a: a["nodes"][3].update(name="finish"), "There's no stage called 'end', but the code of "
+                                                     "confirm_booking, hand_off, start_booking moves the call there"),
+    (lambda a: a.update(initial_node="nowhere"), "The start stage 'nowhere' doesn't exist."),
+    (lambda a: a["nodes"][0].update(edges=[{"function": "go to end", "description": "d", "target": "end"}]),
+     "a name can only use letters, digits, _ and -"),
+    (lambda a: a["nodes"][0].update(edges=[{"function": "hand_off", "description": "d", "target": "end"}]),
+     "has the same name as a tool"),
+    (lambda a: a["nodes"][0].update(edges=[{"function": "go", "description": "d", "target": "end"}] * 2),
+     "two arrows called 'go'"),
     (lambda a: a["nodes"][1]["tools"].append("book_it"), "isn't in the tool registry"),
     (lambda a: a["nodes"][2]["task_messages"][0].update(content="{optoins}"), "unknown placeholder {optoins}"),
     (lambda a: a["nodes"][0].update(position={"x": 1}), "unknown key 'position'"),

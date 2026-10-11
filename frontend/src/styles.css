@@ -41,7 +41,7 @@ code { font-family: ui-monospace, Consolas, monospace; font-size: 12px; }
 
 .middle { flex: 1; display: flex; min-height: 0; }
 .canvas { flex: 1; position: relative; min-width: 0; }
-.legend { position: absolute; left: 60px; bottom: 10px; display: flex; gap: 16px; color: var(--muted); font-size: 12px; background: var(--paper); padding: 4px 8px; border-radius: 6px; }
+.legend { position: absolute; left: 10px; top: 10px; display: flex; gap: 16px; color: var(--muted); font-size: 12px; background: var(--paper); padding: 4px 8px; border-radius: 6px; }
 .side { width: 400px; overflow-y: auto; background: var(--paper); border-left: 1px solid var(--line); }
 .panel { padding: 14px 16px 40px; }
 .panel h2 { font-size: 15px; margin: 0 0 8px; }
@@ -86,4 +86,7 @@ code { font-family: ui-monospace, Consolas, monospace; font-size: 12px; }
 .ev.refused { color: var(--danger); }
 .ev.ai { color: var(--muted); }
 .ev .said, .ev.said { color: var(--ok); }
+.ev .detail { color: var(--muted); }
+.ev details summary { color: var(--muted); font-size: 11.5px; }
+.fields { font-size: 11.5px; }
 .ev pre { white-space: pre-wrap; background: var(--wash); padding: 8px; border-radius: 6px; color: var(--ink); max-height: 240px; overflow: auto; }
