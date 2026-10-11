@@ -2,6 +2,23 @@
 
 What each version adds, for someone reading the repository. The full story of how each part was built and checked is in [`docs/build-log.md`](docs/build-log.md).
 
+## 0.3.0 — silence handling, the code-spoken read-back, and the editor (Sun 11 Oct 2026)
+
+New: the Phase 1 editor, and three changes from the voice calls.
+
+- **The editor** (`frontend/`, served by the agent at http://localhost:7860/editor after `npm run build`):
+  - the stages as boxes; solid arrows for the AI's own moves, dashed arrows for where a tool's code can move the call;
+  - a side panel to edit a stage (name, start, ends the call, instructions, tools, arrows) or the agent (name, model, voice, persona, always-available tools);
+  - Save, which runs the agent's own checks and lists every problem in plain words;
+  - Test call, which opens the call page beside the editor;
+  - the call inspector: the stage, the booking card, every tool call with a short result, every line the code said, and the tokens of each AI reply, updated about once a second.
+- **Silence:** "Are you still there?" after 20 s, a goodbye and hang-up after 15 s more, and a 10-minute cap per call (decision 64).
+- **The read-back is said by the code** after an option is picked (66), and the booking stage says "Let me check" before searching again (67).
+- **Fixes from the reviews:** a caller talking over a line the code says (such as the greeting) no longer jams the call (69); a noise no longer switches the silence check off (70); a "yes" to "Are you still there?" isn't taken as agreeing to the booking (71).
+- **Agent file checks** now refuse arrow names the AI service can't use (73), and every problem is worded in stages, arrows and tools.
+- **Call log:** new lines for silence, the time limit, what the code said, and tokens per AI reply.
+- **Tests:** builder tests for all of the above; independent: a review of 64/66/67, and one round on the editor (91 tests, 29 of them in a real browser). See `docs/build-log.md`, step 3.
+
 ## 0.2.0 — the stages and tools in the voice agent (Thu 8 Oct 2026)
 
 New: the voice agent books through the rules module.

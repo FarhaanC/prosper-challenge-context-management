@@ -202,3 +202,15 @@ For new patients the agent spells it back and the caller corrects it. In the las
 - Then three real voice calls by Farhaan. Each found something the others couldn't, and each fix is a numbered decision (58–63).
 - In all: 381 builder tests and 3,480 independent tests, all passing.
 
+
+## Part 5 (version 0.3.0): silence, the read-back, and the editor
+
+**What happens if the caller goes quiet?** After 20 s of silence the code asks "Are you still there?"; 15 s later it says goodbye and hangs up; any call ends at 10 minutes. The AI costs nothing while it waits, but the speech services keep running, and a pocket dial's background noise can set off paid AI replies (decision 64).
+
+**Why does the code say the read-back, not the AI?** It's the one sentence that must be exactly right, and the AI repeating a sentence it was handed costs a whole AI pass (about 0.7 s) for no gain. The code says it word for word and the AI waits for the caller (66).
+
+**What did the review of these small changes find?** The biggest one wasn't in the new code: since decision 58, if a caller talked over the greeting, the first stage never received its instructions or tools, because Pipecat Flows waits for a marker that the interruption throws away. Three real calls never hit it (nobody talked over the greeting). The reviewer found it by reading Pipecat's source and proved it with a small simulation; the fix is our own "say" action that never waits (69).
+
+**How do you know the token counts are right?** They're the AI service's own figures, logged per reply right after the AI step. One honest limit: a reply the caller cuts off is cancelled before the service reports its figures, so it isn't counted; the inspector says so (76). The typed test runs have no interruptions, so the cost comparison isn't affected.
+
+**How was the editor checked?** One fresh agent wrote 91 tests from the plan (29 of them drive a real browser) and then reviewed the code: 21 findings, none serious, all fixed. The editor's server reuses the voice agent's own checks, so it can't save an agent a call would refuse. See `docs/editor-walkthrough.md` for a walk through the code.

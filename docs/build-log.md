@@ -163,3 +163,55 @@ There was also one real hole: choosing a visit type a second time could save a v
 2. **Each fix can open a new hole.** Round 2 found that round 1's features (several changes in one call, turning doctors down anywhere) had each brought a new way to lose the caller's words. A second, shorter round was worth it.
 3. **The code catching a mistake isn't enough; the caller has to hear it.** The Garcia check worked in every call. In two of three it was never said, because the conversation took a different path first.
 4. **Windows set-up:** the Python here was missing `tzdata`, without which the agent can't tell San Francisco time. And saving the console to a file needs UTF-8, or Pipecat's start-up emoji crashes it. Both are now in the README.
+
+---
+
+## Step 3: silence, the code-spoken read-back, and the editor (Phase 1), version 0.3.0
+
+**Planned for Fri 9 Oct; built Sun 11 Oct** (the schedule had slipped two days; checks kept proportionate, decision P5).
+
+### Part A: decisions 64, 66 and 67
+
+| What | Where | In plain words |
+| --- | --- | --- |
+| 64: silence and the 10-minute cap | `backend/call/silence.py` (the rules), `backend/agent_builder/call_watch.py` (the Pipecat side), `bot.py` | 20 s of silence after the agent speaks: "Are you still there?". 15 s more: a short goodbye, and the code hangs up. Words from the caller bring back the full 20 s; a noise doesn't. Every call ends at 10 minutes, unless it's already booked or handed off. Each of these is a line in the call log. |
+| 66: the code says the read-back | `call/tools.py` (`Outcome.say_now`), `agent_builder/builder.py` | After choose_option, the code says "To confirm: … Would you like me to book it?" and the AI waits for the caller. No AI pass is spent repeating it, and it's word for word every time. (Pipecat Flows only lets a tool skip the AI's next pass by moving stage, so it "moves" to the same stage, keeping the conversation.) |
+| 67: "Let me check" | `clinic_agent.json` | The booking stage asks for a short line before searching again. |
+
+**How it was checked**
+
+| Version | What | Tests |
+| --- | --- | --- |
+| `14dd04e` | **Build**, with 12 builder tests | builder 393; independent 3,479 of 3,480 (the one is decision 66 itself) |
+| `95d4da3` | **One fresh reviewer** (Farhaan's choice for these small changes), who checked every claim against Pipecat's real code and ran small simulations. 11 findings, 2 high. | — |
+| `1d40cff` | **Fixes** (all agreed; `triage.md`): an interrupted code-spoken line jammed the call (69); a noise switched the silence check off (70); the 10-minute timer outlived the call and wrote false lines; a "yes" to "Are you still there?" could book (71). The tests now drive Pipecat's real timer and a real pipeline, and were shown to fail on the old code. | builder 403; independent as above, the one failure proved (adapter) to be decision 66 |
+
+**Still to do:** Farhaan's voice call to confirm (script in the chat of 11 Oct): talk over the greeting; ask for another day ("Let me check"); pick an option (the code's read-back); stay silent (check-in), answer "Yes" (asked again, not booked); then a silent call (check-in, goodbye, hang-up).
+
+### Part B: the editor
+
+| Part | Where | In plain words |
+| --- | --- | --- |
+| Server routes | `backend/editor_api.py` | Load the agent; check and save it (the same checks the voice agent runs, so nothing is saved that a call would refuse; written all at once; one save at a time); the tool registry; the newest call log with the booking card in names. Added to the voice agent's own web server (72). |
+| Token counts | `backend/agent_builder/token_log.py` | One call-log line per AI reply with the AI service's own input and output token counts (decisions 45, 76). |
+| The editor | `frontend/` (React, TypeScript, React Flow) | Stages as boxes; solid arrows are the AI's own moves; dashed arrows are where a tool's code can move the call, read from the tool registry, including a box for the always-available tools. A side panel edits a stage or the agent. Save lists every problem in plain words. Test call opens the call page beside the editor. The inspector reads the newest call log about once a second: stage, booking card, every tool call with a short result, every line the code said, and tokens per AI reply. |
+
+Run it: build once (`cd frontend`, `npm install`, `npm run build`), start the agent, open http://localhost:7860/editor.
+
+**How it was checked**
+
+| Version | What | Tests |
+| --- | --- | --- |
+| `4fae8c4`, `9209ca0` | **Build**, 11 builder tests; checked in a headless browser (edit, save, refused save, test-call panel, inspector) | builder 414 |
+| `a65d14b` | **One round** (Farhaan's choice): one fresh agent, first as tester (91 tests: 62 on the server, 29 in a real browser), then as reviewer (21 findings, 6 medium, none high) | 68 of 91 |
+| `c7141ab` | **Fixes: all 21** (Farhaan), decisions 73–75 | builder all pass; the tester's browser tests 29/29; server 62/62 on a Windows checkout |
+
+**What the check found, in short:** a crash on a stage without instructions; arrow names the AI service would refuse; deleting a stage silently dropped arrows; arrows hidden behind boxes; problems written in the file's words (node, edge); refused tool calls showing no reason; and smaller things in selection, renaming, polling and saving on Windows. Two of the tester's tests and two of the reviewer's suggestions disagreed (options after a booking; where a refused rename is shown); each time the reviewer's other suggested fix satisfied both.
+
+**Known, not fixed:** one dashed arrow's label tucks partly under a box in the default layout (boxes can be dragged); no real call has token lines yet (the token step was checked against Pipecat's code and in isolation; the next call will show them).
+
+### Lessons
+
+1. **A fresh reviewer with the library's source beats a confident builder.** The greeting jam (69) had been in the code since decision 58 and three real calls never hit it: nobody happened to talk over the greeting. It took reading Pipecat Flows' action code and a 40-line simulation to find it.
+2. **When a tester and a reviewer disagree, look for the fix that satisfies both** before calling a verifier: twice, the reviewer had offered a second option that also matched the tester's expectation.
+3. **Working on a Windows checkout from Linux changes line endings.** Files edited from the Linux side lost their Windows line endings in the working copy (git normalises them, so the repo was fine); they were checked out again afterwards.
