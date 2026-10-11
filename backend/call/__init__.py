@@ -12,11 +12,10 @@ agent_builder, and the typed test loop will call them directly.
 from .session import (
     BOOKINGS_FILE, CALL_LOG_DIR, PLACEHOLDER, PLACEHOLDERS, BookingsFileError, CallSession, Clinic, read_bookings,
 )
-from .silence import CHECK_IN_AFTER, MAX_CALL_SECONDS, CallWatch, Step
+from .silence import CallWatch, Step
 from .tools import TOOLS, Outcome, Tool, run_tool
 
 __all__ = [
     "BOOKINGS_FILE", "CALL_LOG_DIR", "PLACEHOLDER", "PLACEHOLDERS", "BookingsFileError", "CallSession", "Clinic",
-    "read_bookings", "TOOLS", "Outcome", "Tool", "run_tool", "CHECK_IN_AFTER", "MAX_CALL_SECONDS", "CallWatch",
-    "Step",
+    "read_bookings", "TOOLS", "Outcome", "Tool", "run_tool", "CallWatch", "Step",
 ]

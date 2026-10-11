@@ -195,7 +195,7 @@ Required: ['option_id']. Can move to: stays.
 }
 ```
 
-*(Decision 66, 9 Oct: `outcome.say_now` holds "To confirm: <read_back> Would you like me to book it?", which the code says itself; through the builder, the handler returns `(result, node)` where `node` is the same stage with the conversation kept, that sentence as a `tts_say` pre-action, and `respond_immediately` false.)*
+*(Decision 66, 9 Oct: `outcome.say_now` holds "To confirm: <read_back> Would you like me to book it?", which the code says itself; through the builder, the handler returns `(result, node)` where `node` is the same stage with the conversation kept, that sentence as a `say` pre-action (the builder's own action: it never waits for the line to finish), and `respond_immediately` false. The result has `read_back` and a `note` telling the AI not to repeat it. An agent file's `tts_say` actions are said the same way.)*
 
 ### confirm_booking
 

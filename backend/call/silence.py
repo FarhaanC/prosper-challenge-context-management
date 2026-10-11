@@ -1,14 +1,17 @@
 """Silence, held calls and pocket dials (decision 64).
 
-Plain Python, no Pipecat: bot.py connects this to Pipecat's user-idle timer, and
-the typed test loop can ignore it (it has no silence).
+Plain Python, no Pipecat: agent_builder/call_watch.py connects this to Pipecat's
+user-idle timer, and the typed test loop can ignore it (it has no silence).
 
-- After CHECK_IN_AFTER seconds of silence, counted from when the agent stops
-  speaking, the code asks "Are you still there?".
+- Silence is counted from when the agent stops speaking. After CHECK_IN_AFTER
+  seconds of it, the code asks "Are you still there?".
 - If the caller still says nothing for HANG_UP_AFTER seconds more, the code says
   a short goodbye and ends the call.
-- Anything the caller says starts the count again from CHECK_IN_AFTER.
-- Separately, every call ends after MAX_CALL_SECONDS, with its own goodbye.
+- When the caller says something (words, not just noise), the next count is the
+  full CHECK_IN_AFTER again. A noise with no words gets no reply, so the count
+  carries on from the end of the noise, and doesn't cancel a pending goodbye.
+- Separately, every call ends after MAX_CALL_SECONDS, with its own goodbye,
+  unless it's already finished (booked or handed to staff).
 
 Why: the AI costs nothing while it waits, but the speech services keep running,
 and Pipecat on its own only ends a silent call after 5 minutes. On a pocket dial,
@@ -40,10 +43,15 @@ class Step:
 
 
 class CallWatch:
-    """One call's silence count and time limit. Once it has hung up, it does nothing more."""
+    """One call's silence count and time limit. Once it has hung up, it does nothing more.
+    The timings can be shortened for tests; the call uses the constants above."""
 
-    def __init__(self) -> None:
-        self.checked_in = False   # "Are you still there?" said, and no reply yet
+    def __init__(self, check_in_after: float = CHECK_IN_AFTER, hang_up_after: float = HANG_UP_AFTER,
+                 max_call_seconds: float = MAX_CALL_SECONDS) -> None:
+        self.check_in_after = check_in_after
+        self.hang_up_after = hang_up_after
+        self.max_call_seconds = max_call_seconds
+        self.checked_in = False   # "Are you still there?" said, and no words since
         self.ended = False        # the code has hung up (silence or time limit)
 
     def on_silence(self) -> Optional[Step]:
@@ -52,20 +60,21 @@ class CallWatch:
             return None
         if not self.checked_in:
             self.checked_in = True
-            return Step(CHECK_IN, hang_up=False, next_wait=HANG_UP_AFTER)
+            return Step(CHECK_IN, hang_up=False, next_wait=self.hang_up_after)
         self.ended = True
         return Step(SILENCE_GOODBYE, hang_up=True)
 
     def on_caller_spoke(self) -> Optional[float]:
-        """The caller said something. Returns the wait to go back to, or None if it hasn't changed."""
+        """The caller said some words. Returns the wait to go back to, or None if it hasn't changed."""
         if self.checked_in and not self.ended:
             self.checked_in = False
-            return CHECK_IN_AFTER
+            return self.check_in_after
         return None
 
-    def on_time_limit(self) -> Optional[Step]:
-        """The call has lasted MAX_CALL_SECONDS."""
-        if self.ended:
+    def on_time_limit(self, call_finished: bool) -> Optional[Step]:
+        """The call has lasted max_call_seconds. A finished call (booked or handed to staff) is
+        already saying its own goodbye, so it gets no second one."""
+        if self.ended or call_finished:
             return None
         self.ended = True
         return Step(TIME_LIMIT_GOODBYE, hang_up=True)

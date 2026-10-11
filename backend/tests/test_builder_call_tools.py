@@ -779,7 +779,8 @@ def test_the_greeting_is_spoken_by_the_code_at_once(clinic):
     first = b.build_initial_node(clinic.new_call(clock=lambda: NOW))
     assert first["respond_immediately"] is False
     (say,) = first["pre_actions"]
-    assert say["type"] == "tts_say" and say["text"].startswith("Hello, you've reached the clinics' scheduling line")
+    # Said with our own "say" action, which can't jam the call if the caller talks over it (review 2026-10-11, R2).
+    assert say["type"] == "say" and say["text"].startswith("Hello, you've reached the clinics' scheduling line")
     assert say["text"] in first["task_messages"][0]["content"]  # the AI knows what was already said
     assert "respond_immediately" not in b._make_node(b._nodes_by_name["booking"], new_caller_at_booking(clinic))
 

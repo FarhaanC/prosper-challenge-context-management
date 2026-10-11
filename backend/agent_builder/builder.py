@@ -15,12 +15,20 @@
 # gives a sentence to say (say_now), the code says it and the AI waits for the
 # caller: no AI pass is spent repeating it (decision 66).
 #
+# Lines the code speaks (an agent file's "tts_say" actions, and say_now) go through
+# our own "say" action, not Pipecat Flows' tts_say. Flows' tts_say waits for a
+# marker to come back after the line is spoken, and if the caller talks over the
+# line, the marker is thrown away and the call stays stuck: an interrupted greeting
+# left stage 1 with no instructions or tools (review 2026-10-11, R2). "say" only
+# queues the line, so nothing waits on it.
+#
 
 import json
 from pathlib import Path
 from typing import Optional, Union
 
 from loguru import logger
+from pipecat.frames.frames import TTSSpeakFrame
 from pipecat_flows import ContextStrategy, ContextStrategyConfig, FlowManager, FlowsFunctionSchema, NodeConfig
 
 from call import PLACEHOLDER, PLACEHOLDERS, TOOLS, CallSession, run_tool
@@ -28,6 +36,17 @@ from call import PLACEHOLDER, PLACEHOLDERS, TOOLS, CallSession, run_tool
 from .schema import AgentConfig, Edge, Node
 
 HISTORY = {"keep": ContextStrategy.APPEND, "reset": ContextStrategy.RESET}
+
+
+async def say(action: dict, flow_manager: FlowManager) -> None:
+    """The "say" action: queue one line for the voice (it joins the conversation) and wait for nothing."""
+    await flow_manager.worker.queue_frame(TTSSpeakFrame(action["text"]))
+
+
+def _spoken_by_code(actions: list) -> list:
+    """An agent file's tts_say actions, said with our "say" action instead (see the top of this file)."""
+    return [{"type": "say", "text": a["text"], "handler": say} if a.get("type") == "tts_say" else a
+            for a in actions]
 
 
 class AgentBuilder:
@@ -109,20 +128,17 @@ class AgentBuilder:
             task_messages = [{**m, "content": session.fill(m.get("content", ""))} for m in node.task_messages]
             session.enter_stage(node.name, [m["content"] for m in task_messages])
         node_config: NodeConfig = {
-            "name": node.name,
-            "role_message": node.role_message or self.config.persona,
+            **self._role_and_functions(node),
             "task_messages": task_messages,
-            "functions": [self._make_edge_function(edge) for edge in node.edges]
-            + [self._make_tool_function(name) for name in node.tools],
             "context_strategy": ContextStrategyConfig(strategy=HISTORY[self.config.history]),
         }
         if node.pre_actions:
-            node_config["pre_actions"] = node.pre_actions
+            node_config["pre_actions"] = _spoken_by_code(node.pre_actions)
         if not node.respond_immediately:
             node_config["respond_immediately"] = False
         # Explicit post_actions win; otherwise a terminal node ends the call.
         if node.post_actions:
-            node_config["post_actions"] = node.post_actions
+            node_config["post_actions"] = _spoken_by_code(node.post_actions)
         elif node.end:
             node_config["post_actions"] = [{"type": "end_conversation"}]
         return node_config
@@ -134,16 +150,21 @@ class AgentBuilder:
         this "moves" to the same stage: same tools, conversation kept (nothing new to
         read: the tool's reply is already in it), the sentence said by the code (and
         added to the conversation), and the AI waits for the caller."""
-        node = self._nodes_by_name[session.stage]
+        return {
+            **self._role_and_functions(self._nodes_by_name[session.stage]),
+            "task_messages": [],
+            "context_strategy": ContextStrategyConfig(strategy=ContextStrategy.APPEND),
+            "pre_actions": [{"type": "say", "text": text, "handler": say}],
+            "respond_immediately": False,
+        }
+
+    def _role_and_functions(self, node: Node) -> dict:
+        """A stage's name, role and tools: the same whether the stage starts or is re-entered."""
         return {
             "name": node.name,
             "role_message": node.role_message or self.config.persona,
-            "task_messages": [],
             "functions": [self._make_edge_function(edge) for edge in node.edges]
             + [self._make_tool_function(name) for name in node.tools],
-            "context_strategy": ContextStrategyConfig(strategy=ContextStrategy.APPEND),
-            "pre_actions": [{"type": "tts_say", "text": text}],
-            "respond_immediately": False,
         }
 
     def _make_edge_function(self, edge: Edge) -> FlowsFunctionSchema:

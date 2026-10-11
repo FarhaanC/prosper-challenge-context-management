@@ -64,6 +64,11 @@ class Outcome:
     next_stage: Optional[str] = None   # None: stay in this stage
     say_now: str = ""                  # said to the caller by the code; the AI then waits for the caller
 
+    def __post_init__(self):
+        # A move rebuilds the stage, so a sentence to say as well would be lost: refuse the pair.
+        if self.next_stage and self.say_now:
+            raise ValueError("An Outcome can move stage or have the code say something, not both.")
+
 
 class Refused(ValueError):
     """A value the tool can't use. The AI is told why and how to send it."""
@@ -312,8 +317,8 @@ def choose_option(session: CallSession, args: dict) -> Outcome:
     # The code says the read-back itself (decision 66): word for word every time, and
     # no AI pass is spent repeating it.
     return Outcome({"ok": True, "read_back": read_back,
-                    "said": "The read_back has just been said to the caller, and they were asked if they'd like "
-                            "to book it. Don't repeat it. Call confirm_booking only after they say yes."},
+                    "note": "The code is reading the read_back to the caller and asking if they'd like to book "
+                            "it: don't repeat it. Call confirm_booking only after they say yes."},
                    say_now=f"To confirm: {read_back} Would you like me to book it?")
 
 
