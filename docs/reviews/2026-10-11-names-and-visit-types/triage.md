@@ -30,3 +30,13 @@ The editor's inspector tests were pointed at the call logs that existed when the
 
 - A new patient (`returning` false) needs `spelled_first_name` and `spelled_last_name` (the letters the caller confirmed), or `name_not_confirmed` true with `full_name` as heard. The saved name is built from the letters. See INTERFACE.md (start_booking).
 - Look-alike visit types carry `description` and `usual_choice` in `visit_types_for`, and a "  What it is: …" line under them in `{visit_types}`.
+
+## After the fixes: Farhaan's call (Sun 11, 22:42)
+
+**Found by the call, not by any test or the review:** the AI sent the confirmed letters as a list (`["F", "A", "R", …]`) instead of one text. The field descriptions said "one per entry", the same words the `days` field uses for a real list, so the AI copied that form. The code refused it twice with "spelled_first_name must be text" (no example), and the agent gave up, telling the caller staff would follow up, without calling hand_off.
+
+**Fixed:** a list of letters is read like the same letters as text; the descriptions say "as one text with commas between letters"; a value of another kind is refused with the example. A test replays the call's exact values. Builder 457 pass; adapter run as above (the line-endings failure is gone on this copy).
+
+**Lesson:** the tool schema says "string", but the AI service doesn't enforce it, so the wording of a description can change the shape of what comes back. Every tool test so far had sent the shape the code expected.
+
+**To check in testing:** the agent promised "a member of staff will follow up" without handing off (no hand_off call), which is a promise the code never made.

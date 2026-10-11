@@ -119,20 +119,26 @@ NOT_NAME_WORDS = {"yes", "no", "not", "sure", "unknown", "double", "triple", "as
 MAX_NAME_LETTERS = 40
 # A first or last name of more than this many words is a sentence, not a name.
 MAX_NAME_WORDS = 3
-LETTERS_ONLY = (" Send letters only, one per entry (\"F, A, R, H, A, A, N\"): \"double A\" is A, A; "
+LETTERS_ONLY = (" Send letters only, as text separated by commas (\"F, A, R, H, A, A, N\"): \"double A\" is A, A; "
                 "\"A as in apple\" is A. A name with a space or a hyphen goes as words (\"MARY ANN\", \"SMITH-JONES\").")
 
 
 def _spelled(args: dict, key: str) -> str:
     """A name the caller spelled and confirmed, turned into the name to save (decision 77).
 
-    Accepted: letters one per entry ("F, A, R, H, A, A, N", "F A R", "F-A-R" or "C.H.I.D.A."),
+    Accepted: letters one by one ("F, A, R, H, A, A, N", "F A R", "F-A-R", "C.H.I.D.A.", or a
+    list of letters, which the AI sometimes sends),
     joined into one word; or the name as words ("FARHAAN", "MARY ANN", "SMITH-JONES",
     "O'BRIEN"). Refused, with how to send it: digits or symbols, letters mixed with words
     ("F, A, double A"), stray words ("yes"), more than 3 words, or more than 40 letters.
     A name sent all in capitals or all in small letters is tidied ("FARHAAN" -> "Farhaan",
     "O'BRIEN" -> "O'Brien"); one with mixed capitals is kept as sent ("McDonald", "van der Berg")."""
-    raw = unicodedata.normalize("NFC", _text(args, key))
+    value = args.get(key)
+    if isinstance(value, list) and all(isinstance(v, str) for v in value):
+        value = ", ".join(value)  # the AI sent the letters as a list (Sun 11 call): same letters, same rules
+    elif value is not None and not isinstance(value, str):
+        raise Refused(f"{key} must be text, e.g. \"F, A, R, H, A, A, N\".")
+    raw = unicodedata.normalize("NFC", tidy(value or ""))
     raw = raw.replace("\u2019", "'").replace("\u2018", "'").replace("`", "'")  # curly or back-tick apostrophes
     if not raw:
         return ""
@@ -617,11 +623,12 @@ def _tools() -> dict:
              "returning": {"type": "boolean", "description": "true if they've been a patient with us before."},
              "date_of_birth": {"type": "string", "description": "Returning patients only: YYYY-MM-DD."},
              "spelled_first_name": {"type": "string", "description": (
-                 "New patients: the first name's letters as the caller confirmed them, one per entry "
-                 "(\"F, A, R, H, A, A, N\"); a name with a space or hyphen as words (\"MARY ANN\"). \"Double A\" "
-                 "is A, A and \"A as in apple\" is A. The name is saved from these letters.")},
+                 "New patients: the first name's letters as the caller confirmed them, as one text with commas "
+                 "between letters: \"F, A, R, H, A, A, N\". A name with a space or hyphen goes as words "
+                 "(\"MARY ANN\"). \"Double A\" is A, A and \"A as in apple\" is A. The name is saved from these letters.")},
              "spelled_last_name": {"type": "string", "description": (
-                 "The last name's letters as the caller confirmed them, in the same form (\"W, I, L, S, O, N\"). "
+                 "The last name's letters as the caller confirmed them, as one text with commas between letters "
+                 "(\"W, I, L, S, O, N\"). "
                  "New patients: always (the name is saved from these letters). Returning patients: only when "
                  "asked to spell.")},
              "name_not_confirmed": {"type": "boolean", "description": (

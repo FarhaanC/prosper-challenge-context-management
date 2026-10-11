@@ -66,11 +66,11 @@ Required: ['full_name', 'returning']. Can move to: ['visit_type', 'end'].
  },
  "spelled_first_name": {
   "type": "string",
-  "description": "New patients: the first name's letters as the caller confirmed them, one per entry (\"F, A, R, H, A, A, N\"); a name with a space or hyphen as words (\"MARY ANN\"). \"Double A\" is A, A and \"A as in apple\" is A. The name is saved from these letters."
+  "description": "New patients: the first name's letters as the caller confirmed them, as one text with commas between letters: \"F, A, R, H, A, A, N\". A name with a space or hyphen goes as words (\"MARY ANN\"). \"Double A\" is A, A and \"A as in apple\" is A. The name is saved from these letters."
  },
  "spelled_last_name": {
   "type": "string",
-  "description": "The last name's letters as the caller confirmed them, in the same form (\"W, I, L, S, O, N\"). New patients: always (the name is saved from these letters). Returning patients: only when asked to spell."
+  "description": "The last name's letters as the caller confirmed them, as one text with commas between letters (\"W, I, L, S, O, N\"). New patients: always (the name is saved from these letters). Returning patients: only when asked to spell."
  },
  "name_not_confirmed": {
   "type": "boolean",
@@ -123,7 +123,7 @@ Required: ['full_name', 'returning']. Can move to: ['visit_type', 'end'].
 }
 ```
 
-*(Decisions 77–78, 11 Oct: for a new patient (`returning` false) the saved name is built from `spelled_first_name` and `spelled_last_name`, letters one per entry ("F, A, R, H, A, A, N", "F-A-R", "C.H.I.D.A.") or words ("MARY ANN", "O'BRIEN"); all-capital or all-small names are tidied ("Farhaan", "O'Brien"), mixed capitals kept ("McDonald"). Refused, changing nothing: letters mixed with words ("double A"), digits or symbols, stray words ("yes"), more than 3 words or 40 letters, and a new patient without both names unless `name_not_confirmed` is true. With `name_not_confirmed` true, a name without letters is taken from `full_name` as heard (which then needs first and last), the caller is marked `name_confirmed: false`, the saved booking has `"name_confirmed": false`, and the end stage says staff will check the spelling.)*
+*(Decisions 77–78, 11 Oct: for a new patient (`returning` false) the saved name is built from `spelled_first_name` and `spelled_last_name`, letters one per entry ("F, A, R, H, A, A, N", "F-A-R", "C.H.I.D.A.") or words ("MARY ANN", "O'BRIEN"); all-capital or all-small names are tidied ("Farhaan", "O'Brien"), mixed capitals kept ("McDonald"). Refused, changing nothing: letters mixed with words ("double A"), digits or symbols, stray words ("yes"), more than 3 words or 40 letters, and a new patient without both names unless `name_not_confirmed` is true. With `name_not_confirmed` true, a name without letters is taken from `full_name` as heard (which then needs first and last), the caller is marked `name_confirmed: false`, the saved booking has `"name_confirmed": false`, and the end stage says staff will check the spelling. A list of letters (`["F", "A", …]`) is read like the same letters as text.)*
 
 ### list_visit_types
 

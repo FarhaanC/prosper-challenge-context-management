@@ -954,3 +954,26 @@ def test_look_alike_visit_types_carry_our_descriptions_and_the_usual_choice(clin
     text = s.fill("{visit_types}")
     assert "Full Body Skin Exam (30 min): can book\n  What it is: A head-to-toe check" in text
     assert text.count("The usual choice if they don't mind which.") == 1
+
+
+def test_letters_sent_as_a_list_are_read_like_text(clinic):
+    """Sun 11, second call: the AI sent ["F", "A", ...] (a list); the code refused it twice with
+    "must be text", and the agent gave up on the booking. The exact values from that call:"""
+    s = session_in(clinic)
+    out = step(s, "start_booking", full_name="Farhan Chida", returning=False,
+               spelled_first_name=["F", "A", "R", "H", "A", "A", "N"], spelled_last_name=["C", "H", "I", "D", "A"],
+               visit_description="skin check", specialty="Dermatology")
+    assert out.next_stage == VISIT_TYPE and s.card.caller.name == "Farhaan Chida"
+
+
+def test_letters_of_another_kind_are_refused_with_how_to_send_them(clinic):
+    s = session_in(clinic)
+    out = step(s, "start_booking", **{**NEW_CALLER, "spelled_first_name": 7})
+    assert out.result["ok"] is False and '"F, A, R, H, A, A, N"' in out.result["error"]
+
+
+def test_the_letter_fields_show_the_text_form_not_a_list():
+    props = TOOLS["start_booking"].properties
+    for key in ("spelled_first_name", "spelled_last_name"):
+        assert props[key]["type"] == "string" and "one text with commas between letters" in props[key]["description"]
+        assert "per entry" not in props[key]["description"]
