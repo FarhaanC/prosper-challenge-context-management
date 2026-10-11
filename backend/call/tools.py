@@ -2,7 +2,8 @@
 
 Plain Python, no Pipecat (decision 22). Each tool takes the call's session and the
 values the AI sent, calls the clinic module, and returns an Outcome: what the AI
-is told, and the stage to move to (or None to stay). Moves are decided here, by
+is told, the stage to move to (or None to stay), and sometimes a sentence the code
+says to the caller itself, which ends the AI's turn. Moves are decided here, by
 code, never by the AI.
 
 What the AI sends follows the rule in clinic/__init__.py: names (doctors, places,
@@ -28,7 +29,7 @@ agent file and the editor will draw as dashed arrows.
 | start_booking      | identify        | visit_type (found or new), end (staff); else stays    |
 | list_visit_types   | visit_type      | stays                                                 |
 | choose_visit_type  | visit_type      | booking (accepted), stays (refused)                   |
-| choose_option      | booking         | stays (gives the read-back)                           |
+| choose_option      | booking         | stays; the code says the read-back (decision 66)      |
 | confirm_booking    | booking         | end (saved), booking (time gone: fresh options)       |
 | change_choice      | every stage     | booking (fresh options), visit_type, or stays         |
 | turn_down_doctors  | every stage     | booking (fresh options), or stays                     |
@@ -61,6 +62,7 @@ ANY = "any"  # the value that drops a wish in change_choice
 class Outcome:
     result: dict                       # what the AI is told
     next_stage: Optional[str] = None   # None: stay in this stage
+    say_now: str = ""                  # said to the caller by the code; the AI then waits for the caller
 
 
 class Refused(ValueError):
@@ -306,9 +308,13 @@ def choose_option(session: CallSession, args: dict) -> Outcome:
         card.choose_option(option_id)
     except ValueError as e:
         raise Refused(str(e)) from e
-    return Outcome({"ok": True, "read_back": card.read_back(session.catalog),
-                    "next": "Say the read_back to the caller word for word and ask if they'd like to book it. "
-                            "Call confirm_booking only after they say yes."})
+    read_back = card.read_back(session.catalog)
+    # The code says the read-back itself (decision 66): word for word every time, and
+    # no AI pass is spent repeating it.
+    return Outcome({"ok": True, "read_back": read_back,
+                    "said": "The read_back has just been said to the caller, and they were asked if they'd like "
+                            "to book it. Don't repeat it. Call confirm_booking only after they say yes."},
+                   say_now=f"To confirm: {read_back} Would you like me to book it?")
 
 
 def confirm_booking(session: CallSession, args: dict) -> Outcome:
@@ -530,7 +536,8 @@ def _tools() -> dict:
             {"visit_type_id": {"type": "string", "description": "The visit type's id from the list."}, **WISH_FIELDS},
             ["visit_type_id"], (BOOKING,), needs_caller=True),
         Tool("choose_option", (
-            "Call when the caller picks one of the options on offer. Returns the read-back sentence to say."),
+            "Call when the caller picks one of the options on offer. The read-back is then said to the caller "
+            "for you, with the question whether to book it."),
             choose_option,
             {"option_id": {"type": "string", "description": "The option number from your instructions, e.g. \"2\"."}},
             ["option_id"], needs_caller=True),
@@ -612,5 +619,6 @@ def run_tool(session: CallSession, name: str, args: dict) -> Outcome:
     except Exception as e:
         session.log({**entry, "error": f"{type(e).__name__}: {e}"})
         raise
-    session.log({**entry, "result": outcome.result, "next_stage": outcome.next_stage})
+    session.log({**entry, "result": outcome.result, "next_stage": outcome.next_stage,
+                 **({"said": outcome.say_now} if outcome.say_now else {})})
     return outcome

@@ -593,9 +593,14 @@ def test_the_pipecat_wrapper_moves_with_filled_instructions(clinic):
     assert "No doctor matching 'Dr. Garsha' can do this" in node["task_messages"][0]["content"]
 
     # A tool that stays returns just the result: no move.
-    pick = next(f for f in node["functions"] if f.name == "choose_option")
-    stay = asyncio.run(pick.handler({"option_id": s.card.offered_options[0].option_id}, FakeFlowManager(s)))
+    ask = next(f for f in b.global_functions() if f.name == "answer_question")
+    stay = asyncio.run(ask.handler({"about": "location", "name": "Midtown"}, FakeFlowManager(s)))
     assert isinstance(stay, dict) and stay["ok"] is True
+
+    # choose_option stays too, but the code says the read-back, so it "moves" to the same stage (decision 66).
+    pick = next(f for f in node["functions"] if f.name == "choose_option")
+    picked, same = asyncio.run(pick.handler({"option_id": s.card.offered_options[0].option_id}, FakeFlowManager(s)))
+    assert picked["ok"] is True and same["name"] == BOOKING and s.stage == BOOKING
 
     confirm = next(f for f in node["functions"] if f.name == "confirm_booking")
     _, end = asyncio.run(confirm.handler({}, FakeFlowManager(s)))

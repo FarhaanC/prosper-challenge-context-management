@@ -11,7 +11,9 @@
 # Tools (call/tools.py) are plain Python. Here each one is wrapped for Pipecat:
 # the wrapper runs the tool on this call's session (kept in flow_manager.state),
 # and if the tool's code says "move to stage X", builds node X with its
-# placeholders filled from the booking card at that moment.
+# placeholders filled from the booking card at that moment. If the tool's code
+# gives a sentence to say (say_now), the code says it and the AI waits for the
+# caller: no AI pass is spent repeating it (decision 66).
 #
 
 import json
@@ -125,6 +127,25 @@ class AgentBuilder:
             node_config["post_actions"] = [{"type": "end_conversation"}]
         return node_config
 
+    def _say_and_wait(self, session: CallSession, text: str) -> NodeConfig:
+        """Stay in the current stage, keeping its conversation, while the code says `text`.
+
+        Pipecat Flows only lets a tool stop the AI's next pass by moving to a node, so
+        this "moves" to the same stage: same tools, conversation kept (nothing new to
+        read: the tool's reply is already in it), the sentence said by the code (and
+        added to the conversation), and the AI waits for the caller."""
+        node = self._nodes_by_name[session.stage]
+        return {
+            "name": node.name,
+            "role_message": node.role_message or self.config.persona,
+            "task_messages": [],
+            "functions": [self._make_edge_function(edge) for edge in node.edges]
+            + [self._make_tool_function(name) for name in node.tools],
+            "context_strategy": ContextStrategyConfig(strategy=ContextStrategy.APPEND),
+            "pre_actions": [{"type": "tts_say", "text": text}],
+            "respond_immediately": False,
+        }
+
     def _make_edge_function(self, edge: Edge) -> FlowsFunctionSchema:
         async def handler(args: dict, flow_manager: FlowManager):
             # Persist what the caller gave us so later nodes can use it.
@@ -150,6 +171,8 @@ class AgentBuilder:
             logger.info(f"[{name}] {args} -> {outcome.result} | next stage: {outcome.next_stage or 'stay'}")
             if outcome.next_stage:
                 return outcome.result, self._make_node(self._nodes_by_name[outcome.next_stage], session)
+            if outcome.say_now:
+                return outcome.result, self._say_and_wait(session, outcome.say_now)
             return outcome.result
 
         return FlowsFunctionSchema(

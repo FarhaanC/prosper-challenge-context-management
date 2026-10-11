@@ -9,12 +9,14 @@
 #   clinic_agent.json  ->  AgentBuilder  ->  Pipecat Flows graph  ->  FlowManager
 #
 # Each call gets its own CallSession (booking card, options on offer, call log in
-# call_logs/). The clinic data, and the schedule with every saved booking
+# call_logs/) and its own CallWatch (silence check-in and hang-up, 10-minute cap:
+# decision 64). The clinic data, and the schedule with every saved booking
 # (bookings.jsonl), are loaded once and shared by every call.
 #
 # Run:  python bot.py   then open http://localhost:7860/client
 #
 
+import asyncio
 import os
 from pathlib import Path
 
@@ -22,6 +24,7 @@ from dotenv import load_dotenv
 from loguru import logger
 
 from pipecat.audio.vad.silero import SileroVADAnalyzer
+from pipecat.frames.frames import EndFrame, TTSSpeakFrame, UserIdleTimeoutUpdateFrame
 from pipecat.pipeline.pipeline import Pipeline
 from pipecat.pipeline.worker import PipelineParams, PipelineWorker
 from pipecat.processors.aggregators.llm_context import LLMContext
@@ -40,7 +43,7 @@ from pipecat.workers.runner import WorkerRunner
 from pipecat_flows import FlowManager
 
 from agent_builder import AgentBuilder
-from call import Clinic
+from call import CHECK_IN_AFTER, MAX_CALL_SECONDS, CallWatch, Clinic, Step
 
 # Load .env next to this file, so the bot runs the same from the repo root or backend/.
 load_dotenv(Path(__file__).parent / ".env", override=True)
@@ -84,7 +87,8 @@ async def run_bot(
     context = LLMContext()
     context_aggregator = LLMContextAggregatorPair(
         context,
-        user_params=LLMUserAggregatorParams(vad_analyzer=SileroVADAnalyzer()),
+        # The user-idle timer counts silence from when the agent stops speaking (decision 64).
+        user_params=LLMUserAggregatorParams(vad_analyzer=SileroVADAnalyzer(), user_idle_timeout=CHECK_IN_AFTER),
     )
 
     pipeline = Pipeline(
@@ -113,16 +117,52 @@ async def run_bot(
         global_functions=builder.global_functions(),
     )
 
+    # Silence, held calls and pocket dials (decision 64): the rules are in call/silence.py.
+    watch = CallWatch()
+    time_limit_task = None
+
+    async def act(step: Step, event: str) -> None:
+        """Say the step's sentence (it joins the conversation), then hang up or wait the next stretch."""
+        session = flow_manager.state.get("session")
+        if session is not None:
+            session.log({"event": event, "said": step.say, "hang_up": step.hang_up})
+        logger.info(f"[{event}] {step.say} | hang up: {step.hang_up}")
+        if step.next_wait is not None:
+            await worker.queue_frame(UserIdleTimeoutUpdateFrame(timeout=step.next_wait))
+        await worker.queue_frames([TTSSpeakFrame(step.say)] + ([EndFrame()] if step.hang_up else []))
+
+    @context_aggregator.user().event_handler("on_user_turn_idle")
+    async def on_user_turn_idle(aggregator):
+        step = watch.on_silence()
+        if step:
+            await act(step, "silence")
+
+    @context_aggregator.user().event_handler("on_user_turn_started")
+    async def on_user_turn_started(aggregator, strategy):
+        wait = watch.on_caller_spoke()
+        if wait is not None:
+            await worker.queue_frame(UserIdleTimeoutUpdateFrame(timeout=wait))
+
+    async def end_at_time_limit() -> None:
+        await asyncio.sleep(MAX_CALL_SECONDS)
+        step = watch.on_time_limit()
+        if step:
+            await act(step, "time_limit")
+
     @transport.event_handler("on_client_connected")
     async def on_client_connected(transport, client):
+        nonlocal time_limit_task
         session = CLINIC.new_call()
         flow_manager.state["session"] = session
         logger.info(f"Client connected — starting flow at initial node (call log: {session.log_path})")
+        time_limit_task = asyncio.create_task(end_at_time_limit())
         await flow_manager.initialize(builder.build_initial_node(session))
 
     @transport.event_handler("on_client_disconnected")
     async def on_client_disconnected(transport, client):
         logger.info("Client disconnected")
+        if time_limit_task:
+            time_limit_task.cancel()
         await worker.cancel()
 
     runner = WorkerRunner(handle_sigint=runner_args.handle_sigint)

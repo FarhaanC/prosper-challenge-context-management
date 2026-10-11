@@ -11,7 +11,7 @@ clinic = Clinic(catalog, patients, schedule, bookings_file=path_or_None, log_dir
 # or Clinic.load(bookings_file=..., log_dir=...): loads the real catalog and patients, and reloads saved bookings
 session = clinic.new_call(clock=lambda: NOW)   # NOW: a fixed datetime in clinic time
 session.enter_stage(stage_name, instructions_list)   # what the builder does when a stage starts
-outcome = run_tool(session, tool_name, args_dict)   # outcome.result (dict the AI sees), outcome.next_stage (None = stay)
+outcome = run_tool(session, tool_name, args_dict)   # outcome.result (dict the AI sees), outcome.next_stage (None = stay), outcome.say_now (a sentence the code says itself, or "")
 session.fill(text)   # fills {placeholders}
 session.card        # the clinic.BookingCard for this call (caller, preferences, choices, status, offered_options)
 session.stage, session.log_path, clinic.schedule, clinic.bookings_file
@@ -19,7 +19,7 @@ session.stage, session.log_path, clinic.schedule, clinic.bookings_file
 
 After a tool moves the call (next_stage set), the voice agent enters that stage: in tests call `session.enter_stage(outcome.next_stage, [])` yourself, as the builder does.
 
-Saved bookings: one JSON object per line in the bookings file. The call log: one JSON object per line (events `stage` and `tool`).
+Saved bookings: one JSON object per line in the bookings file. The call log: one JSON object per line (events `stage` and `tool`; since 9 Oct also `silence` and `time_limit`, written by bot.py, decision 64).
 
 ## The agent file and builder
 
@@ -182,7 +182,7 @@ Required: ['visit_type_id']. Can move to: ['booking'].
 
 ### choose_option
 
-Call when the caller picks one of the options on offer. Returns the read-back sentence to say.
+Call when the caller picks one of the options on offer. The read-back is then said to the caller for you, with the question whether to book it.
 
 Required: ['option_id']. Can move to: stays.
 
@@ -194,6 +194,8 @@ Required: ['option_id']. Can move to: stays.
  }
 }
 ```
+
+*(Decision 66, 9 Oct: `outcome.say_now` holds "To confirm: <read_back> Would you like me to book it?", which the code says itself; through the builder, the handler returns `(result, node)` where `node` is the same stage with the conversation kept, that sentence as a `tts_say` pre-action, and `respond_immediately` false.)*
 
 ### confirm_booking
 
