@@ -13,7 +13,8 @@
 # decision 64). The clinic data, and the schedule with every saved booking
 # (bookings.jsonl), are loaded once and shared by every call.
 #
-# Run:  python bot.py   then open http://localhost:7860/client
+# Run:  python bot.py   then open http://localhost:7860/client (a call)
+#                        or http://localhost:7860/editor (the editor, once built)
 #
 
 import os
@@ -40,7 +41,7 @@ from pipecat.transports.base_transport import BaseTransport, TransportParams
 from pipecat.workers.runner import WorkerRunner
 from pipecat_flows import FlowManager
 
-from agent_builder import AgentBuilder, CallWatchWiring
+from agent_builder import AgentBuilder, CallWatchWiring, TokenLog
 from call import CallWatch, Clinic
 
 # Load .env next to this file, so the bot runs the same from the repo root or backend/.
@@ -50,6 +51,9 @@ load_dotenv(Path(__file__).parent / ".env", override=True)
 # The agent this bot runs. Point this at any agent JSON (the Phase 2 Copilot
 # would generate one and drop it here). example_flow.json is the starter agent.
 AGENT_FLOW = Path(__file__).parent / "clinic_agent.json"
+
+# The editor's built page (frontend/, `npm run build`), served at /editor.
+EDITOR_FILES = Path(__file__).parent.parent / "frontend" / "dist"
 
 # Loaded once: catalog, fake patients, and the schedule with every saved booking.
 CLINIC = Clinic.load()
@@ -82,6 +86,16 @@ async def run_bot(
         settings=OpenAILLMService.Settings(model=config.model, extra=extra),
     )
 
+    # This call's log and state live in its session, made when the caller connects.
+    def log(entry: dict) -> None:
+        session = flow_manager.state.get("session")
+        if session is not None:
+            session.log(entry)
+
+    def call_finished() -> bool:
+        session = flow_manager.state.get("session")
+        return session is not None and session.card.status != "in_progress"
+
     # Silence check-in, hang-up and the 10-minute cap (decision 64): rules in call/silence.py.
     watch = CallWatch()
     context = LLMContext()
@@ -98,6 +112,7 @@ async def run_bot(
             stt,
             context_aggregator.user(),
             llm,
+            TokenLog(log),  # input and output tokens per AI reply, into the call log (decision 45)
             tts,
             transport.output(),
             context_aggregator.assistant(),
@@ -117,15 +132,6 @@ async def run_bot(
         transport=transport,
         global_functions=builder.global_functions(),
     )
-
-    def log(entry: dict) -> None:
-        session = flow_manager.state.get("session")
-        if session is not None:
-            session.log(entry)
-
-    def call_finished() -> bool:
-        session = flow_manager.state.get("session")
-        return session is not None and session.card.status != "in_progress"
 
     silence = CallWatchWiring(watch, context_aggregator.user(), worker, log, call_finished)
 
@@ -158,6 +164,15 @@ async def bot(runner_args: RunnerArguments):
 
 
 if __name__ == "__main__":
-    from pipecat.runner.run import main
+    from fastapi.staticfiles import StaticFiles
+    from pipecat.runner.run import app, main
 
+    from editor_api import editor_routes
+
+    # The editor (Phase 1) is served by this same program: http://localhost:7860/editor
+    app.include_router(editor_routes(AGENT_FLOW))
+    if EDITOR_FILES.exists():
+        app.mount("/editor", StaticFiles(directory=EDITOR_FILES, html=True), name="editor")
+    else:
+        logger.warning(f"The editor isn't built yet ({EDITOR_FILES}): in frontend/, run npm install, then npm run build.")
     main()
