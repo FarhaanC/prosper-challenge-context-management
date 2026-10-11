@@ -19,6 +19,8 @@ from catalog_ids import (
 from clinic import BOOKING, END, IDENTIFY, VISIT_TYPE, PatientDirectory, Schedule
 
 AGENT_FILE = "clinic_agent.json"
+# A new caller, with the letters of both names as they confirmed them (decision 77).
+NEW_CALLER = dict(full_name="Farhan Jida", returning=False, spelled_first_name="FARHAN", spelled_last_name="JIDA")
 
 
 @pytest.fixture
@@ -43,7 +45,7 @@ def step(s: CallSession, tool: str, **args):
 
 def new_caller_at_visit_type(clinic, **wishes) -> CallSession:
     s = session_in(clinic)
-    assert step(s, "start_booking", full_name="Farhan Jida", returning=False, **wishes).next_stage == VISIT_TYPE
+    assert step(s, "start_booking", **NEW_CALLER, **wishes).next_stage == VISIT_TYPE
     return s
 
 
@@ -135,7 +137,7 @@ def test_specialty_sent_early_lists_its_visit_types_in_stage_two(clinic):
 
 def test_unknown_specialty_is_refused(clinic):
     s = session_in(clinic)
-    out = step(s, "start_booking", full_name="Farhan Jida", returning=False, specialty="astrology")
+    out = step(s, "start_booking", **NEW_CALLER, specialty="astrology")
     assert out.result["ok"] is False and s.card.caller is None
 
 
@@ -150,7 +152,8 @@ def test_identity_steps_then_register_as_new(clinic):
                spelled_last_name="BROWN")
     assert out.result["status"] == "offer_new_or_staff" and out.next_stage is None
     assert s.card.caller is None
-    out = step(s, "start_booking", full_name=name, returning=False)
+    out = step(s, "start_booking", full_name=name, returning=False, spelled_first_name="EMILY",
+               spelled_last_name="BROWN")
     assert out.next_stage == VISIT_TYPE and s.card.caller.is_new_patient
 
 
@@ -174,10 +177,61 @@ def test_same_name_and_birthday_goes_to_staff(catalog):
     assert "member of staff will call the caller back" in s.fill("{outcome}")
 
 
-def test_new_caller_needs_a_full_name(clinic):
+def test_new_caller_needs_both_names_spelled(clinic):
+    for missing in ("spelled_first_name", "spelled_last_name"):
+        s = session_in(clinic)
+        args = {k: v for k, v in NEW_CALLER.items() if k != missing}
+        out = step(s, "start_booking", **args)
+        assert out.result["ok"] is False and out.next_stage is None and s.card.caller is None
+        assert "spelled_first_name and spelled_last_name" in out.result["error"]
+
+
+def test_a_new_patients_name_is_saved_from_the_confirmed_letters_not_the_heard_name(clinic, tmp_path):
+    """Sun 11 voice call: the agent read back "F, A, R, H, A, A, N", the caller said yes, and
+    "Farhan" was saved anyway, because the AI wrote the name itself."""
     s = session_in(clinic)
-    out = step(s, "start_booking", full_name="Farhan", returning=False)
-    assert out.result["ok"] is False and out.next_stage is None and s.card.caller is None
+    out = step(s, "start_booking", full_name="Farhan Chida", returning=False,
+               spelled_first_name="F, A, R, H, A, A, N", spelled_last_name="C, H, I, D, A")
+    assert out.next_stage == VISIT_TYPE and s.card.caller.name == "Farhaan Chida"
+    assert "Farhaan" in s.just_happened
+    book_first_option(_to_booking(s))
+    saved = json.loads((tmp_path / "bookings.jsonl").read_text(encoding="utf-8").splitlines()[-1])
+    assert saved["caller"] == "Farhaan Chida"
+
+
+@pytest.mark.parametrize("first, last, saved", [
+    ("FARHAAN", "CHIDA", "Farhaan Chida"),
+    ("farhaan", "chida", "Farhaan Chida"),
+    ("F A R H A A N", "C.H.I.D.A", "Farhaan Chida"),
+    ("MARY ANN", "O'BRIEN", "Mary Ann O'Brien"),
+    ("M, A, R, Y, -, J, A, N, E", "SMITH-JONES", "Mary-Jane Smith-Jones"),
+    ("JOSÉ", "NÚÑEZ", "José Núñez"),
+])
+def test_spelled_letters_become_the_saved_name(clinic, first, last, saved):
+    s = session_in(clinic)
+    step(s, "start_booking", full_name="anything", returning=False, spelled_first_name=first, spelled_last_name=last)
+    assert s.card.caller.name == saved
+
+
+@pytest.mark.parametrize("bad", ["F4RHAAN", "F, A, R, ?", "-", "", "not sure how it's spelled!"])
+def test_spelled_letters_that_are_not_a_name_are_refused(clinic, bad):
+    s = session_in(clinic)
+    out = step(s, "start_booking", **{**NEW_CALLER, "spelled_first_name": bad})
+    assert out.result["ok"] is False and s.card.caller is None
+
+
+def test_identify_and_visit_type_instructions_after_the_sun_11_call():
+    stages = {n["name"]: n["task_messages"][0]["content"] for n in agent_dict()["nodes"]}
+    assert "spell their names back one at a time" in stages["identify"]
+    assert "A as in apple" in stages["identify"]
+    assert "spelled_first_name and spelled_last_name" in stages["identify"]
+    assert "When you call start_booking, say only a short line" in stages["identify"]
+    assert "never choose for them" in stages["visit_type"]
+
+
+def _to_booking(s):
+    step(s, "choose_visit_type", visit_type_id=SKIN_CANCER_SCREENING)
+    return s
 
 
 # ---------------------------------------------------------------- values from the AI
@@ -196,7 +250,7 @@ def test_new_caller_needs_a_full_name(clinic):
 ])
 def test_bad_values_are_refused_and_change_nothing(clinic, args):
     s = session_in(clinic)
-    out = step(s, "start_booking", full_name="Farhan Jida", returning=False, **args)
+    out = step(s, "start_booking", **NEW_CALLER, **args)
     assert out.result["ok"] is False and out.result["error"] and out.next_stage is None
     assert s.card.caller is None
     p = s.card.preferences
@@ -213,7 +267,7 @@ def test_a_wrong_year_gets_a_message_that_names_the_years(clinic):
 
 def test_wishes_travel_with_start_booking(clinic):
     s = session_in(clinic)
-    step(s, "start_booking", full_name="Farhan Jida", returning=False, days=["Thursday", "friday"],
+    step(s, "start_booking", **NEW_CALLER, days=["Thursday", "friday"],
          time_of_day="morning", language="Spanish", soonest=True)
     p = s.card.preferences
     assert (p.days, p.time_of_day, p.language, p.soonest) == (["Thursday", "friday"], "morning", "Spanish", True)
@@ -256,7 +310,7 @@ def test_a_finished_call_cannot_be_reopened(clinic):
     for tool, args in [("choose_visit_type", {"visit_type_id": SKIN_CANCER_SCREENING}),
                        ("choose_option", {"option_id": "1"}), ("confirm_booking", {}),
                        ("turn_down_doctors", {"current": True}), ("change_choice", {"days": ["Friday"]}),
-                       ("start_booking", {"full_name": "Farhan Jida", "returning": False})]:
+                       ("start_booking", dict(NEW_CALLER))]:
         out = step(s, tool, **args)
         assert out.result["ok"] is False and out.next_stage is None, tool
     assert s.card.status == "booked"
@@ -268,7 +322,7 @@ def test_change_choice_in_identify_and_visit_type_records_without_moving(clinic)
     s = session_in(clinic)
     out = step(s, "change_choice", days=["Friday"])
     assert out.next_stage is None and s.card.preferences.days == ["Friday"]
-    step(s, "start_booking", full_name="Farhan Jida", returning=False)
+    step(s, "start_booking", **NEW_CALLER)
     out = step(s, "change_choice", language="Spanish")
     assert out.next_stage is None and s.stage == VISIT_TYPE and s.card.preferences.language == "Spanish"
 
@@ -391,7 +445,7 @@ def test_turn_down_before_any_options_is_kept(clinic):
     s = session_in(clinic)
     out = step(s, "turn_down_doctors", doctor_name="Dr. Kenji Kim")
     assert out.result["ok"] is True and out.next_stage is None
-    step(s, "start_booking", full_name="Farhan Jida", returning=False)
+    step(s, "start_booking", **NEW_CALLER)
     step(s, "choose_visit_type", visit_type_id=SKIN_CANCER_SCREENING)
     assert KENJI_KIM_DERM not in {o.provider_id for o in s.card.offered_options}
     assert step(session_in(clinic), "turn_down_doctors", on_offer=True).result["ok"] is False
@@ -501,7 +555,7 @@ def test_a_failed_save_holds_no_time(clinic, monkeypatch):
 def test_nothing_is_saved_or_logged_when_the_clinic_has_no_paths(catalog, patients, tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     s = session_in(Clinic(catalog, patients, Schedule(catalog)))
-    step(s, "start_booking", full_name="Farhan Jida", returning=False)
+    step(s, "start_booking", **NEW_CALLER)
     step(s, "choose_visit_type", visit_type_id=SKIN_CANCER_SCREENING)
     book_first_option(s)
     assert s.card.status == "booked" and s.log_path is None
@@ -582,7 +636,7 @@ def test_the_pipecat_wrapper_moves_with_filled_instructions(clinic):
     assert first["context_strategy"].strategy.value == "reset"
     start = next(f for f in first["functions"] if f.name == "start_booking")
     result, node = asyncio.run(start.handler(
-        {"full_name": "Farhan Jida", "returning": False, "doctor_name": "Dr. Garsha", "specialty": "Dermatology"},
+        {**NEW_CALLER, "doctor_name": "Dr. Garsha", "specialty": "Dermatology"},
         FakeFlowManager(s)))
     assert result["ok"] is True and node["name"] == VISIT_TYPE and s.stage == VISIT_TYPE
     content = node["task_messages"][0]["content"]
@@ -668,7 +722,7 @@ def test_early_turn_downs_survive_a_visit_change(clinic, where):
     step(s, "change_choice", visit_type="skin cancer check")
     assert s.card.preferences.not_provider_ids == [KENJI_KIM_DERM]
     if where == "identify":
-        step(s, "start_booking", full_name="Farhan Jida", returning=False)
+        step(s, "start_booking", **NEW_CALLER)
     step(s, "choose_visit_type", visit_type_id=SKIN_CANCER_SCREENING)
     assert KENJI_KIM_DERM not in {o.provider_id for o in s.card.offered_options}
 
@@ -787,7 +841,7 @@ def test_the_greeting_is_spoken_by_the_code_at_once(clinic):
 
 def test_new_patients_names_are_spelled_back_and_nothing_is_promised_early():
     stages = {n["name"]: n["task_messages"][0]["content"] for n in agent_dict()["nodes"]}
-    assert "spell their first and last name back letter by letter" in stages["identify"]
+    assert "the first name letter by letter" in stages["identify"] and "then the last name" in stages["identify"]
     assert "Don't say or suggest that any doctor, place or time is available" in stages["identify"]
     assert "Don't ask about doctor, place or time preferences here" in stages["visit_type"]
 

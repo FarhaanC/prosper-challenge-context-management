@@ -50,7 +50,7 @@ from clinic import (
     check_booking, language_problem,
 )
 from clinic.card import DOCTOR, LANGUAGE, LOCATION, TIME, TIMES_OF_DAY, VISIT
-from clinic.fuzzy import looks_like_a_sentence, means_no_preference, name_tokens, tidy
+from clinic.fuzzy import looks_like_a_sentence, means_no_preference, tidy
 from clinic.options import check_time_wishes
 
 from .session import CallSession
@@ -108,6 +108,30 @@ def _a_name(value: str, kind: str, extra: str = "") -> str:
     if value and not means_no_preference(value) and looks_like_a_sentence(value):
         raise Refused(f"'{value}' isn't a {kind} name. Pass just the name.{extra}")
     return value
+
+
+def _spelled(args: dict, key: str) -> str:
+    """A name the caller spelled, as letters ("F, A, R, H, A, A, N", "FARHAAN" or "MARY ANN"),
+    turned into the name to save ("Farhaan", "Mary Ann", "O'Brien", "Mary-Jane"). The code builds
+    the name from the letters the caller confirmed, so the AI's own spelling of a name it heard
+    never reaches the booking. Only letters, spaces, hyphens and apostrophes are accepted."""
+    raw = _text(args, key)
+    if not raw:
+        return ""
+    tokens = raw.replace(",", " ").replace(".", " ").split()
+    if all(len(t) == 1 for t in tokens):
+        tokens = ["".join(tokens)]  # spelled letter by letter: one word
+    if not all(ch.isalpha() or ch in "-'" for t in tokens for ch in t) or not any(ch.isalpha() for t in tokens for ch in t):
+        raise Refused(f"{key} must be the letters the caller confirmed, e.g. \"FARHAAN\" or \"F, A, R, H, A, A, N\".")
+
+    def word(w: str) -> str:
+        out, upper_next = [], True
+        for ch in w.lower():
+            out.append(ch.upper() if upper_next else ch)
+            upper_next = ch in "-'"
+        return "".join(out)
+
+    return " ".join(word(t) for t in tokens)
 
 
 def _specialty(session: CallSession, args: dict) -> Optional[str]:
@@ -255,9 +279,14 @@ def start_booking(session: CallSession, args: dict) -> Outcome:
             return Outcome({"ok": False, "status": step.status, "say": step.say})
         caller = step.caller
     else:
-        if len(name_tokens(name)) < 2:
-            raise Refused("Ask for the caller's full name (first and last) and send it in full_name.")
-        caller = Caller(name=name)
+        # A new patient's name is saved as spelled back and confirmed (decision 77): the code
+        # builds it from the letters, so a name heard as "Farhan" can't be saved for "Farhaan".
+        first, last = _spelled(args, "spelled_first_name"), _spelled(args, "spelled_last_name")
+        if not (first and last):
+            raise Refused("A new patient's name is saved from its letters: spell the first name back letter by "
+                          "letter, then the last name, and once the caller confirms each, send the letters in "
+                          "spelled_first_name and spelled_last_name.")
+        caller = Caller(name=f"{first} {last}")
 
     card.caller = caller
     record()
@@ -513,8 +542,9 @@ class Tool:
 def _tools() -> dict:
     tools = [
         Tool("start_booking", (
-            "Call once you have the caller's full name, whether they've been a patient with us before, and (for "
-            "returning patients) their date of birth. Also send anything they've already said they want. "
+            "Call once you have the caller's full name, whether they've been a patient with us before, and their "
+            "date of birth (returning patients) or both names spelled back and confirmed (new patients). Also send "
+            "anything they've already said they want. "
             "If it returns ok false with a 'say', say that sentence and follow it (ask again, ask them to spell "
             "their last name, or offer to register them as a new patient or have a member of staff call them "
             "back). If they choose to register as new, call again with returning false."),
@@ -522,8 +552,12 @@ def _tools() -> dict:
             {"full_name": {"type": "string", "description": "The caller's full name, first and last."},
              "returning": {"type": "boolean", "description": "true if they've been a patient with us before."},
              "date_of_birth": {"type": "string", "description": "Returning patients only: YYYY-MM-DD."},
+             "spelled_first_name": {"type": "string", "description": (
+                 "New patients: the first name's letters as the caller confirmed them (\"FARHAAN\"). The name is "
+                 "saved from these letters.")},
              "spelled_last_name": {"type": "string", "description": (
-                 "Only when asked to spell: the letters they spelled, joined (\"WILSON\").")},
+                 "The last name's letters as the caller confirmed them (\"WILSON\"). New patients: always (the name "
+                 "is saved from these letters). Returning patients: only when asked to spell.")},
              "visit_description": {"type": "string", "description": "What they want, in their words (\"knee MRI\")."},
              "specialty": SPECIALTY_FIELD,
              **WISH_FIELDS},

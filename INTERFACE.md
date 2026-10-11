@@ -45,7 +45,7 @@ Agent file fields beyond the starter format: per node `tools` (names), per agent
 
 ### start_booking
 
-Call once you have the caller's full name, whether they've been a patient with us before, and (for returning patients) their date of birth. Also send anything they've already said they want. If it returns ok false with a 'say', say that sentence and follow it (ask again, ask them to spell their last name, or offer to register them as a new patient or have a member of staff call them back). If they choose to register as new, call again with returning false.
+Call once you have the caller's full name, whether they've been a patient with us before, and their date of birth (returning patients) or both names spelled back and confirmed (new patients). Also send anything they've already said they want. If it returns ok false with a 'say', say that sentence and follow it (ask again, ask them to spell their last name, or offer to register them as a new patient or have a member of staff call them back). If they choose to register as new, call again with returning false.
 
 Required: ['full_name', 'returning']. Can move to: ['visit_type', 'end'].
 
@@ -63,9 +63,13 @@ Required: ['full_name', 'returning']. Can move to: ['visit_type', 'end'].
   "type": "string",
   "description": "Returning patients only: YYYY-MM-DD."
  },
+ "spelled_first_name": {
+  "type": "string",
+  "description": "New patients: the first name's letters as the caller confirmed them (\"FARHAAN\"). The name is saved from these letters."
+ },
  "spelled_last_name": {
   "type": "string",
-  "description": "Only when asked to spell: the letters they spelled, joined (\"WILSON\")."
+  "description": "The last name's letters as the caller confirmed them (\"WILSON\"). New patients: always (the name is saved from these letters). Returning patients: only when asked to spell."
  },
  "visit_description": {
   "type": "string",
@@ -113,6 +117,8 @@ Required: ['full_name', 'returning']. Can move to: ['visit_type', 'end'].
  }
 }
 ```
+
+*(Decision 77, 11 Oct: for a new patient (`returning` false), `spelled_first_name` and `spelled_last_name` are required; the saved name is built from those letters ("F, A, R, H, A, A, N" or "FARHAAN" → "Farhaan"; "MARY ANN" → "Mary Ann"; "O'BRIEN" → "O'Brien"), not from `full_name`. Without both, the call is refused and changes nothing.)*
 
 ### list_visit_types
 

@@ -65,7 +65,7 @@ def at_booking(catalog, patients, tmp_path):
         f = next(f for f in node["functions"] + b.global_functions() if f.name == name)
         return asyncio.run(f.handler(args, FakeFlowManager(s)))
 
-    _, node = call("start_booking", {"full_name": "Farhan Jida", "returning": False})
+    _, node = call("start_booking", {"full_name": "Farhan Jida", "returning": False, "spelled_first_name": "FARHAN", "spelled_last_name": "JIDA"})
     _, node = call("choose_visit_type", {"visit_type_id": SKIN_CANCER_SCREENING})
     return b, s, node, call
 
@@ -385,7 +385,7 @@ def test_only_choose_option_has_the_code_speak(catalog, patients):
         if out.next_stage:
             s.enter_stage(out.next_stage, [])
 
-    run("start_booking", {"full_name": "Farhan Jida", "returning": False})
+    run("start_booking", {"full_name": "Farhan Jida", "returning": False, "spelled_first_name": "FARHAN", "spelled_last_name": "JIDA"})
     run("list_visit_types", {"specialty": "Dermatology"})
     run("choose_visit_type", {"visit_type_id": SKIN_CANCER_SCREENING})
     run("answer_question", {"about": "location", "name": "Midtown"})
