@@ -203,9 +203,14 @@ def test_a_new_patients_name_is_saved_from_the_confirmed_letters_not_the_heard_n
     ("FARHAAN", "CHIDA", "Farhaan Chida"),
     ("farhaan", "chida", "Farhaan Chida"),
     ("F A R H A A N", "C.H.I.D.A", "Farhaan Chida"),
+    # the forms speech-to-text wrote in the Sun 11 call ("C-H-I-D-A.", "F-A...") (review N1)
+    ("F-A-R-H-A-A-N", "C-H-I-D-A.", "Farhaan Chida"),
     ("MARY ANN", "O'BRIEN", "Mary Ann O'Brien"),
     ("M, A, R, Y, -, J, A, N, E", "SMITH-JONES", "Mary-Jane Smith-Jones"),
     ("JOSÉ", "NÚÑEZ", "José Núñez"),
+    ("Mary Ann", "McDonald", "Mary Ann McDonald"),             # mixed capitals kept (review N7)
+    ("Pieter", "van der Berg", "Pieter van der Berg"),
+    ("SIOBHAN", "O\u2019BRIEN", "Siobhan O'Brien"),            # a curly apostrophe (review N8)
 ])
 def test_spelled_letters_become_the_saved_name(clinic, first, last, saved):
     s = session_in(clinic)
@@ -213,7 +218,14 @@ def test_spelled_letters_become_the_saved_name(clinic, first, last, saved):
     assert s.card.caller.name == saved
 
 
-@pytest.mark.parametrize("bad", ["F4RHAAN", "F, A, R, ?", "-", "", "not sure how it's spelled!"])
+@pytest.mark.parametrize("bad", [
+    "F4RHAAN", "F, A, R, ?", "-",
+    "F, A, R, H, double A, N",                # "double A" must be sent as A, A (review N2)
+    "F, A, R, H, A as in apple, A, N",        # a word per letter must be sent as the letters
+    "O, apostrophe, B, R, I, E, N",
+    "yes", "not sure how its spelled",        # stray words, no punctuation to give them away (review N9)
+    "--A", "A-", "A" * 41, "ONE TWO THREE FOUR",
+])
 def test_spelled_letters_that_are_not_a_name_are_refused(clinic, bad):
     s = session_in(clinic)
     out = step(s, "start_booking", **{**NEW_CALLER, "spelled_first_name": bad})
@@ -222,11 +234,14 @@ def test_spelled_letters_that_are_not_a_name_are_refused(clinic, bad):
 
 def test_identify_and_visit_type_instructions_after_the_sun_11_call():
     stages = {n["name"]: n["task_messages"][0]["content"] for n in agent_dict()["nodes"]}
-    assert "spell their names back one at a time" in stages["identify"]
-    assert "A as in apple" in stages["identify"]
-    assert "spelled_first_name and spelled_last_name" in stages["identify"]
-    assert "When you call start_booking, say only a short line" in stages["identify"]
-    assert "never choose for them" in stages["visit_type"]
+    identify, visit_type = stages["identify"], stages["visit_type"]
+    assert "confirm the spelling of each name, one at a time" in identify
+    assert "with a word for each letter" in identify and "A as in apple" in identify
+    assert "If it's still wrong after that, don't ask again" in identify and "name_not_confirmed true" in identify
+    assert "spelled_first_name and spelled_last_name" in identify and "exactly" not in identify
+    assert "When you call start_booking, say only a short line" in identify
+    assert "Describe a visit only with what the list says about it" in visit_type
+    assert "choose the one marked as the usual choice, tell them which you've chosen" in visit_type
 
 
 def _to_booking(s):
@@ -841,7 +856,7 @@ def test_the_greeting_is_spoken_by_the_code_at_once(clinic):
 
 def test_new_patients_names_are_spelled_back_and_nothing_is_promised_early():
     stages = {n["name"]: n["task_messages"][0]["content"] for n in agent_dict()["nodes"]}
-    assert "the first name letter by letter" in stages["identify"] and "then the last name" in stages["identify"]
+    assert "spell the first name back letter by letter" in stages["identify"] and "then the last name" in stages["identify"]
     assert "Don't say or suggest that any doctor, place or time is available" in stages["identify"]
     assert "Don't ask about doctor, place or time preferences here" in stages["visit_type"]
 
@@ -875,3 +890,67 @@ def test_speech_to_text_is_english_only():
     with open("bot.py", encoding="utf-8") as f:
         source = f.read()
     assert "ElevenLabsRealtimeSTTService.Settings(language=Language.EN)" in source
+
+
+def test_a_name_still_wrong_after_two_spell_backs_is_saved_as_heard_and_marked(clinic, tmp_path):
+    """Decision 78: nobody is asked forever. The confirmed first name is used; the last name as
+    heard; the booking is marked, and the goodbye says staff will check the spelling."""
+    s = session_in(clinic)
+    out = step(s, "start_booking", full_name="Farhan cheda", returning=False, spelled_first_name="F, A, R, H, A, A, N",
+               name_not_confirmed=True)
+    assert out.next_stage == VISIT_TYPE and s.card.caller.name == "Farhaan Cheda"
+    assert s.card.caller.name_confirmed is False and "Farhaan Cheda" in s.just_happened
+    book_first_option(_to_booking(s))
+    saved = json.loads((tmp_path / "bookings.jsonl").read_text(encoding="utf-8").splitlines()[-1])
+    assert saved["caller"] == "Farhaan Cheda" and saved["name_confirmed"] is False
+    assert "check the spelling of their name" in s.fill("{outcome}")
+
+
+def test_a_confirmed_name_is_marked_confirmed_and_the_goodbye_says_nothing_about_spelling(clinic, tmp_path):
+    s = session_in(clinic)
+    out = step(s, "start_booking", **NEW_CALLER)
+    assert s.card.caller.name == "Farhan Jida" and s.card.caller.name_confirmed is True
+    book_first_option(_to_booking(s))
+    saved = json.loads((tmp_path / "bookings.jsonl").read_text(encoding="utf-8").splitlines()[-1])
+    assert saved["name_confirmed"] is True and "spelling" not in s.fill("{outcome}")
+
+
+def test_name_not_confirmed_still_needs_the_full_name_heard(clinic):
+    s = session_in(clinic)
+    out = step(s, "start_booking", full_name="Farhan", returning=False, name_not_confirmed=True)
+    assert out.result["ok"] is False and s.card.caller is None
+
+
+def test_a_returning_caller_who_registers_as_new_must_spell_both_names(clinic):
+    """Review N3: the last name spelled on the third identity try isn't enough on its own."""
+    s = session_in(clinic)
+    for _ in range(2):
+        step(s, "start_booking", full_name="Emily Brown", returning=True, date_of_birth="1990-01-01")
+    step(s, "start_booking", full_name="Emily Brown", returning=True, date_of_birth="1990-01-01",
+         spelled_last_name="B-R-A-U-N")
+    out = step(s, "start_booking", full_name="Emily Brown", returning=False, spelled_last_name="B-R-A-U-N")
+    assert out.result["ok"] is False and "spelled_first_name" in out.result["error"]
+    out = step(s, "start_booking", full_name="Emily Brown", returning=False, spelled_first_name="E, M, I, L, Y",
+               spelled_last_name="B, R, A, U, N")
+    assert out.next_stage == VISIT_TYPE and s.card.caller.name == "Emily Braun"
+
+
+def test_the_thank_you_uses_the_whole_spelled_first_name(clinic):
+    s = session_in(clinic)
+    step(s, "start_booking", full_name="Mary Ann Smith", returning=False, spelled_first_name="MARY ANN",
+         spelled_last_name="SMITH")
+    assert "by first name (Mary Ann)" in s.just_happened
+
+
+def test_look_alike_visit_types_carry_our_descriptions_and_the_usual_choice(clinic):
+    """Decision 79: the only words the agent may describe a look-alike with, and which one to
+    book if the caller doesn't mind. Types without a look-alike have no description."""
+    s = new_caller_at_visit_type(clinic, specialty="Dermatology")
+    listed = {t["id"]: t for t in s.visit_types_for("Dermatology")}
+    assert listed[SKIN_CANCER_SCREENING]["description"].startswith("A check of particular moles")
+    assert listed[SKIN_CANCER_SCREENING]["usual_choice"] is False
+    assert listed["appt_028"]["usual_choice"] is True
+    assert "description" not in listed["appt_030"]                      # Acne Follow-up: no look-alike
+    text = s.fill("{visit_types}")
+    assert "Full Body Skin Exam (30 min): can book\n  What it is: A head-to-toe check" in text
+    assert text.count("The usual choice if they don't mind which.") == 1

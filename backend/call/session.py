@@ -162,9 +162,13 @@ class CallSession:
         types = []
         for vt in self.catalog.visit_types_in(specialty):
             b = can_book_visit_type(self.catalog, self.card.caller, vt.id)
-            types.append({"id": vt.id, "name": vt.name, "minutes": vt.duration_min,
-                          "needs_referral": vt.requires_referral, "open_to_new_patients": vt.new_patients_allowed,
-                          "can_book": b.bookable, "why_not": b.reasons})
+            entry = {"id": vt.id, "name": vt.name, "minutes": vt.duration_min,
+                     "needs_referral": vt.requires_referral, "open_to_new_patients": vt.new_patients_allowed,
+                     "can_book": b.bookable, "why_not": b.reasons}
+            if vt.description:  # look-alikes only (decision 79): the only words the AI may describe it with
+                entry["description"] = vt.description
+                entry["usual_choice"] = vt.usual
+            types.append(entry)
         return types
 
     # ---- placeholders ------------------------------------------------------
@@ -198,9 +202,13 @@ class CallSession:
         lines = [f"{self.listed_specialty} visit types for this caller (send the id to choose_visit_type):"]
         for t in self.visit_types_for(self.listed_specialty):
             if t["can_book"]:
-                lines.append(f"- {t['id']}: {t['name']} ({t['minutes']} min): can book")
+                line = f"- {t['id']}: {t['name']} ({t['minutes']} min): can book"
             else:
-                lines.append(f"- {t['id']}: {t['name']}: can't book ({' '.join(t['why_not'])})")
+                line = f"- {t['id']}: {t['name']}: can't book ({' '.join(t['why_not'])})"
+            lines.append(line)
+            if t.get("description"):  # on its own line, so each visit's first line keeps one shape
+                lines.append(f"  What it is: {t['description']}"
+                             + (" The usual choice if they don't mind which." if t["usual_choice"] else ""))
         lines.append("If none of these fits what the caller wants, call list_visit_types for another specialty.")
         return "\n".join(lines)
 

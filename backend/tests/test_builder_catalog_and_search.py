@@ -267,3 +267,34 @@ def test_r7_a_word_from_another_place_name_is_not_borrowed(catalog, name):
     # Verifier's ruling (round 7): "clinic" counts only for a place whose own name has it.
     # "Chinatown clinic" must not quietly become "near Chinatown".
     assert catalog.resolve_place(name).kind == "none"
+
+
+# ---------------------------------------------------------------- our visit-type notes (decision 79)
+def _notes():
+    import json as _json
+    from clinic.catalog import DATA_DIR
+    return _json.loads((DATA_DIR / "visit_type_notes.json").read_text(encoding="utf-8"))
+
+
+@pytest.mark.parametrize("break_it, says", [
+    (lambda n: n["groups"][0]["visit_types"].update(appt_999="x"), "appt_999 isn't a visit type"),
+    (lambda n: n["groups"][1]["visit_types"].update(appt_027="again"), "appt_027 is in more than one group"),
+    (lambda n: n["groups"][0].update(usual="appt_001"), "'usual' must be one of the group's visit types"),
+    (lambda n: n["groups"][0]["visit_types"].update(appt_027="  "), "needs a one-line description"),
+    (lambda n: n.pop("groups"), "has no 'groups' list"),
+])
+def test_visit_type_notes_are_checked_at_load(break_it, says):
+    notes = _notes()
+    break_it(notes)
+    with pytest.raises(CatalogError, match=says):
+        Catalog(RAW, EXTRAS, notes)
+
+
+def test_every_look_alike_group_named_in_the_brief_has_descriptions():
+    """The brief's data notes name Skin Cancer Screening vs Full Body Skin Exam and Annual
+    Physical vs Annual Wellness Visit as look-alikes to handle."""
+    c = Catalog(RAW, EXTRAS, _notes())
+    by_name = {vt.name: vt for vt in c.visit_types.values()}
+    for name in ("Skin Cancer Screening", "Full Body Skin Exam", "Annual Physical", "Annual Wellness Visit"):
+        assert by_name[name].description, name
+    assert sum(vt.usual for vt in c.visit_types.values()) == len(_notes()["groups"])

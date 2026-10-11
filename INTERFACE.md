@@ -13,6 +13,7 @@ session = clinic.new_call(clock=lambda: NOW)   # NOW: a fixed datetime in clinic
 session.enter_stage(stage_name, instructions_list)   # what the builder does when a stage starts
 outcome = run_tool(session, tool_name, args_dict)   # outcome.result (dict the AI sees), outcome.next_stage (None = stay), outcome.say_now (a sentence the code says itself, or "")
 session.fill(text)   # fills {placeholders}
+session.visit_types_for(specialty)   # list of dicts; look-alike types (decision 79) also have 'description' and 'usual_choice'; in {visit_types} the description is on its own line under the visit ("  What it is: …")
 session.card        # the clinic.BookingCard for this call (caller, preferences, choices, status, offered_options)
 session.stage, session.log_path, clinic.schedule, clinic.bookings_file
 ```
@@ -45,7 +46,7 @@ Agent file fields beyond the starter format: per node `tools` (names), per agent
 
 ### start_booking
 
-Call once you have the caller's full name, whether they've been a patient with us before, and their date of birth (returning patients) or both names spelled back and confirmed (new patients). Also send anything they've already said they want. If it returns ok false with a 'say', say that sentence and follow it (ask again, ask them to spell their last name, or offer to register them as a new patient or have a member of staff call them back). If they choose to register as new, call again with returning false.
+Call once you have the caller's full name, whether they've been a patient with us before, and their date of birth (returning patients) or both names spelled back and confirmed (new patients). Also send anything they've already said they want. If it returns ok false with a 'say', say that sentence and follow it (ask again, ask them to spell their last name, or offer to register them as a new patient or have a member of staff call them back). If they choose to register as new, confirm the spelling of both names as for a new patient, then call again with returning false.
 
 Required: ['full_name', 'returning']. Can move to: ['visit_type', 'end'].
 
@@ -53,7 +54,7 @@ Required: ['full_name', 'returning']. Can move to: ['visit_type', 'end'].
 {
  "full_name": {
   "type": "string",
-  "description": "The caller's full name, first and last."
+  "description": "The caller's full name, first and last, as you heard it. Returning patients: used to find them. New patients: the name is saved from the spelled letters; this is used only for a name whose spelling couldn't be confirmed."
  },
  "returning": {
   "type": "boolean",
@@ -65,11 +66,15 @@ Required: ['full_name', 'returning']. Can move to: ['visit_type', 'end'].
  },
  "spelled_first_name": {
   "type": "string",
-  "description": "New patients: the first name's letters as the caller confirmed them (\"FARHAAN\"). The name is saved from these letters."
+  "description": "New patients: the first name's letters as the caller confirmed them, one per entry (\"F, A, R, H, A, A, N\"); a name with a space or hyphen as words (\"MARY ANN\"). \"Double A\" is A, A and \"A as in apple\" is A. The name is saved from these letters."
  },
  "spelled_last_name": {
   "type": "string",
-  "description": "The last name's letters as the caller confirmed them (\"WILSON\"). New patients: always (the name is saved from these letters). Returning patients: only when asked to spell."
+  "description": "The last name's letters as the caller confirmed them, in the same form (\"W, I, L, S, O, N\"). New patients: always (the name is saved from these letters). Returning patients: only when asked to spell."
+ },
+ "name_not_confirmed": {
+  "type": "boolean",
+  "description": "New patients only: true if a name was still wrong after spelling it back with a word per letter. The name as heard is saved for staff to check; send the letters of any name they did confirm."
  },
  "visit_description": {
   "type": "string",
@@ -118,7 +123,7 @@ Required: ['full_name', 'returning']. Can move to: ['visit_type', 'end'].
 }
 ```
 
-*(Decision 77, 11 Oct: for a new patient (`returning` false), `spelled_first_name` and `spelled_last_name` are required; the saved name is built from those letters ("F, A, R, H, A, A, N" or "FARHAAN" → "Farhaan"; "MARY ANN" → "Mary Ann"; "O'BRIEN" → "O'Brien"), not from `full_name`. Without both, the call is refused and changes nothing.)*
+*(Decisions 77–78, 11 Oct: for a new patient (`returning` false) the saved name is built from `spelled_first_name` and `spelled_last_name`, letters one per entry ("F, A, R, H, A, A, N", "F-A-R", "C.H.I.D.A.") or words ("MARY ANN", "O'BRIEN"); all-capital or all-small names are tidied ("Farhaan", "O'Brien"), mixed capitals kept ("McDonald"). Refused, changing nothing: letters mixed with words ("double A"), digits or symbols, stray words ("yes"), more than 3 words or 40 letters, and a new patient without both names unless `name_not_confirmed` is true. With `name_not_confirmed` true, a name without letters is taken from `full_name` as heard (which then needs first and last), the caller is marked `name_confirmed: false`, the saved booking has `"name_confirmed": false`, and the end stage says staff will check the spelling.)*
 
 ### list_visit_types
 

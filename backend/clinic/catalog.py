@@ -1,7 +1,8 @@
 """The clinic catalog, held by code (never pasted whole into the AI's instructions).
 
 Loads the given `catalog.json` untouched, plus our own fake map data
-(`location_extras.json`), checks both, and answers small questions:
+(`location_extras.json`) and our one-line descriptions of look-alike visit types
+(`visit_type_notes.json`, decision 79), checks them all, and answers small questions:
 
 - the list of specialties, and the visit types inside one specialty
 - doctors matching a (possibly misheard) name: ALL matches, because names
@@ -110,6 +111,8 @@ class VisitType:
     requires_referral: bool
     new_patients_allowed: bool
     required_capability: Optional[str] = None
+    description: str = ""     # our own line (visit_type_notes.json); "" when the type has no look-alike
+    usual: bool = False       # the one booked from its look-alike group when the caller doesn't mind which
 
 
 @dataclass(frozen=True)
@@ -316,6 +319,34 @@ def _check_extras(extras, location_ids: list) -> list:
     return problems
 
 
+def _check_visit_notes(notes, visit_type_ids) -> list:
+    """Our visit-type descriptions (visit_type_notes.json): every id must be a real visit
+    type, appear in one group only, have a description, and each group's 'usual' must be
+    one of its own visit types."""
+    if notes is None:
+        return []
+    if not isinstance(notes, dict) or not isinstance(notes.get("groups"), list):
+        return ["visit_type_notes.json has no 'groups' list."]
+    problems, seen = [], set()
+    for i, g in enumerate(notes["groups"]):
+        name = g.get("name", f"#{i}") if isinstance(g, dict) else f"#{i}"
+        types = g.get("visit_types") if isinstance(g, dict) else None
+        if not isinstance(types, dict) or not types:
+            problems.append(f"visit_type_notes.json group {name!r} has no visit_types.")
+            continue
+        for vid, line in types.items():
+            if vid not in visit_type_ids:
+                problems.append(f"visit_type_notes.json group {name!r}: {vid} isn't a visit type in the catalog.")
+            if vid in seen:
+                problems.append(f"visit_type_notes.json: {vid} is in more than one group.")
+            seen.add(vid)
+            if not (isinstance(line, str) and line.strip()):
+                problems.append(f"visit_type_notes.json group {name!r}: {vid} needs a one-line description.")
+        if g.get("usual") not in types:
+            problems.append(f"visit_type_notes.json group {name!r}: 'usual' must be one of the group's visit types.")
+    return problems
+
+
 def _find_problems(raw, extras) -> list:
     """Every problem with the catalog and our map data, as plain sentences, so one
     load lists them all: missing or wrong fields, repeated ids, map data, opening
@@ -370,8 +401,10 @@ def _doctor_words(specialty: str) -> list:
 
 
 class Catalog:
-    def __init__(self, raw: dict, extras: dict):
+    def __init__(self, raw: dict, extras: dict, visit_notes: Optional[dict] = None):
         problems = _find_problems(raw, extras)
+        if not problems:
+            problems = _check_visit_notes(visit_notes, {a["id"] for a in raw["appointment_types"]})
         if problems:
             raise CatalogError("The catalog data has problems:\n- " + "\n- ".join(problems))
         # Everything below can trust the data: it has all been checked.
@@ -387,11 +420,14 @@ class Catalog:
                 neighbourhood=x.get("neighbourhood", ""), also_called=tuple(x.get("also_called", [])),
                 lat=float(x["lat"]), lon=float(x["lon"]),
             )
+        notes = {vid: (line.strip(), vid == g["usual"])  # visit type id -> (description, usual)
+                 for g in (visit_notes or {}).get("groups", []) for vid, line in g["visit_types"].items()}
         self.visit_types: dict = {
             a["id"]: VisitType(
                 id=a["id"], name=a["name"], specialty=a["specialty"], duration_min=a["duration_min"],
                 requires_referral=a["requires_referral"], new_patients_allowed=a["new_patients_allowed"],
                 required_capability=a.get("required_capability"),
+                description=notes.get(a["id"], ("", False))[0], usual=notes.get(a["id"], ("", False))[1],
             )
             for a in raw["appointment_types"]
         }
@@ -420,7 +456,8 @@ class Catalog:
         data_dir = Path(data_dir)
         raw = json.loads((data_dir / "catalog.json").read_text(encoding="utf-8"))
         extras = json.loads((data_dir / "location_extras.json").read_text(encoding="utf-8"))
-        return cls(raw, extras)
+        notes = json.loads((data_dir / "visit_type_notes.json").read_text(encoding="utf-8"))
+        return cls(raw, extras, notes)
 
     # ---- visit types -------------------------------------------------------
     def specialties(self) -> list:

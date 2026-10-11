@@ -80,6 +80,7 @@ def answer_question(catalog: Catalog, about, name) -> dict:
                     "needs_referral": vt.requires_referral, "open_to_new_patients": vt.new_patients_allowed,
                     "needs_equipment": vt.required_capability or "none",
                     "offered_by_any_doctor": bool(catalog.providers_offering(vt.id)),
+                    **({"description": vt.description} if vt.description else {}),
                 }
                 for vt in matches
             ],

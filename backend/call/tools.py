@@ -42,6 +42,8 @@ to rebuild: before the caller is identified, and in the visit_type stage (decisi
 
 from __future__ import annotations
 
+import re
+import unicodedata
 from dataclasses import dataclass, field
 from typing import Callable, Optional
 
@@ -110,28 +112,64 @@ def _a_name(value: str, kind: str, extra: str = "") -> str:
     return value
 
 
+# Words that are never a name, sent by mistake for letters ("double A", "A as in apple").
+NOT_NAME_WORDS = {"yes", "no", "not", "sure", "unknown", "double", "triple", "as", "in", "for", "like", "space",
+                  "apostrophe", "hyphen", "dash", "letter", "spelled", "spelling"}
+# A name part longer than this is something else (the longest names in common use are well under it).
+MAX_NAME_LETTERS = 40
+# A first or last name of more than this many words is a sentence, not a name.
+MAX_NAME_WORDS = 3
+LETTERS_ONLY = (" Send letters only, one per entry (\"F, A, R, H, A, A, N\"): \"double A\" is A, A; "
+                "\"A as in apple\" is A. A name with a space or a hyphen goes as words (\"MARY ANN\", \"SMITH-JONES\").")
+
+
 def _spelled(args: dict, key: str) -> str:
-    """A name the caller spelled, as letters ("F, A, R, H, A, A, N", "FARHAAN" or "MARY ANN"),
-    turned into the name to save ("Farhaan", "Mary Ann", "O'Brien", "Mary-Jane"). The code builds
-    the name from the letters the caller confirmed, so the AI's own spelling of a name it heard
-    never reaches the booking. Only letters, spaces, hyphens and apostrophes are accepted."""
-    raw = _text(args, key)
+    """A name the caller spelled and confirmed, turned into the name to save (decision 77).
+
+    Accepted: letters one per entry ("F, A, R, H, A, A, N", "F A R", "F-A-R" or "C.H.I.D.A."),
+    joined into one word; or the name as words ("FARHAAN", "MARY ANN", "SMITH-JONES",
+    "O'BRIEN"). Refused, with how to send it: digits or symbols, letters mixed with words
+    ("F, A, double A"), stray words ("yes"), more than 3 words, or more than 40 letters.
+    A name sent all in capitals or all in small letters is tidied ("FARHAAN" -> "Farhaan",
+    "O'BRIEN" -> "O'Brien"); one with mixed capitals is kept as sent ("McDonald", "van der Berg")."""
+    raw = unicodedata.normalize("NFC", _text(args, key))
+    raw = raw.replace("\u2019", "'").replace("\u2018", "'").replace("`", "'")  # curly or back-tick apostrophes
     if not raw:
         return ""
-    tokens = raw.replace(",", " ").replace(".", " ").split()
-    if all(len(t) == 1 for t in tokens):
-        tokens = ["".join(tokens)]  # spelled letter by letter: one word
-    if not all(ch.isalpha() or ch in "-'" for t in tokens for ch in t) or not any(ch.isalpha() for t in tokens for ch in t):
-        raise Refused(f"{key} must be the letters the caller confirmed, e.g. \"FARHAAN\" or \"F, A, R, H, A, A, N\".")
+    tokens = []
+    for t in re.split(r"[\s,.;]+", raw):
+        if not t:
+            continue
+        parts = t.split("-")
+        if len(parts) > 1 and all(len(p) == 1 for p in parts):
+            tokens += parts                 # "F-A-R": letters joined by hyphens
+        else:
+            tokens.append(t)
+    single = [t for t in tokens if len(t) == 1]
+    if single and len(single) < len(tokens):
+        raise Refused(f"{key} mixes single letters with words.{LETTERS_ONLY}")
+    words = ["".join(tokens)] if single else tokens  # letters one per entry make one word
+    for w in words:
+        if not all(ch.isalpha() or ch in "-'" for ch in w) or not any(ch.isalpha() for ch in w) \
+                or w[0] in "-'" or w[-1] in "-'":
+            raise Refused(f"{key} must be the letters the caller confirmed.{LETTERS_ONLY}")
+        if w.lower() in NOT_NAME_WORDS:
+            raise Refused(f"'{w}' isn't part of a name.{LETTERS_ONLY}")
+    if len(words) > MAX_NAME_WORDS or sum(len(w) for w in words) > MAX_NAME_LETTERS:
+        raise Refused(f"{key} is too long for a name: send only the letters the caller confirmed.")
 
-    def word(w: str) -> str:
+    whole = "".join(words)
+    if not (whole.isupper() or whole.islower()):
+        return " ".join(words)              # mixed capitals: as the caller has it
+
+    def tidy_case(w: str) -> str:
         out, upper_next = [], True
         for ch in w.lower():
             out.append(ch.upper() if upper_next else ch)
             upper_next = ch in "-'"
         return "".join(out)
 
-    return " ".join(word(t) for t in tokens)
+    return " ".join(tidy_case(w) for w in words)
 
 
 def _specialty(session: CallSession, args: dict) -> Optional[str]:
@@ -279,24 +317,43 @@ def start_booking(session: CallSession, args: dict) -> Outcome:
             return Outcome({"ok": False, "status": step.status, "say": step.say})
         caller = step.caller
     else:
-        # A new patient's name is saved as spelled back and confirmed (decision 77): the code
-        # builds it from the letters, so a name heard as "Farhan" can't be saved for "Farhaan".
-        first, last = _spelled(args, "spelled_first_name"), _spelled(args, "spelled_last_name")
-        if not (first and last):
-            raise Refused("A new patient's name is saved from its letters: spell the first name back letter by "
-                          "letter, then the last name, and once the caller confirms each, send the letters in "
-                          "spelled_first_name and spelled_last_name.")
-        caller = Caller(name=f"{first} {last}")
+        caller = _new_patient(args, name)
 
     card.caller = caller
     record()
     if specialty:
         session.listed_specialty = specialty
-    first = caller.name.split()[0]
+    first_name = _spelled(args, "spelled_first_name") if not returning else ""
+    first_name = first_name or caller.name.split()[0]
     session.just_happened = (f"The caller has just been identified as {caller.name} "
                              f"({'a new' if caller.is_new_patient else 'a returning'} patient): "
-                             f"thank them, by first name ({first}).")
+                             f"thank them, by first name ({first_name}).")
     return Outcome({"ok": True}, VISIT_TYPE)
+
+
+def _new_patient(args: dict, heard: str) -> Caller:
+    """A new patient's name is saved as spelled back and confirmed (decision 77): the code
+    builds it from the letters, so a name heard as "Farhan" can't be saved for "Farhaan".
+    If a name's spelling still couldn't be confirmed after spelling it with a word per
+    letter, the AI says so (name_not_confirmed): the name as heard is saved for that part,
+    marked for staff to check, so nobody is asked forever (decision 78)."""
+    first, last = _spelled(args, "spelled_first_name"), _spelled(args, "spelled_last_name")
+    unconfirmed = _flag(args, "name_not_confirmed")
+    if first and last:
+        return Caller(name=f"{first} {last}", name_confirmed=not unconfirmed)
+    if not unconfirmed:
+        raise Refused("A new patient's name is saved from its letters: spell the first name back letter by letter, "
+                      "then the last name, and once the caller confirms each, send the letters in "
+                      "spelled_first_name and spelled_last_name. If a name still isn't right after spelling it with "
+                      "a word per letter, send name_not_confirmed true instead (with the letters of any name they did "
+                      "confirm).")
+    heard_parts = heard.split()
+    if len(heard_parts) < 2:
+        raise Refused("With name_not_confirmed, send the caller's full name as you heard it (first and last) in "
+                      "full_name.")
+    first = first or heard_parts[0].capitalize()
+    last = last or " ".join(p.capitalize() for p in heard_parts[1:])
+    return Caller(name=f"{first} {last}", name_confirmed=False)
 
 
 def list_visit_types(session: CallSession, args: dict) -> Outcome:
@@ -377,6 +434,7 @@ def confirm_booking(session: CallSession, args: dict) -> Outcome:
     clinic.save_booking({
         "booked_at": now.isoformat(timespec="minutes"),  # clinic time, like "start"
         "caller": caller.name, "patient_id": caller.patient_id, "new_patient": caller.is_new_patient,
+        "name_confirmed": caller.name_confirmed,  # false: staff check the spelling (decision 78)
         "visit_type_id": vt.id, "visit_type": vt.name, "provider_id": p.id, "provider": p.name,
         "location_id": loc.id, "location": loc.name, "start": c.slot.isoformat(),
         "duration_min": vt.duration_min, "read_back": read_back,
@@ -385,6 +443,8 @@ def confirm_booking(session: CallSession, args: dict) -> Outcome:
     card.status = "booked"
     session.outcome = (f"The booking is saved: {read_back} Confirm the day, time and doctor in one short "
                        "sentence (not the whole read-back again), thank the caller and say goodbye.")
+    if not caller.name_confirmed:
+        session.outcome += " Also tell them a member of staff will check the spelling of their name with them."
     return Outcome({"ok": True, "booked": read_back}, END)
 
 
@@ -547,17 +607,26 @@ def _tools() -> dict:
             "anything they've already said they want. "
             "If it returns ok false with a 'say', say that sentence and follow it (ask again, ask them to spell "
             "their last name, or offer to register them as a new patient or have a member of staff call them "
-            "back). If they choose to register as new, call again with returning false."),
+            "back). If they choose to register as new, confirm the spelling of both names as for a new patient, "
+            "then call again with returning false."),
             start_booking,
-            {"full_name": {"type": "string", "description": "The caller's full name, first and last."},
+            {"full_name": {"type": "string", "description": (
+                "The caller's full name, first and last, as you heard it. Returning patients: used to find them. "
+                "New patients: the name is saved from the spelled letters; this is used only for a name whose "
+                "spelling couldn't be confirmed.")},
              "returning": {"type": "boolean", "description": "true if they've been a patient with us before."},
              "date_of_birth": {"type": "string", "description": "Returning patients only: YYYY-MM-DD."},
              "spelled_first_name": {"type": "string", "description": (
-                 "New patients: the first name's letters as the caller confirmed them (\"FARHAAN\"). The name is "
-                 "saved from these letters.")},
+                 "New patients: the first name's letters as the caller confirmed them, one per entry "
+                 "(\"F, A, R, H, A, A, N\"); a name with a space or hyphen as words (\"MARY ANN\"). \"Double A\" "
+                 "is A, A and \"A as in apple\" is A. The name is saved from these letters.")},
              "spelled_last_name": {"type": "string", "description": (
-                 "The last name's letters as the caller confirmed them (\"WILSON\"). New patients: always (the name "
-                 "is saved from these letters). Returning patients: only when asked to spell.")},
+                 "The last name's letters as the caller confirmed them, in the same form (\"W, I, L, S, O, N\"). "
+                 "New patients: always (the name is saved from these letters). Returning patients: only when "
+                 "asked to spell.")},
+             "name_not_confirmed": {"type": "boolean", "description": (
+                 "New patients only: true if a name was still wrong after spelling it back with a word per letter. "
+                 "The name as heard is saved for staff to check; send the letters of any name they did confirm.")},
              "visit_description": {"type": "string", "description": "What they want, in their words (\"knee MRI\")."},
              "specialty": SPECIALTY_FIELD,
              **WISH_FIELDS},

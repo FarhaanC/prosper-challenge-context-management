@@ -151,7 +151,7 @@ There was also one real hole: choosing a visit type a second time could save a v
 
 ### Known, not fixed (for Sat 10, testing day)
 
-- **The first name was still not spelled back once** (only the last name was), so "Farhan" was saved again. The instruction says both. The AI-played callers will show how often this happens before we decide on a stronger fix.
+- ~~**The first name was still not spelled back once**~~ *(fixed in step 3: the name is now built from the confirmed letters, decisions 77–78)* (only the last name was), so "Farhan" was saved again. The instruction says both. The AI-played callers will show how often this happens before we decide on a stronger fix.
 - **After a change of day, the Garcia note is said again.** It's still true, just repetitive.
 - **If the AI calls a tool during the goodbye, the call ends without the goodbye** (decision 50, accepted). It didn't happen in any call.
 - **Stage 2 can still take an extra AI pass** when the caller says only "an MRI": the visit types have to be looked up. The agent now speaks first ("I'll check…"), so the caller isn't left in silence.
@@ -215,3 +215,17 @@ Run it: build once (`cd frontend`, `npm install`, `npm run build`), start the ag
 1. **A fresh reviewer with the library's source beats a confident builder.** The greeting jam (69) had been in the code since decision 58 and three real calls never hit it: nobody happened to talk over the greeting. It took reading Pipecat Flows' action code and a 40-line simulation to find it.
 2. **When a tester and a reviewer disagree, look for the fix that satisfies both** before calling a verifier: twice, the reviewer had offered a second option that also matched the tester's expectation.
 3. **Working on a Windows checkout from Linux changes line endings.** Files edited from the Linux side lost their Windows line endings in the working copy (git normalises them, so the repo was fine); they were checked out again afterwards.
+
+### Part C: after Sun 11's voice call (decisions 77–80)
+
+**The call** confirmed: talking over the greeting no longer jams the call (69); "Let me check" (67); the code's read-back started 0.7 s after "the first one" (66); the silence check-in and hang-up (64), and in a separate call, "Yes, I'm here" after the check-in made the agent ask its last question again (71). The read-back-then-"Yes" case wasn't reached (the caller answered within 20 s). Tokens per AI reply were logged for the first time: about 1,500–2,400 in, most of it cached by OpenAI.
+
+**It also showed four problems:** speech-to-text misheard the spelled letters (2 minutes, 14 AI replies); the agent read back the right letters but saved "Farhan" anyway; it picked a visit type for a caller who said "any of them"; and it said "Let me proceed with booking" before anything was checked.
+
+| Version | What | Tests |
+| --- | --- | --- |
+| `39845de` | **Build:** the name built from confirmed letters (77), spelling one name at a time with a check word, no booking promise (80), never choosing the visit for the caller | builder 431; 312 older independent tests fail (their new callers don't spell) |
+| — | **One fresh reviewer:** 12 findings (1 high: letters joined by hyphens, as speech-to-text writes them, were saved as written). Before deciding, Farhaan asked for research into how other voice-AI agents capture names, and for the brief to be checked on visit types. | — |
+| (this commit) | **Fixes and decisions 78–79:** the stricter letter reader; the three-step spelling with "spelling not confirmed"; our own descriptions of look-alike visit types | builder 454; independent: all 2,848 rules tests pass; voice and editor tests 691 of 694 with the adapter, each of the 3 explained in `docs/reviews/2026-10-11-names-and-visit-types/triage.md` |
+
+**Still to confirm on a call:** a new patient's name saved as spelled, the word-per-letter step, and a "don't mind" visit choice.

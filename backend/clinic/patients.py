@@ -56,6 +56,7 @@ class Caller:
     patient_id: Optional[str] = None
     is_new_patient: bool = True
     referrals_on_file: list = field(default_factory=list)  # specialty names
+    name_confirmed: bool = True  # False: a new patient's spelling couldn't be confirmed; staff check it (decision 78)
 
     def has_referral_for(self, specialty: str) -> bool:
         return normalize(specialty) in {normalize(r) for r in self.referrals_on_file}

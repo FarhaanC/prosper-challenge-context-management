@@ -1,0 +1,80 @@
+{
+  "about": "Our own one-line descriptions for the catalog's look-alike visit types (decision 79). The given catalog has none: 'Skin Cancer Screening' and 'Full Body Skin Exam' have identical data. The agent may describe a visit type only with these lines, so it never makes a difference up. In each group, 'usual' is the visit booked when the caller says they don't mind which. These are our assumptions, not clinic policy; a real catalog would carry its own descriptions.",
+  "groups": [
+    {
+      "name": "skin checks",
+      "usual": "appt_028",
+      "visit_types": {
+        "appt_027": "A check of particular moles or spots you're worried about.",
+        "appt_028": "A head-to-toe check of all your skin, moles and spots included.",
+        "appt_026": "A first visit with a dermatologist about a skin problem."
+      }
+    },
+    {
+      "name": "first visits",
+      "usual": "appt_001",
+      "visit_types": {
+        "appt_000": "A longer first visit to go through your health history and any concerns.",
+        "appt_001": "A standard first visit to get to know a doctor."
+      }
+    },
+    {
+      "name": "follow-ups",
+      "usual": "appt_004",
+      "visit_types": {
+        "appt_004": "An in-person check after an earlier visit.",
+        "appt_005": "A follow-up conversation about results or a treatment plan.",
+        "appt_006": "A follow-up by video or phone instead of in person."
+      }
+    },
+    {
+      "name": "yearly check-ups",
+      "usual": "appt_002",
+      "visit_types": {
+        "appt_002": "A yearly check-up with a family doctor.",
+        "appt_003": "A yearly visit with an internal medicine doctor to review your health and prevention plan."
+      }
+    },
+    {
+      "name": "feeling unwell",
+      "usual": "appt_007",
+      "visit_types": {
+        "appt_007": "For a new illness that isn't an emergency, like a cold or an infection.",
+        "appt_008": "For something that needs seeing today but isn't an emergency."
+      }
+    },
+    {
+      "name": "eye exams",
+      "usual": "appt_045",
+      "visit_types": {
+        "appt_045": "A standard check of your vision.",
+        "appt_046": "A longer, fuller check of your vision and eye health."
+      }
+    },
+    {
+      "name": "children's physicals",
+      "usual": "appt_018",
+      "visit_types": {
+        "appt_018": "The check-up a school asks for.",
+        "appt_019": "The check-up needed before playing a sport."
+      }
+    },
+    {
+      "name": "blood tests",
+      "usual": "appt_072",
+      "visit_types": {
+        "appt_072": "A blood sample for tests your doctor has ordered.",
+        "appt_073": "A blood test taken after not eating beforehand; your doctor tells you for how long."
+      }
+    },
+    {
+      "name": "dental visits",
+      "usual": "appt_075",
+      "visit_types": {
+        "appt_075": "A check-up of your teeth and gums.",
+        "appt_076": "A longer first check-up for new dental patients.",
+        "appt_074": "A professional cleaning of your teeth."
+      }
+    }
+  ]
+}
