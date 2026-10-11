@@ -10,6 +10,10 @@
 #   - a turn with no words (noise) -> no reply will come, so the agent won't stop
 #                     speaking and Pipecat would never restart the timer. We restart
 #                     it ourselves (review 2026-10-11, R1).
+#   - a turn with no words that cut off the agent's answer -> the caller's last
+#                     words are still unanswered, so we ask the AI to answer them
+#                     (decision 81, found on the 22:50 call of Sun 11).
+# caller_turn_rules() says what counts as the caller starting to speak (decision 81).
 # The 10-minute cap is a separate timer, stopped when the call ends however it ends.
 #
 
@@ -17,9 +21,37 @@ import asyncio
 from typing import Callable, Optional
 
 from loguru import logger
-from pipecat.frames.frames import BotStoppedSpeakingFrame, EndFrame, TTSSpeakFrame, UserIdleTimeoutUpdateFrame
+from pipecat.frames.frames import (
+    BotStoppedSpeakingFrame,
+    EndFrame,
+    LLMRunFrame,
+    TTSSpeakFrame,
+    UserIdleTimeoutUpdateFrame,
+)
+from pipecat.turns.user_start import TranscriptionUserTurnStartStrategy, VADUserTurnStartStrategy
+from pipecat.turns.user_turn_strategies import UserTurnStrategies
 
 from call import CallWatch, Step
+
+
+def caller_turn_rules() -> UserTurnStrategies:
+    """What counts as the caller starting to speak (decision 81).
+
+    Pipecat's default listens to the voice detector and to speech-to-text, including its
+    rough drafts. A rough draft can arrive a moment after the final text of the caller's
+    sentence; Pipecat then thinks the caller has started speaking again and cancels the
+    agent's answer. So: the voice detector, plus final text only (for speech too soft for
+    the detector). When the turn ends is unchanged (Pipecat's default)."""
+    return UserTurnStrategies(
+        start=[VADUserTurnStartStrategy(), TranscriptionUserTurnStartStrategy(use_interim=False)])
+
+
+def _unanswered(aggregator) -> bool:
+    """True if the last thing in the conversation is the caller's words (no answer yet)."""
+    context = getattr(aggregator, "context", None)
+    messages = context.get_messages() if context is not None else []
+    last = messages[-1] if messages else None
+    return isinstance(last, dict) and last.get("role") == "user"
 
 
 class CallWatchWiring:
@@ -46,6 +78,14 @@ class CallWatchWiring:
             wait = self.watch.on_caller_spoke()
             if wait is not None:
                 await self._worker.queue_frame(UserIdleTimeoutUpdateFrame(timeout=wait))
+        elif _unanswered(aggregator):
+            # No words, but this "turn" cancelled the agent's answer to the caller's last
+            # words (a late speech-to-text draft, or a noise, just after they spoke). Nothing
+            # else will ask the AI again, so the caller would hear silence until the
+            # check-in (decision 81).
+            self._log({"event": "reply_retried"})
+            logger.info("[reply_retried] the answer to the caller's last words was cut off; asking again")
+            await self._worker.queue_frame(LLMRunFrame())
         else:
             # No words, so the AI won't reply. Start Pipecat's own silence timer as if the
             # agent had just stopped speaking, so the agent speaking, the caller speaking

@@ -20,7 +20,7 @@ session.stage, session.log_path, clinic.schedule, clinic.bookings_file
 
 After a tool moves the call (next_stage set), the voice agent enters that stage: in tests call `session.enter_stage(outcome.next_stage, [])` yourself, as the builder does.
 
-Saved bookings: one JSON object per line in the bookings file. The call log: one JSON object per line (events `stage` and `tool`; since 9 Oct also `silence` and `time_limit`, written by bot.py, decision 64).
+Saved bookings: one JSON object per line in the bookings file. The call log: one JSON object per line (events `stage` and `tool`; since 9 Oct also `silence` and `time_limit`, written by bot.py, decision 64; `ai_turn` with the tokens of each AI reply, decision 45; and since 11 Oct `reply_retried`, when an answer cut off by a turn with no words is asked for again, decision 81).
 
 ## The agent file and builder
 

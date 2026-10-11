@@ -229,3 +229,26 @@ Run it: build once (`cd frontend`, `npm install`, `npm run build`), start the ag
 | (this commit) | **Fixes and decisions 78–79:** the stricter letter reader; the three-step spelling with "spelling not confirmed"; our own descriptions of look-alike visit types | builder 454; independent: all 2,848 rules tests pass; voice and editor tests 691 of 694 with the adapter, each of the 3 explained in `docs/reviews/2026-10-11-names-and-visit-types/triage.md` |
 
 **Still to confirm on a call:** a new patient's name saved as spelled, the word-per-letter step, and a "don't mind" visit choice.
+
+**Sun 11, 22:42 call:** the AI sent the confirmed letters as a list and was refused twice; fixed in `2fb50d1` (details in the names-and-visit-types triage).
+
+### Part D: the 22:50 call, and the fixes before tagging 0.3.0 (decisions 81–83)
+
+**The call confirmed everything still open:**
+- the name: speech-to-text heard "Perhan Cheetah", the caller spelled it, and "Farhaan Chida" was saved from the confirmed letters (77, 78);
+- the visit type: the agent described the two skin visits from our notes and, when the caller said "you advise me, I don't mind", chose the usual one and said it could be changed (79);
+- the editor: a line Farhaan added in the editor ("Thanks for waiting") was said on the call, so edit, save, call, see the change works; the inspector was polling throughout (then the line was removed in the editor, before this commit);
+- "Let me check" (67), the code's read-back (66), the booking, and the silence check-in (64).
+
+**It showed one real bug and two slips:**
+- **25 s of silence after "Yes, that is it."** The console log shows the answer started, then 20 ms later a turn "started" from speech-to-text (a late rough draft: no final text followed), which cancelled it. The turn ended empty after Pipecat's 5 s limit, nothing asked the AI again, and the check-in came 20 s later. Fixed both ways (81): drafts no longer start a turn, and an empty turn that leaves the caller unanswered asks the AI again. This is probably also the "it didn't speak properly" from an earlier call.
+- "Thank you, Perhan" before the name was spelled (82).
+- "around 11:00 a.m." became "Let me check ... around eleven", then 9:00 and 8:30 were offered without saying searches go by morning or afternoon (83).
+
+| Version | What | Tests |
+| --- | --- | --- |
+| (this commit) | Decisions 81–83 | builder 469 (12 new: Pipecat's real turn controller shows a draft started a turn with the default rules and doesn't with ours; the safety net with Pipecat's real silence timer and conversation record; the two instruction fixes). Independent: the rules-module tests all pass; with the P3 adapter the voice tests give 630 of 632, the same 2 failures before and after this change (`test_choose_option_handler_stays`, decision 66; a one-word name the adapter itself turns into a spelled name); editor API 59 of 62 (3 inspector tests read the newest real call log on this computer, which is now the 22:50 call, and expect an older one; the same 3 fail without this change; not edited, P2: a note for the next fresh tester). |
+
+**Checks kept proportionate (P5):** no separate review round for 81–83 (Farhaan: "just fix the errors and let's get the version update out"); the next voice call confirms them, and the testing step gets its own independent check.
+
+**Lesson:** the 25 s silence came from a default inside Pipecat, not our code, and only a real call with a real speech service could show it. Reading the console log line by line (not just our call log) found it.

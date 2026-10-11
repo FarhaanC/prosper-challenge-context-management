@@ -41,7 +41,7 @@ from pipecat.transports.base_transport import BaseTransport, TransportParams
 from pipecat.workers.runner import WorkerRunner
 from pipecat_flows import FlowManager
 
-from agent_builder import AgentBuilder, CallWatchWiring, TokenLog
+from agent_builder import AgentBuilder, CallWatchWiring, TokenLog, caller_turn_rules
 from call import CallWatch, Clinic
 
 # Load .env next to this file, so the bot runs the same from the repo root or backend/.
@@ -101,9 +101,11 @@ async def run_bot(
     context = LLMContext()
     context_aggregator = LLMContextAggregatorPair(
         context,
-        # Pipecat's silence timer, counted from when the agent stops speaking.
+        # Pipecat's silence timer, counted from when the agent stops speaking; and what counts
+        # as the caller starting to speak: not speech-to-text's rough drafts (decision 81).
         user_params=LLMUserAggregatorParams(vad_analyzer=SileroVADAnalyzer(),
-                                            user_idle_timeout=watch.check_in_after),
+                                            user_idle_timeout=watch.check_in_after,
+                                            user_turn_strategies=caller_turn_rules()),
     )
 
     pipeline = Pipeline(

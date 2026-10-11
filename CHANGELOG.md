@@ -16,7 +16,9 @@ New: the Phase 1 editor, and three changes from the voice calls.
 - **The read-back is said by the code** after an option is picked (66), and the booking stage says "Let me check" before searching again (67).
 - **Fixes from the reviews:** a caller talking over a line the code says (such as the greeting) no longer jams the call (69); a noise no longer switches the silence check off (70); a "yes" to "Are you still there?" isn't taken as agreeing to the booking (71).
 - **Agent file checks** now refuse arrow names the AI service can't use (73), and every problem is worded in stages, arrows and tools.
-- **Call log:** new lines for silence, the time limit, what the code said, and tokens per AI reply.
+- **New patients' names** are saved from the letters the caller confirmed, spelled one name at a time, with a word per letter if needed, and marked for staff to check if still unsure (77, 78). Look-alike visit types have our own one-line descriptions and a usual choice (79). The agent no longer promises a booking before it's checked (80).
+- **Fixes from the last voice call:** a late rough draft from speech-to-text no longer cancels the agent's answer, and an answer cut off that way is asked for again (81; it caused 25 s of silence); the caller's name isn't said before it's spelled (82); an exact time is searched as morning or afternoon and the caller is told (83).
+- **Call log:** new lines for silence, the time limit, what the code said, and tokens per AI reply, and a line when an answer is asked for again.
 - **Tests:** builder tests for all of the above; independent: a review of 64/66/67, and one round on the editor (91 tests, 29 of them in a real browser). See `docs/build-log.md`, step 3.
 
 ## 0.2.0 — the stages and tools in the voice agent (Thu 8 Oct 2026)
