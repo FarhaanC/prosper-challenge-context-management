@@ -23,7 +23,8 @@ dist/
 venv/
 env/
 
-# ---- Node / frontend (Phase 1 UI later) ----
+# ---- Node / frontend (the editor) ----
+backend/tests_independent/editor/browser/screenshots/
 node_modules/
 .next/
 dist/
