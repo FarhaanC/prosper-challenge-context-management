@@ -1,0 +1,275 @@
+{
+ "version": "naive_rules",
+ "model": "gpt-4o",
+ "caller_model": "gpt-4o-mini",
+ "scenario": "james_knee_mri_downtown",
+ "title": "James Wilson: a knee MRI near Downtown (only 2 valid doctor-place pairs)",
+ "run": 1,
+ "clinic_time": "2026-10-13T09:00",
+ "ran_at": "2026-10-12T18:44:32",
+ "greeting": {
+  "said": [
+   "Hello, you've reached the clinics' scheduling line. How can I help you today?"
+  ],
+  "passes": 0,
+  "seconds": 0.0,
+  "input_tokens": 0,
+  "cached_tokens": 0,
+  "output_tokens": 0,
+  "cost": 0.0,
+  "tools": [],
+  "problems": [],
+  "order": [
+   {
+    "said": "Hello, you've reached the clinics' scheduling line. How can I help you today?"
+   }
+  ]
+ },
+ "turns": [
+  {
+   "caller": "Hi, my name is James Wilson. I need to schedule a knee MRI, please.",
+   "agent": {
+    "said": [
+     "Is this your first time visiting our clinic, or are you a returning patient?"
+    ],
+    "passes": 1,
+    "seconds": 0.893,
+    "input_tokens": 9996,
+    "cached_tokens": 9088,
+    "output_tokens": 17,
+    "cost": 0.0138,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "Is this your first time visiting our clinic, or are you a returning patient?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "I've been a patient here before.",
+   "agent": {
+    "said": [
+     "I'll need your date of birth to locate your patient record."
+    ],
+    "passes": 1,
+    "seconds": 0.907,
+    "input_tokens": 10027,
+    "cached_tokens": 9856,
+    "output_tokens": 13,
+    "cost": 0.012878,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "I'll need your date of birth to locate your patient record."
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "It's March 12th, 1984.",
+   "agent": {
+    "said": [
+     "As a returning patient with a referral on file for Radiology, we can go ahead and book your knee MRI. Let me find soonest openings for you."
+    ],
+    "passes": 2,
+    "seconds": 1.922,
+    "input_tokens": 20186,
+    "cached_tokens": 19712,
+    "output_tokens": 60,
+    "cost": 0.026425,
+    "tools": [
+     {
+      "tool": "find_patient",
+      "args": {
+       "full_name": "James Wilson",
+       "date_of_birth": "1984-03-12"
+      },
+      "result": {
+       "found": true,
+       "patient_id": "pat_001",
+       "name": "James Wilson",
+       "referrals_on_file": [
+        "Radiology",
+        "Orthopedics"
+       ]
+      },
+      "stage": "naive",
+      "next_stage": null
+     }
+    ],
+    "problems": [],
+    "order": [
+     {
+      "tool": 0
+     },
+     {
+      "said": "As a returning patient with a referral on file for Radiology, we can go ahead and book your knee MRI. Let me find soonest openings for you."
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "Thank you! I appreciate it.",
+   "agent": {
+    "said": [
+     "Here are some available times for your knee MRI: today at eleven a.m. with Dr. Linda Ramirez at Downtown Health Center, today at two p.m. with Dr. Hannah Nguyen at Midtown Medical Group, or tomorrow at ten thirty a.m. with Dr. Linda Ramirez at Mission Bay Health Center. Which would you prefer?"
+    ],
+    "passes": 2,
+    "seconds": 2.151,
+    "input_tokens": 20649,
+    "cached_tokens": 19968,
+    "output_tokens": 86,
+    "cost": 0.027522,
+    "tools": [
+     {
+      "tool": "find_open_times",
+      "args": {
+       "visit_type_id": "appt_065"
+      },
+      "result": {
+       "ok": true,
+       "times": [
+        {
+         "start": "2026-10-13T11:00",
+         "spoken": "Tuesday 13 October at 11 AM",
+         "provider_id": "prov_014",
+         "doctor": "Dr. Linda Ramirez",
+         "location_id": "loc_004",
+         "location": "Downtown Health Center"
+        },
+        {
+         "start": "2026-10-13T14:00",
+         "spoken": "Tuesday 13 October at 2 PM",
+         "provider_id": "prov_015",
+         "doctor": "Dr. Hannah Nguyen",
+         "location_id": "loc_005",
+         "location": "Midtown Medical Group"
+        },
+        {
+         "start": "2026-10-13T14:30",
+         "spoken": "Tuesday 13 October at 2:30 PM",
+         "provider_id": "prov_015",
+         "doctor": "Dr. Hannah Nguyen",
+         "location_id": "loc_005",
+         "location": "Midtown Medical Group"
+        },
+        {
+         "start": "2026-10-14T10:30",
+         "spoken": "Wednesday 14 October at 10:30 AM",
+         "provider_id": "prov_014",
+         "doctor": "Dr. Linda Ramirez",
+         "location_id": "loc_000",
+         "location": "Mission Bay Health Center"
+        }
+       ]
+      },
+      "stage": "naive",
+      "next_stage": null
+     }
+    ],
+    "problems": [],
+    "order": [
+     {
+      "tool": 0
+     },
+     {
+      "said": "Here are some available times for your knee MRI: today at eleven a.m. with Dr. Linda Ramirez at Downtown Health Center, today at two p.m. with Dr. Hannah Nguyen at Midtown Medical Group, or tomorrow at ten thirty a.m. with Dr. Linda Ramirez at Mission Bay Health Center. Which would you prefer?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "I'll take the eleven a.m. appointment today with Dr. Linda Ramirez at Downtown Health Center.",
+   "agent": {
+    "said": [
+     "Your knee MRI is confirmed for today at eleven a.m. with Dr. Linda Ramirez at Downtown Health Center. Thank you and goodbye!"
+    ],
+    "passes": 2,
+    "seconds": 1.868,
+    "input_tokens": 21269,
+    "cached_tokens": 20864,
+    "output_tokens": 87,
+    "cost": 0.027963,
+    "tools": [
+     {
+      "tool": "book_appointment",
+      "args": {
+       "patient_name": "James Wilson",
+       "patient_id": "pat_001",
+       "visit_type_id": "appt_065",
+       "provider_id": "prov_014",
+       "location_id": "loc_004",
+       "start": "2026-10-13T11:00"
+      },
+      "result": {
+       "ok": true,
+       "booked": {
+        "patient_name": "James Wilson",
+        "patient_id": "pat_001",
+        "visit_type_id": "appt_065",
+        "provider_id": "prov_014",
+        "location_id": "loc_004",
+        "start": "2026-10-13T11:00"
+       }
+      },
+      "stage": "naive",
+      "next_stage": null
+     }
+    ],
+    "problems": [],
+    "order": [
+     {
+      "tool": 0
+     },
+     {
+      "said": "Your knee MRI is confirmed for today at eleven a.m. with Dr. Linda Ramirez at Downtown Health Center. Thank you and goodbye!"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "Thank you! Goodbye!",
+   "agent": null
+  }
+ ],
+ "ended_by": "caller_hung_up",
+ "stopped_because": "",
+ "outcome": {
+  "status": "booked",
+  "bookings": [
+   {
+    "patient_name": "James Wilson",
+    "patient_id": "pat_001",
+    "visit_type_id": "appt_065",
+    "provider_id": "prov_014",
+    "location_id": "loc_004",
+    "start": "2026-10-13T11:00"
+   }
+  ],
+  "name_confirmed": null
+ },
+ "totals": {
+  "agent_input_tokens": 82127,
+  "agent_cached_tokens": 79488,
+  "agent_output_tokens": 263,
+  "agent_passes": 8,
+  "agent_cost": 0.108588,
+  "slowest_reply_seconds": 2.151,
+  "caller_lines": 6,
+  "caller_cost": 0.000407
+ },
+ "score": {
+  "passed": true,
+  "reasons": [],
+  "bad_bookings": 0,
+  "staff_promise": false
+ }
+}

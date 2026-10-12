@@ -1,0 +1,380 @@
+{
+ "version": "naive",
+ "model": "gpt-4o",
+ "caller_model": "gpt-4o-mini",
+ "scenario": "james_changes_to_mri",
+ "title": "James Wilson: a Garcia skin check, then 'actually, a knee MRI'",
+ "run": 1,
+ "clinic_time": "2026-10-13T09:00",
+ "ran_at": "2026-10-12T18:50:03",
+ "greeting": {
+  "said": [
+   "Hello, you've reached the clinics' scheduling line. How can I help you today?"
+  ],
+  "passes": 0,
+  "seconds": 0.0,
+  "input_tokens": 0,
+  "cached_tokens": 0,
+  "output_tokens": 0,
+  "cost": 0.0,
+  "tools": [],
+  "problems": [],
+  "order": [
+   {
+    "said": "Hello, you've reached the clinics' scheduling line. How can I help you today?"
+   }
+  ]
+ },
+ "turns": [
+  {
+   "caller": "Hi, I’d like to schedule a skin check with Dr. Garcia, please.",
+   "agent": {
+    "said": [
+     "We have two Dr. Garcias. Could you please specify if you mean Dr. Maria Garcia or Dr. Carlos Garcia?"
+    ],
+    "passes": 1,
+    "seconds": 0.828,
+    "input_tokens": 9995,
+    "cached_tokens": 9088,
+    "output_tokens": 26,
+    "cost": 0.013888,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "We have two Dr. Garcias. Could you please specify if you mean Dr. Maria Garcia or Dr. Carlos Garcia?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "I mean Dr. Maria Garcia.",
+   "agent": {
+    "said": [
+     "Are you a returning patient or visiting us for the first time?"
+    ],
+    "passes": 1,
+    "seconds": 0.976,
+    "input_tokens": 10035,
+    "cached_tokens": 9856,
+    "output_tokens": 14,
+    "cost": 0.012908,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "Are you a returning patient or visiting us for the first time?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "I'm a returning patient.",
+   "agent": {
+    "said": [
+     "Could you please provide your date of birth so I can find your patient record?"
+    ],
+    "passes": 1,
+    "seconds": 0.833,
+    "input_tokens": 10061,
+    "cached_tokens": 9856,
+    "output_tokens": 17,
+    "cost": 0.013003,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "Could you please provide your date of birth so I can find your patient record?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "Sure, it's March 12th, 1984.",
+   "agent": {
+    "said": [
+     "Unfortunately, I couldn't locate your patient record with that information. Could there be a different spelling of your name or any other way we have it listed?"
+    ],
+    "passes": 2,
+    "seconds": 1.819,
+    "input_tokens": 20259,
+    "cached_tokens": 19840,
+    "output_tokens": 58,
+    "cost": 0.026427,
+    "tools": [
+     {
+      "tool": "find_patient",
+      "args": {
+       "full_name": "Maria Garcia",
+       "date_of_birth": "1984-03-12"
+      },
+      "result": {
+       "found": false,
+       "why": "No single patient matches that full name and date of birth (send the date as YYYY-MM-DD)."
+      },
+      "stage": "naive",
+      "next_stage": null
+     }
+    ],
+    "problems": [],
+    "order": [
+     {
+      "tool": 0
+     },
+     {
+      "said": "Unfortunately, I couldn't locate your patient record with that information. Could there be a different spelling of your name or any other way we have it listed?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "My name is James Wilson. Would you like me to spell it out?",
+   "agent": {
+    "said": [
+     "That would be helpful. Could you please spell your full name for me, and confirm your date of birth again?"
+    ],
+    "passes": 1,
+    "seconds": 0.805,
+    "input_tokens": 10215,
+    "cached_tokens": 9984,
+    "output_tokens": 24,
+    "cost": 0.013298,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "That would be helpful. Could you please spell your full name for me, and confirm your date of birth again?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "Sure, it's J, A, M, E, S, W, I, L, S, O, N. My date of birth is March 12th, 1984.",
+   "agent": {
+    "said": [
+     "Thank you, James. For a detailed skin check, would you like a head-to-toe exam or a check of specific moles or spots?"
+    ],
+    "passes": 2,
+    "seconds": 2.164,
+    "input_tokens": 20642,
+    "cached_tokens": 20224,
+    "output_tokens": 58,
+    "cost": 0.026905,
+    "tools": [
+     {
+      "tool": "find_patient",
+      "args": {
+       "full_name": "James Wilson",
+       "date_of_birth": "1984-03-12"
+      },
+      "result": {
+       "found": true,
+       "patient_id": "pat_001",
+       "name": "James Wilson",
+       "referrals_on_file": [
+        "Radiology",
+        "Orthopedics"
+       ]
+      },
+      "stage": "naive",
+      "next_stage": null
+     }
+    ],
+    "problems": [],
+    "order": [
+     {
+      "tool": 0
+     },
+     {
+      "said": "Thank you, James. For a detailed skin check, would you like a head-to-toe exam or a check of specific moles or spots?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "I think a head-to-toe exam would be best. But you know, the skin check can wait. What I really need is a knee MRI, which my doctor referred me for.",
+   "agent": {
+    "said": [
+     "We can arrange that knee MRI for you. Let's find the available appointment times."
+    ],
+    "passes": 1,
+    "seconds": 0.957,
+    "input_tokens": 10433,
+    "cached_tokens": 10240,
+    "output_tokens": 17,
+    "cost": 0.013452,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "We can arrange that knee MRI for you. Let's find the available appointment times."
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "That sounds good to me. I'm flexible with any day and location.",
+   "agent": {
+    "said": [
+     "I found a few options for your knee MRI: Tuesday, October thirteenth at eleven AM with Dr. Linda Ramirez at the Downtown Health Center, at two PM with Dr. Hannah Nguyen at Midtown Medical Group, or at two thirty PM also at Midtown. Do any of these work for you?"
+    ],
+    "passes": 2,
+    "seconds": 2.455,
+    "input_tokens": 21239,
+    "cached_tokens": 20608,
+    "output_tokens": 80,
+    "cost": 0.028137,
+    "tools": [
+     {
+      "tool": "find_open_times",
+      "args": {
+       "visit_type_id": "appt_065"
+      },
+      "result": {
+       "ok": true,
+       "times": [
+        {
+         "start": "2026-10-13T11:00",
+         "spoken": "Tuesday 13 October at 11 AM",
+         "provider_id": "prov_014",
+         "doctor": "Dr. Linda Ramirez",
+         "location_id": "loc_004",
+         "location": "Downtown Health Center"
+        },
+        {
+         "start": "2026-10-13T14:00",
+         "spoken": "Tuesday 13 October at 2 PM",
+         "provider_id": "prov_015",
+         "doctor": "Dr. Hannah Nguyen",
+         "location_id": "loc_005",
+         "location": "Midtown Medical Group"
+        },
+        {
+         "start": "2026-10-13T14:30",
+         "spoken": "Tuesday 13 October at 2:30 PM",
+         "provider_id": "prov_015",
+         "doctor": "Dr. Hannah Nguyen",
+         "location_id": "loc_005",
+         "location": "Midtown Medical Group"
+        },
+        {
+         "start": "2026-10-14T10:30",
+         "spoken": "Wednesday 14 October at 10:30 AM",
+         "provider_id": "prov_014",
+         "doctor": "Dr. Linda Ramirez",
+         "location_id": "loc_000",
+         "location": "Mission Bay Health Center"
+        }
+       ]
+      },
+      "stage": "naive",
+      "next_stage": null
+     }
+    ],
+    "problems": [],
+    "order": [
+     {
+      "tool": 0
+     },
+     {
+      "said": "I found a few options for your knee MRI: Tuesday, October thirteenth at eleven AM with Dr. Linda Ramirez at the Downtown Health Center, at two PM with Dr. Hannah Nguyen at Midtown Medical Group, or at two thirty PM also at Midtown. Do any of these work for you?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "The appointment on Tuesday, October 13th at eleven AM with Dr. Linda Ramirez at the Downtown Health Center works for me.",
+   "agent": {
+    "said": [
+     "Your knee MRI is booked for Tuesday, October thirteenth at eleven AM with Dr. Linda Ramirez at the Downtown Health Center. Thank you, and goodbye!"
+    ],
+    "passes": 2,
+    "seconds": 2.028,
+    "input_tokens": 21861,
+    "cached_tokens": 21376,
+    "output_tokens": 92,
+    "cost": 0.028852,
+    "tools": [
+     {
+      "tool": "book_appointment",
+      "args": {
+       "patient_name": "James Wilson",
+       "patient_id": "pat_001",
+       "visit_type_id": "appt_065",
+       "provider_id": "prov_014",
+       "location_id": "loc_004",
+       "start": "2026-10-13T11:00"
+      },
+      "result": {
+       "ok": true,
+       "booked": {
+        "patient_name": "James Wilson",
+        "patient_id": "pat_001",
+        "visit_type_id": "appt_065",
+        "provider_id": "prov_014",
+        "location_id": "loc_004",
+        "start": "2026-10-13T11:00"
+       }
+      },
+      "stage": "naive",
+      "next_stage": null
+     }
+    ],
+    "problems": [],
+    "order": [
+     {
+      "tool": 0
+     },
+     {
+      "said": "Your knee MRI is booked for Tuesday, October thirteenth at eleven AM with Dr. Linda Ramirez at the Downtown Health Center. Thank you, and goodbye!"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "Thank you! Goodbye!",
+   "agent": null
+  }
+ ],
+ "ended_by": "caller_hung_up",
+ "stopped_because": "",
+ "outcome": {
+  "status": "booked",
+  "bookings": [
+   {
+    "patient_name": "James Wilson",
+    "patient_id": "pat_001",
+    "visit_type_id": "appt_065",
+    "provider_id": "prov_014",
+    "location_id": "loc_004",
+    "start": "2026-10-13T11:00"
+   }
+  ],
+  "name_confirmed": null
+ },
+ "totals": {
+  "agent_input_tokens": 134740,
+  "agent_cached_tokens": 131072,
+  "agent_output_tokens": 386,
+  "agent_passes": 13,
+  "agent_cost": 0.17687,
+  "slowest_reply_seconds": 2.455,
+  "caller_lines": 10,
+  "caller_cost": 0.000942
+ },
+ "score": {
+  "passed": true,
+  "reasons": [],
+  "bad_bookings": 0,
+  "staff_promise": false
+ }
+}

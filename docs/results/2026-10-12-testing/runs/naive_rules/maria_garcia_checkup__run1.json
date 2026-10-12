@@ -1,0 +1,294 @@
+{
+ "version": "naive_rules",
+ "model": "gpt-4o",
+ "caller_model": "gpt-4o-mini",
+ "scenario": "maria_garcia_checkup",
+ "title": "New patient: a check-up with Dr. Maria Garcia (there are two)",
+ "run": 1,
+ "clinic_time": "2026-10-13T09:00",
+ "ran_at": "2026-10-12T18:51:24",
+ "greeting": {
+  "said": [
+   "Hello, you've reached the clinics' scheduling line. How can I help you today?"
+  ],
+  "passes": 0,
+  "seconds": 0.0,
+  "input_tokens": 0,
+  "cached_tokens": 0,
+  "output_tokens": 0,
+  "cost": 0.0,
+  "tools": [],
+  "problems": [],
+  "order": [
+   {
+    "said": "Hello, you've reached the clinics' scheduling line. How can I help you today?"
+   }
+  ]
+ },
+ "turns": [
+  {
+   "caller": "Hi, I’d like to schedule a yearly check-up with Dr. Maria Garcia. A colleague recommended her.",
+   "agent": {
+    "said": [
+     "Sure, I can help with that. Could you please confirm if you're already a patient with us or if you're new?"
+    ],
+    "passes": 1,
+    "seconds": 1.095,
+    "input_tokens": 10000,
+    "cached_tokens": 9088,
+    "output_tokens": 25,
+    "cost": 0.01389,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "Sure, I can help with that. Could you please confirm if you're already a patient with us or if you're new?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "I’m new to the clinic.",
+   "agent": {
+    "said": [
+     "Great, welcome. Just to confirm, are you looking to book a standard first visit or a longer one to go through your health history and concerns?"
+    ],
+    "passes": 1,
+    "seconds": 0.955,
+    "input_tokens": 10039,
+    "cached_tokens": 9856,
+    "output_tokens": 31,
+    "cost": 0.013088,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "Great, welcome. Just to confirm, are you looking to book a standard first visit or a longer one to go through your health history and concerns?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "I’m looking for a yearly physical.",
+   "agent": {
+    "said": [
+     "For a yearly check-up, we can schedule a yearly visit with Dr. Maria Garcia at Mission Bay Health Center in Family Medicine. Let me find available times for you."
+    ],
+    "passes": 1,
+    "seconds": 1.099,
+    "input_tokens": 10085,
+    "cached_tokens": 9856,
+    "output_tokens": 35,
+    "cost": 0.013243,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "For a yearly check-up, we can schedule a yearly visit with Dr. Maria Garcia at Mission Bay Health Center in Family Medicine. Let me find available times for you."
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "That sounds good, thank you.",
+   "agent": {
+    "said": [
+     "Dr. Maria Garcia has availability today at one thirty PM, two PM, and three PM. Which time would you prefer?"
+    ],
+    "passes": 2,
+    "seconds": 1.969,
+    "input_tokens": 20700,
+    "cached_tokens": 19968,
+    "output_tokens": 52,
+    "cost": 0.02731,
+    "tools": [
+     {
+      "tool": "find_open_times",
+      "args": {
+       "visit_type_id": "appt_002",
+       "provider_id": "prov_002"
+      },
+      "result": {
+       "ok": true,
+       "times": [
+        {
+         "start": "2026-10-13T13:00",
+         "spoken": "Tuesday 13 October at 1 PM",
+         "provider_id": "prov_002",
+         "doctor": "Dr. Maria Garcia",
+         "location_id": "loc_000",
+         "location": "Mission Bay Health Center"
+        },
+        {
+         "start": "2026-10-13T13:30",
+         "spoken": "Tuesday 13 October at 1:30 PM",
+         "provider_id": "prov_002",
+         "doctor": "Dr. Maria Garcia",
+         "location_id": "loc_000",
+         "location": "Mission Bay Health Center"
+        },
+        {
+         "start": "2026-10-13T14:00",
+         "spoken": "Tuesday 13 October at 2 PM",
+         "provider_id": "prov_002",
+         "doctor": "Dr. Maria Garcia",
+         "location_id": "loc_000",
+         "location": "Mission Bay Health Center"
+        },
+        {
+         "start": "2026-10-13T15:00",
+         "spoken": "Tuesday 13 October at 3 PM",
+         "provider_id": "prov_002",
+         "doctor": "Dr. Maria Garcia",
+         "location_id": "loc_000",
+         "location": "Mission Bay Health Center"
+        },
+        {
+         "start": "2026-10-13T16:00",
+         "spoken": "Tuesday 13 October at 4 PM",
+         "provider_id": "prov_002",
+         "doctor": "Dr. Maria Garcia",
+         "location_id": "loc_000",
+         "location": "Mission Bay Health Center"
+        },
+        {
+         "start": "2026-10-13T16:30",
+         "spoken": "Tuesday 13 October at 4:30 PM",
+         "provider_id": "prov_002",
+         "doctor": "Dr. Maria Garcia",
+         "location_id": "loc_000",
+         "location": "Mission Bay Health Center"
+        }
+       ]
+      },
+      "stage": "naive",
+      "next_stage": null
+     }
+    ],
+    "problems": [],
+    "order": [
+     {
+      "tool": 0
+     },
+     {
+      "said": "Dr. Maria Garcia has availability today at one thirty PM, two PM, and three PM. Which time would you prefer?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "I can do one thirty PM.",
+   "agent": {
+    "said": [
+     "I'll get you booked for your yearly check-up with Dr. Maria Garcia at Mission Bay Health Center on Tuesday, 13 October at 1:30 PM. Shall I go ahead and book it?"
+    ],
+    "passes": 1,
+    "seconds": 1.154,
+    "input_tokens": 10606,
+    "cached_tokens": 10368,
+    "output_tokens": 41,
+    "cost": 0.013965,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "I'll get you booked for your yearly check-up with Dr. Maria Garcia at Mission Bay Health Center on Tuesday, 13 October at 1:30 PM. Shall I go ahead and book it?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "Yes, please go ahead and book it.",
+   "agent": {
+    "said": [
+     "You're all set for your yearly check-up with Dr. Maria Garcia at Mission Bay Health Center on October 13th at 1:30 PM. Thank you for calling, and have a great day!"
+    ],
+    "passes": 2,
+    "seconds": 2.071,
+    "input_tokens": 21453,
+    "cached_tokens": 20992,
+    "output_tokens": 94,
+    "cost": 0.028333,
+    "tools": [
+     {
+      "tool": "book_appointment",
+      "args": {
+       "patient_name": "New Patient",
+       "visit_type_id": "appt_002",
+       "provider_id": "prov_002",
+       "location_id": "loc_000",
+       "start": "2026-10-13T13:30"
+      },
+      "result": {
+       "ok": true,
+       "booked": {
+        "patient_name": "New Patient",
+        "patient_id": null,
+        "visit_type_id": "appt_002",
+        "provider_id": "prov_002",
+        "location_id": "loc_000",
+        "start": "2026-10-13T13:30"
+       }
+      },
+      "stage": "naive",
+      "next_stage": null
+     }
+    ],
+    "problems": [],
+    "order": [
+     {
+      "tool": 0
+     },
+     {
+      "said": "You're all set for your yearly check-up with Dr. Maria Garcia at Mission Bay Health Center on October 13th at 1:30 PM. Thank you for calling, and have a great day!"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "Thank you! Goodbye!",
+   "agent": null
+  }
+ ],
+ "ended_by": "caller_hung_up",
+ "stopped_because": "",
+ "outcome": {
+  "status": "booked",
+  "bookings": [
+   {
+    "patient_name": "New Patient",
+    "patient_id": null,
+    "visit_type_id": "appt_002",
+    "provider_id": "prov_002",
+    "location_id": "loc_000",
+    "start": "2026-10-13T13:30"
+   }
+  ],
+  "name_confirmed": null
+ },
+ "totals": {
+  "agent_input_tokens": 82883,
+  "agent_cached_tokens": 80128,
+  "agent_output_tokens": 278,
+  "agent_passes": 8,
+  "agent_cost": 0.109829,
+  "slowest_reply_seconds": 2.071,
+  "caller_lines": 7,
+  "caller_cost": 0.000586
+ },
+ "score": {
+  "passed": false,
+  "reasons": [
+   "Booked under the name \"New Patient\", not \"Priya Nair\".",
+   "Booked doctor prov_002, expected one of prov_003."
+  ],
+  "bad_bookings": 0,
+  "staff_promise": false
+ }
+}

@@ -1,0 +1,163 @@
+{
+ "version": "naive_rules",
+ "model": "gpt-4o",
+ "caller_model": "gpt-4o-mini",
+ "scenario": "knee_mri_new_patient",
+ "title": "New patient: a knee MRI (needs a referral; existing patients only)",
+ "run": 1,
+ "clinic_time": "2026-10-13T09:00",
+ "ran_at": "2026-10-12T18:49:17",
+ "greeting": {
+  "said": [
+   "Hello, you've reached the clinics' scheduling line. How can I help you today?"
+  ],
+  "passes": 0,
+  "seconds": 0.0,
+  "input_tokens": 0,
+  "cached_tokens": 0,
+  "output_tokens": 0,
+  "cost": 0.0,
+  "tools": [],
+  "problems": [],
+  "order": [
+   {
+    "said": "Hello, you've reached the clinics' scheduling line. How can I help you today?"
+   }
+  ]
+ },
+ "turns": [
+  {
+   "caller": "Hi, I’d like to book a knee MRI, please.",
+   "agent": {
+    "said": [
+     "Sure, I'd be happy to help with that. Have you been a patient with us before?"
+    ],
+    "passes": 1,
+    "seconds": 0.838,
+    "input_tokens": 9991,
+    "cached_tokens": 9088,
+    "output_tokens": 20,
+    "cost": 0.013817,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "Sure, I'd be happy to help with that. Have you been a patient with us before?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "No, I have not been a patient here before.",
+   "agent": {
+    "said": [
+     "Thank you. To confirm, do you have a referral for the knee MRI?"
+    ],
+    "passes": 1,
+    "seconds": 0.819,
+    "input_tokens": 10029,
+    "cached_tokens": 9856,
+    "output_tokens": 17,
+    "cost": 0.012922,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "Thank you. To confirm, do you have a referral for the knee MRI?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "No, I don't have a referral.",
+   "agent": {
+    "said": [
+     "I'm unable to book a knee MRI without a referral. Please obtain one from your doctor, and we can assist with the appointment."
+    ],
+    "passes": 1,
+    "seconds": 0.883,
+    "input_tokens": 10061,
+    "cached_tokens": 9856,
+    "output_tokens": 27,
+    "cost": 0.013102,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "I'm unable to book a knee MRI without a referral. Please obtain one from your doctor, and we can assist with the appointment."
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "Is there anything else I can do to maybe still get the MRI?",
+   "agent": {
+    "said": [
+     "Unfortunately, a referral is essential for a knee MRI. Once you have it, feel free to contact us again."
+    ],
+    "passes": 1,
+    "seconds": 0.897,
+    "input_tokens": 10109,
+    "cached_tokens": 9856,
+    "output_tokens": 24,
+    "cost": 0.013192,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "Unfortunately, a referral is essential for a knee MRI. Once you have it, feel free to contact us again."
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "Okay, I’ll sort it out with my own doctor first. Thank you for your help! Goodbye.",
+   "agent": {
+    "said": [
+     "You're welcome! Please don't hesitate to call back when you're ready. Goodbye!"
+    ],
+    "passes": 1,
+    "seconds": 1.234,
+    "input_tokens": 10161,
+    "cached_tokens": 9984,
+    "output_tokens": 16,
+    "cost": 0.013083,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "You're welcome! Please don't hesitate to call back when you're ready. Goodbye!"
+     }
+    ]
+   },
+   "after_check_in": false
+  }
+ ],
+ "ended_by": "caller_hung_up",
+ "stopped_because": "",
+ "outcome": {
+  "status": "in_progress",
+  "bookings": [],
+  "name_confirmed": null
+ },
+ "totals": {
+  "agent_input_tokens": 50351,
+  "agent_cached_tokens": 48640,
+  "agent_output_tokens": 104,
+  "agent_passes": 5,
+  "agent_cost": 0.066116,
+  "slowest_reply_seconds": 1.234,
+  "caller_lines": 5,
+  "caller_cost": 0.000418
+ },
+ "score": {
+  "passed": true,
+  "reasons": [],
+  "bad_bookings": 0,
+  "staff_promise": false
+ }
+}

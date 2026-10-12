@@ -4,8 +4,8 @@ r"""The test runs (decisions 84-88). From the backend folder, in PowerShell:
     .venv\Scripts\python.exe -m evals.run plan      # checks everything, spends nothing
     .venv\Scripts\python.exe -m evals.run smoke     # 1 scenario on all 4 versions (part of round 1)
     .venv\Scripts\python.exe -m evals.run round1    # every scenario once, all 4 versions, + the check-in check
-    .venv\Scripts\python.exe -m evals.run round2    # ours only (both models), second run
-    .venv\Scripts\python.exe -m evals.run round3    # ours only, third run
+    .venv\Scripts\python.exe -m evals.run round2    # every scenario again, all 4 versions (decision 91)
+    .venv\Scripts\python.exe -m evals.run round3    # and a third time
     .venv\Scripts\python.exe -m evals.run all       # round1, round2, round3, in that order
     .venv\Scripts\python.exe -m evals.run results   # rebuild the results tables only
     .venv\Scripts\python.exe -m evals.run rescore   # score the saved runs again (free), then rebuild
@@ -64,8 +64,9 @@ ROUNDS = {
     "smoke": [(s, v, 1) for s in SCENARIOS if s.id == "james_knee_mri_downtown" for v in VERSIONS],
     "round1": ([(s, v, 1) for s in SCENARIOS for v in VERSIONS]  # scenario by scenario, so a stop leaves
                + [(CHECK_IN_SCENARIO, "ours", 1)]),              # every version compared on the same ones
-    "round2": [(s, v, 2) for s in SCENARIOS for v in ("ours", "ours_mini")],
-    "round3": [(s, v, 3) for s in SCENARIOS for v in ("ours", "ours_mini")],
+    # Decision 91: every version gets three runs, once round 1 showed the naive versions cost far less than feared.
+    "round2": [(s, v, 2) for s in SCENARIOS for v in VERSIONS],
+    "round3": [(s, v, 3) for s in SCENARIOS for v in VERSIONS],
 }
 ROUNDS["all"] = ROUNDS["round1"] + ROUNDS["round2"] + ROUNDS["round3"]
 

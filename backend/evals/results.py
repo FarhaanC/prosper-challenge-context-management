@@ -81,9 +81,9 @@ def build_results(results_dir: Path, ledger: Ledger) -> Path:
         if left_out:
             out.append(f"\nLeft out because not every version has run them: {', '.join(left_out)}.")
         out.append("")
-    if any(len(by_version[v]) > len(first[v]) for v in ("ours", "ours_mini")):
-        out += ["## Our agent over every run (up to 3 per scenario)", "", TABLE_HEAD]
-        out += [_row(LABELS[v], by_version[v]) for v in ("ours", "ours_mini") if by_version[v]]
+    if any(len(by_version[v]) > len(first[v]) for v in ORDER):
+        out += ["## Every version over every run (up to 3 per scenario)", "", TABLE_HEAD]
+        out += [_row(LABELS[v], by_version[v]) for v in ORDER if by_version[v]]
         out.append("")
 
     out += ["## Passes by scenario (all runs)", "",

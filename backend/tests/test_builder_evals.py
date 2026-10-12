@@ -416,8 +416,8 @@ def test_the_rounds_match_decisions_84_and_87():
     r1 = ROUNDS["round1"]
     assert len(r1) == 6 * 4 + 1 and r1[-1] == (CHECK_IN_SCENARIO, "ours", 1)
     assert [v for _, v, _ in r1[:4]] == list(VERSIONS)  # scenario by scenario
-    for name, number in (("round2", 2), ("round3", 3)):
-        assert {v for _, v, _ in ROUNDS[name]} == {"ours", "ours_mini"} and {n for *_, n in ROUNDS[name]} == {number}
+    for name, number in (("round2", 2), ("round3", 3)):  # decision 91: three runs for every version
+        assert set(ROUNDS[name]) == {(s, v, number) for s in SCENARIOS for v in VERSIONS}
     assert all(item in r1 for item in ROUNDS["smoke"])  # the smoke run is part of round 1, never paid twice
 
 

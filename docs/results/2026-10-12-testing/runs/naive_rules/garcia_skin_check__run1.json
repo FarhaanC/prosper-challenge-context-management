@@ -1,0 +1,293 @@
+{
+ "version": "naive_rules",
+ "model": "gpt-4o",
+ "caller_model": "gpt-4o-mini",
+ "scenario": "garcia_skin_check",
+ "title": "New patient: a skin check with Dr. Garcia (no Garcia does skin checks)",
+ "run": 1,
+ "clinic_time": "2026-10-13T09:00",
+ "ran_at": "2026-10-12T18:48:08",
+ "greeting": {
+  "said": [
+   "Hello, you've reached the clinics' scheduling line. How can I help you today?"
+  ],
+  "passes": 0,
+  "seconds": 0.0,
+  "input_tokens": 0,
+  "cached_tokens": 0,
+  "output_tokens": 0,
+  "cost": 0.0,
+  "tools": [],
+  "problems": [],
+  "order": [
+   {
+    "said": "Hello, you've reached the clinics' scheduling line. How can I help you today?"
+   }
+  ]
+ },
+ "turns": [
+  {
+   "caller": "Hi, I’d like to schedule a skin check for a couple of moles. A friend recommended Dr. Garcia.",
+   "agent": {
+    "said": [
+     "Is this your first time with us, or have you visited our clinics before?"
+    ],
+    "passes": 1,
+    "seconds": 0.862,
+    "input_tokens": 10002,
+    "cached_tokens": 9088,
+    "output_tokens": 17,
+    "cost": 0.013815,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "Is this your first time with us, or have you visited our clinics before?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "This is my first time.",
+   "agent": {
+    "said": [
+     "I can help with that. Do you want a first visit with a dermatologist about a skin problem, or a check of all your skin?"
+    ],
+    "passes": 1,
+    "seconds": 1.088,
+    "input_tokens": 10032,
+    "cached_tokens": 9856,
+    "output_tokens": 29,
+    "cost": 0.01305,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "I can help with that. Do you want a first visit with a dermatologist about a skin problem, or a check of all your skin?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "I just want my moles checked. I don't mind which kind of visit.",
+   "agent": {
+    "said": [
+     "For new patients, we usually schedule a full body skin exam. May I find some times with Dr. Maria Garcia for that?"
+    ],
+    "passes": 1,
+    "seconds": 0.933,
+    "input_tokens": 10084,
+    "cached_tokens": 9856,
+    "output_tokens": 27,
+    "cost": 0.01316,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "For new patients, we usually schedule a full body skin exam. May I find some times with Dr. Maria Garcia for that?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "Yes, that works for me.",
+   "agent": {
+    "said": [
+     "Dr. Maria Garcia specializes in Pediatrics and Family Medicine. To see a dermatologist for a skin check, may I find times with Dr. Daniel Chen instead?"
+    ],
+    "passes": 1,
+    "seconds": 0.956,
+    "input_tokens": 10125,
+    "cached_tokens": 9984,
+    "output_tokens": 32,
+    "cost": 0.013152,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "Dr. Maria Garcia specializes in Pediatrics and Family Medicine. To see a dermatologist for a skin check, may I find times with Dr. Daniel Chen instead?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "Sure, that’s fine with me.",
+   "agent": {
+    "said": [
+     "Dr. Daniel Chen has openings today, Tuesday, 13 October, at 1 PM or 3 PM at Richmond Care Center, and tomorrow, Wednesday, 14 October, at 8 AM at Downtown Health Center. Do any of these work for you?"
+    ],
+    "passes": 2,
+    "seconds": 1.988,
+    "input_tokens": 20776,
+    "cached_tokens": 19968,
+    "output_tokens": 80,
+    "cost": 0.02778,
+    "tools": [
+     {
+      "tool": "find_open_times",
+      "args": {
+       "visit_type_id": "appt_028",
+       "provider_id": "prov_001"
+      },
+      "result": {
+       "ok": true,
+       "times": [
+        {
+         "start": "2026-10-13T13:00",
+         "spoken": "Tuesday 13 October at 1 PM",
+         "provider_id": "prov_001",
+         "doctor": "Dr. Daniel Chen",
+         "location_id": "loc_007",
+         "location": "Richmond Care Center"
+        },
+        {
+         "start": "2026-10-13T15:00",
+         "spoken": "Tuesday 13 October at 3 PM",
+         "provider_id": "prov_001",
+         "doctor": "Dr. Daniel Chen",
+         "location_id": "loc_007",
+         "location": "Richmond Care Center"
+        },
+        {
+         "start": "2026-10-13T16:00",
+         "spoken": "Tuesday 13 October at 4 PM",
+         "provider_id": "prov_001",
+         "doctor": "Dr. Daniel Chen",
+         "location_id": "loc_007",
+         "location": "Richmond Care Center"
+        },
+        {
+         "start": "2026-10-13T16:30",
+         "spoken": "Tuesday 13 October at 4:30 PM",
+         "provider_id": "prov_001",
+         "doctor": "Dr. Daniel Chen",
+         "location_id": "loc_007",
+         "location": "Richmond Care Center"
+        },
+        {
+         "start": "2026-10-14T08:00",
+         "spoken": "Wednesday 14 October at 8 AM",
+         "provider_id": "prov_001",
+         "doctor": "Dr. Daniel Chen",
+         "location_id": "loc_004",
+         "location": "Downtown Health Center"
+        },
+        {
+         "start": "2026-10-14T08:30",
+         "spoken": "Wednesday 14 October at 8:30 AM",
+         "provider_id": "prov_001",
+         "doctor": "Dr. Daniel Chen",
+         "location_id": "loc_004",
+         "location": "Downtown Health Center"
+        }
+       ]
+      },
+      "stage": "naive",
+      "next_stage": null
+     }
+    ],
+    "problems": [],
+    "order": [
+     {
+      "tool": 0
+     },
+     {
+      "said": "Dr. Daniel Chen has openings today, Tuesday, 13 October, at 1 PM or 3 PM at Richmond Care Center, and tomorrow, Wednesday, 14 October, at 8 AM at Downtown Health Center. Do any of these work for you?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "I can do tomorrow at 8 AM at Downtown Health Center.",
+   "agent": {
+    "said": [
+     "Your appointment with Dr. Daniel Chen for a full body skin exam is confirmed for Wednesday, October 14th at 8 AM at Downtown Health Center. Thank you and goodbye!"
+    ],
+    "passes": 2,
+    "seconds": 1.758,
+    "input_tokens": 21481,
+    "cached_tokens": 20992,
+    "output_tokens": 88,
+    "cost": 0.028342,
+    "tools": [
+     {
+      "tool": "book_appointment",
+      "args": {
+       "patient_name": "Unknown",
+       "visit_type_id": "appt_028",
+       "provider_id": "prov_001",
+       "location_id": "loc_004",
+       "start": "2026-10-14T08:00"
+      },
+      "result": {
+       "ok": true,
+       "booked": {
+        "patient_name": "Unknown",
+        "patient_id": null,
+        "visit_type_id": "appt_028",
+        "provider_id": "prov_001",
+        "location_id": "loc_004",
+        "start": "2026-10-14T08:00"
+       }
+      },
+      "stage": "naive",
+      "next_stage": null
+     }
+    ],
+    "problems": [],
+    "order": [
+     {
+      "tool": 0
+     },
+     {
+      "said": "Your appointment with Dr. Daniel Chen for a full body skin exam is confirmed for Wednesday, October 14th at 8 AM at Downtown Health Center. Thank you and goodbye!"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "Thank you! Goodbye!",
+   "agent": null
+  }
+ ],
+ "ended_by": "caller_hung_up",
+ "stopped_because": "",
+ "outcome": {
+  "status": "booked",
+  "bookings": [
+   {
+    "patient_name": "Unknown",
+    "patient_id": null,
+    "visit_type_id": "appt_028",
+    "provider_id": "prov_001",
+    "location_id": "loc_004",
+    "start": "2026-10-14T08:00"
+   }
+  ],
+  "name_confirmed": null
+ },
+ "totals": {
+  "agent_input_tokens": 82500,
+  "agent_cached_tokens": 79744,
+  "agent_output_tokens": 273,
+  "agent_passes": 8,
+  "agent_cost": 0.109299,
+  "slowest_reply_seconds": 1.988,
+  "caller_lines": 7,
+  "caller_cost": 0.000576
+ },
+ "score": {
+  "passed": false,
+  "reasons": [
+   "Booked under the name \"Unknown\", not \"Lena Park\"."
+  ],
+  "bad_bookings": 0,
+  "staff_promise": false
+ }
+}

@@ -1,0 +1,205 @@
+{
+ "version": "ours",
+ "model": "gpt-4o",
+ "caller_model": "gpt-4o-mini",
+ "scenario": "knee_mri_new_patient",
+ "title": "New patient: a knee MRI (needs a referral; existing patients only)",
+ "run": 1,
+ "clinic_time": "2026-10-13T09:00",
+ "ran_at": "2026-10-12T18:49:30",
+ "greeting": {
+  "said": [
+   "Hello, you've reached the clinics' scheduling line. How can I help you today?"
+  ],
+  "passes": 0,
+  "seconds": 0.0,
+  "input_tokens": 0,
+  "cached_tokens": 0,
+  "output_tokens": 0,
+  "cost": 0.0,
+  "tools": [],
+  "problems": [],
+  "order": [
+   {
+    "said": "Hello, you've reached the clinics' scheduling line. How can I help you today?"
+   }
+  ]
+ },
+ "turns": [
+  {
+   "caller": "Hi, my name is Omar Haddad. I'd like to book a knee MRI, please.",
+   "agent": {
+    "said": [
+     "Have you been a patient with us before, Omar?"
+    ],
+    "passes": 1,
+    "seconds": 0.829,
+    "input_tokens": 2381,
+    "cached_tokens": 1920,
+    "output_tokens": 12,
+    "cost": 0.003672,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "Have you been a patient with us before, Omar?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "No, I’ve never been a patient there.",
+   "agent": {
+    "said": [
+     "Welcome, Omar. Let me confirm the spelling of your first name. Is it O, M, A, R?"
+    ],
+    "passes": 1,
+    "seconds": 0.937,
+    "input_tokens": 2410,
+    "cached_tokens": 2176,
+    "output_tokens": 25,
+    "cost": 0.003555,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "Welcome, Omar. Let me confirm the spelling of your first name. Is it O, M, A, R?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "Yes, that's correct. It’s O, M, A, R.",
+   "agent": {
+    "said": [
+     "Great, now let's confirm the spelling of your last name. Is it H, A, D, D, A, D?"
+    ],
+    "passes": 1,
+    "seconds": 1.06,
+    "input_tokens": 2457,
+    "cached_tokens": 2304,
+    "output_tokens": 27,
+    "cost": 0.003533,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "Great, now let's confirm the spelling of your last name. Is it H, A, D, D, A, D?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "Yes, that's right. It’s H, A, D, D, A, D.",
+   "agent": {
+    "said": [
+     "Thank you, Omar. The MRI for the knee is only for existing patients and needs a referral, which we don't have right now. Would you be open to discussing other visit options, such as a Mammogram, which can be booked?"
+    ],
+    "passes": 2,
+    "seconds": 2.106,
+    "input_tokens": 4733,
+    "cached_tokens": 2304,
+    "output_tokens": 115,
+    "cost": 0.010103,
+    "tools": [
+     {
+      "tool": "start_booking",
+      "args": {
+       "full_name": "Omar Haddad",
+       "returning": false,
+       "spelled_first_name": "O, M, A, R",
+       "spelled_last_name": "H, A, D, D, A, D",
+       "visit_description": "knee MRI",
+       "specialty": "Radiology"
+      },
+      "result": {
+       "ok": true
+      },
+      "stage": "identify",
+      "next_stage": "visit_type"
+     }
+    ],
+    "problems": [],
+    "order": [
+     {
+      "tool": 0
+     },
+     {
+      "said": "Thank you, Omar. The MRI for the knee is only for existing patients and needs a referral, which we don't have right now. Would you be open to discussing other visit options, such as a Mammogram, which can be booked?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "I'm not sure about that. Is there anything else I can do to get the knee MRI?",
+   "agent": {
+    "said": [
+     "For a knee MRI, you would need to be an existing patient and have a referral to Radiology. Would you like to explore visit types in another specialty, or speak with a staff member for further assistance?"
+    ],
+    "passes": 1,
+    "seconds": 1.636,
+    "input_tokens": 2298,
+    "cached_tokens": 2048,
+    "output_tokens": 43,
+    "cost": 0.003615,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "For a knee MRI, you would need to be an existing patient and have a referral to Radiology. Would you like to explore visit types in another specialty, or speak with a staff member for further assistance?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "No, I think I'll sort it out with my own doctor first. Thank you for your help! Goodbye!",
+   "agent": {
+    "said": [
+     "You're welcome, Omar. Feel free to call back whenever you need. Goodbye!"
+    ],
+    "passes": 1,
+    "seconds": 0.9,
+    "input_tokens": 2370,
+    "cached_tokens": 2176,
+    "output_tokens": 17,
+    "cost": 0.003375,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "You're welcome, Omar. Feel free to call back whenever you need. Goodbye!"
+     }
+    ]
+   },
+   "after_check_in": false
+  }
+ ],
+ "ended_by": "caller_hung_up",
+ "stopped_because": "",
+ "outcome": {
+  "status": "in_progress",
+  "bookings": [],
+  "name_confirmed": true
+ },
+ "totals": {
+  "agent_input_tokens": 16649,
+  "agent_cached_tokens": 12928,
+  "agent_output_tokens": 239,
+  "agent_passes": 7,
+  "agent_cost": 0.027853,
+  "slowest_reply_seconds": 2.106,
+  "caller_lines": 6,
+  "caller_cost": 0.000555
+ },
+ "score": {
+  "passed": true,
+  "reasons": [],
+  "bad_bookings": 0,
+  "staff_promise": false
+ }
+}

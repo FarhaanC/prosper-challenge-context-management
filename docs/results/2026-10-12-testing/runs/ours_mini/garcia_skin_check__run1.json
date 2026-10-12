@@ -1,0 +1,517 @@
+{
+ "version": "ours_mini",
+ "model": "gpt-4o-mini",
+ "caller_model": "gpt-4o-mini",
+ "scenario": "garcia_skin_check",
+ "title": "New patient: a skin check with Dr. Garcia (no Garcia does skin checks)",
+ "run": 1,
+ "clinic_time": "2026-10-13T09:00",
+ "ran_at": "2026-10-12T18:48:57",
+ "greeting": {
+  "said": [
+   "Hello, you've reached the clinics' scheduling line. How can I help you today?"
+  ],
+  "passes": 0,
+  "seconds": 0.0,
+  "input_tokens": 0,
+  "cached_tokens": 0,
+  "output_tokens": 0,
+  "cost": 0.0,
+  "tools": [],
+  "problems": [],
+  "order": [
+   {
+    "said": "Hello, you've reached the clinics' scheduling line. How can I help you today?"
+   }
+  ]
+ },
+ "turns": [
+  {
+   "caller": "Hi, I’d like to schedule a skin check for a couple of moles. I was recommended Dr. Garcia.",
+   "agent": {
+    "said": [
+     "Can I have your full name, please?"
+    ],
+    "passes": 1,
+    "seconds": 0.749,
+    "input_tokens": 2386,
+    "cached_tokens": 2304,
+    "output_tokens": 10,
+    "cost": 0.000191,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "Can I have your full name, please?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "Sure, it's Lena Park.",
+   "agent": {
+    "said": [
+     "Have you been a patient with us before?"
+    ],
+    "passes": 1,
+    "seconds": 0.731,
+    "input_tokens": 2409,
+    "cached_tokens": 2304,
+    "output_tokens": 10,
+    "cost": 0.000195,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "Have you been a patient with us before?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "No, I haven't. This would be my first visit.",
+   "agent": {
+    "said": [
+     "Can you please spell your first name letter by letter?"
+    ],
+    "passes": 1,
+    "seconds": 0.839,
+    "input_tokens": 2438,
+    "cached_tokens": 2304,
+    "output_tokens": 12,
+    "cost": 0.0002,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "Can you please spell your first name letter by letter?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "Of course, it's L, E, N, A.",
+   "agent": {
+    "said": [
+     "Is that correct?"
+    ],
+    "passes": 1,
+    "seconds": 0.856,
+    "input_tokens": 2469,
+    "cached_tokens": 2304,
+    "output_tokens": 5,
+    "cost": 0.000201,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "Is that correct?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "Yes, that's correct.",
+   "agent": {
+    "said": [
+     "Now, could you spell your last name letter by letter?"
+    ],
+    "passes": 1,
+    "seconds": 0.726,
+    "input_tokens": 2486,
+    "cached_tokens": 2432,
+    "output_tokens": 13,
+    "cost": 0.000198,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "Now, could you spell your last name letter by letter?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "Sure, it's P, A, R, K.",
+   "agent": {
+    "said": [
+     "Is that correct?"
+    ],
+    "passes": 1,
+    "seconds": 0.986,
+    "input_tokens": 2517,
+    "cached_tokens": 2432,
+    "output_tokens": 5,
+    "cost": 0.000198,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "Is that correct?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "Yes, that's correct.",
+   "agent": {
+    "said": [
+     "Thank you! I'll proceed with scheduling your skin check with Dr. Garcia. Can you please provide your date of birth?"
+    ],
+    "passes": 1,
+    "seconds": 0.932,
+    "input_tokens": 2534,
+    "cached_tokens": 2432,
+    "output_tokens": 25,
+    "cost": 0.000213,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "Thank you! I'll proceed with scheduling your skin check with Dr. Garcia. Can you please provide your date of birth?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "My date of birth is March 12th, 1984.",
+   "agent": {
+    "said": [
+     "Thank you for that information. I will now book your appointment. Please hold on for a moment."
+    ],
+    "passes": 1,
+    "seconds": 0.789,
+    "input_tokens": 2580,
+    "cached_tokens": 2432,
+    "output_tokens": 21,
+    "cost": 0.000217,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "Thank you for that information. I will now book your appointment. Please hold on for a moment."
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "Okay, thank you!",
+   "agent": {
+    "said": [
+     "Thank you, Lena. I'll check the visit types for dermatology since you're looking for a skin check.",
+     "I found the visit types for dermatology. You can choose either a Skin Cancer Screening, which is a check of particular moles or spots you're worried about, or a Full Body Skin Exam, which is a head-to-toe check of all your skin, moles, and spots. \n\nWould you prefer one of these?"
+    ],
+    "passes": 3,
+    "seconds": 3.659,
+    "input_tokens": 6958,
+    "cached_tokens": 4480,
+    "output_tokens": 179,
+    "cost": 0.000815,
+    "tools": [
+     {
+      "tool": "start_booking",
+      "args": {
+       "full_name": "Lena Park",
+       "returning": false,
+       "date_of_birth": "1984-03-12",
+       "spelled_first_name": "L,E,N,A",
+       "spelled_last_name": "P,A,R,K",
+       "visit_description": "skin check for a couple of moles",
+       "doctor_name": "Dr. Garcia"
+      },
+      "result": {
+       "ok": true
+      },
+      "stage": "identify",
+      "next_stage": "visit_type"
+     },
+     {
+      "tool": "list_visit_types",
+      "args": {
+       "specialty": "Dermatology"
+      },
+      "result": {
+       "ok": true,
+       "specialty": "Dermatology",
+       "visit_types": [
+        {
+         "id": "appt_026",
+         "name": "Dermatology Consultation",
+         "minutes": 30,
+         "needs_referral": true,
+         "open_to_new_patients": true,
+         "can_book": false,
+         "why_not": [
+          "Dermatology Consultation needs a referral to Dermatology, and there isn't one on file."
+         ],
+         "description": "A first visit with a dermatologist about a skin problem.",
+         "usual_choice": false
+        },
+        {
+         "id": "appt_027",
+         "name": "Skin Cancer Screening",
+         "minutes": 30,
+         "needs_referral": false,
+         "open_to_new_patients": true,
+         "can_book": true,
+         "why_not": [],
+         "description": "A check of particular moles or spots you're worried about.",
+         "usual_choice": false
+        },
+        {
+         "id": "appt_028",
+         "name": "Full Body Skin Exam",
+         "minutes": 30,
+         "needs_referral": false,
+         "open_to_new_patients": true,
+         "can_book": true,
+         "why_not": [],
+         "description": "A head-to-toe check of all your skin, moles and spots included.",
+         "usual_choice": true
+        },
+        {
+         "id": "appt_029",
+         "name": "Mole Removal",
+         "minutes": 30,
+         "needs_referral": true,
+         "open_to_new_patients": false,
+         "can_book": false,
+         "why_not": [
+          "Mole Removal is only for existing patients.",
+          "Mole Removal needs a referral to Dermatology, and there isn't one on file."
+         ]
+        },
+        {
+         "id": "appt_030",
+         "name": "Acne Follow-up",
+         "minutes": 15,
+         "needs_referral": false,
+         "open_to_new_patients": false,
+         "can_book": false,
+         "why_not": [
+          "Acne Follow-up is only for existing patients."
+         ]
+        },
+        {
+         "id": "appt_031",
+         "name": "Cosmetic Consultation",
+         "minutes": 30,
+         "needs_referral": false,
+         "open_to_new_patients": true,
+         "can_book": true,
+         "why_not": []
+        }
+       ]
+      },
+      "stage": "visit_type",
+      "next_stage": null
+     }
+    ],
+    "problems": [],
+    "order": [
+     {
+      "tool": 0
+     },
+     {
+      "said": "Thank you, Lena. I'll check the visit types for dermatology since you're looking for a skin check."
+     },
+     {
+      "tool": 1
+     },
+     {
+      "said": "I found the visit types for dermatology. You can choose either a Skin Cancer Screening, which is a check of particular moles or spots you're worried about, or a Full Body Skin Exam, which is a head-to-toe check of all your skin, moles, and spots. \n\nWould you prefer one of these?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "I just want my moles checked, so I’ll go with the Skin Cancer Screening.",
+   "agent": {
+    "said": [
+     "Dr. Garcia cannot perform Skin Cancer Screenings, but I have options with other doctors. You can see Dr. Kenji Kim at Midtown Medical Group today at 11 AM, Dr. Daniel Smith at Mission District Family Clinic at 11:30 AM, or Dr. Daniel Chen at Richmond Care Center at 1 PM. Which one would you like?"
+    ],
+    "passes": 2,
+    "seconds": 1.976,
+    "input_tokens": 4178,
+    "cached_tokens": 3456,
+    "output_tokens": 92,
+    "cost": 0.000423,
+    "tools": [
+     {
+      "tool": "choose_visit_type",
+      "args": {
+       "visit_type_id": "appt_027"
+      },
+      "result": {
+       "ok": true
+      },
+      "stage": "visit_type",
+      "next_stage": "booking"
+     }
+    ],
+    "problems": [],
+    "order": [
+     {
+      "tool": 0
+     },
+     {
+      "said": "Dr. Garcia cannot perform Skin Cancer Screenings, but I have options with other doctors. You can see Dr. Kenji Kim at Midtown Medical Group today at 11 AM, Dr. Daniel Smith at Mission District Family Clinic at 11:30 AM, or Dr. Daniel Chen at Richmond Care Center at 1 PM. Which one would you like?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "I’ll go with Dr. Kenji Kim at Midtown Medical Group at 11 AM.",
+   "agent": {
+    "said": [
+     "Just to confirm, you'd like to book with Dr. Kenji Kim at Midtown Medical Group today at 11 AM. Is that correct?"
+    ],
+    "passes": 1,
+    "seconds": 0.816,
+    "input_tokens": 1762,
+    "cached_tokens": 1664,
+    "output_tokens": 29,
+    "cost": 0.000157,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "Just to confirm, you'd like to book with Dr. Kenji Kim at Midtown Medical Group today at 11 AM. Is that correct?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "Yes, that’s correct.",
+   "agent": {
+    "said": [
+     "To confirm: Skin Cancer Screening with Dr. Kenji Kim at Midtown Medical Group, 2099 Market St, on Tuesday 13 October at 11 AM. It takes about 30 minutes. Would you like me to book it?"
+    ],
+    "passes": 2,
+    "seconds": 1.465,
+    "input_tokens": 3654,
+    "cached_tokens": 3456,
+    "output_tokens": 25,
+    "cost": 0.000304,
+    "tools": [
+     {
+      "tool": "confirm_booking",
+      "args": {},
+      "result": {
+       "ok": false,
+       "error": "Nothing is chosen yet. Call choose_option first, read back, and ask the caller."
+      },
+      "stage": "booking",
+      "next_stage": null
+     },
+     {
+      "tool": "choose_option",
+      "args": {
+       "option_id": "1"
+      },
+      "result": {
+       "ok": true,
+       "read_back": "Skin Cancer Screening with Dr. Kenji Kim at Midtown Medical Group, 2099 Market St, on Tuesday 13 October at 11 AM. It takes about 30 minutes.",
+       "note": "The code is reading the read_back to the caller and asking if they'd like to book it: don't repeat it. Call confirm_booking only after they say yes."
+      },
+      "stage": "booking",
+      "next_stage": null
+     }
+    ],
+    "problems": [],
+    "order": [
+     {
+      "tool": 0
+     },
+     {
+      "tool": 1
+     },
+     {
+      "said": "To confirm: Skin Cancer Screening with Dr. Kenji Kim at Midtown Medical Group, 2099 Market St, on Tuesday 13 October at 11 AM. It takes about 30 minutes. Would you like me to book it?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "Yes, please book it.",
+   "agent": {
+    "said": [
+     "Your Skin Cancer Screening with Dr. Kenji Kim is scheduled for Tuesday, October 13th at 11 AM. Thank you, and goodbye!"
+    ],
+    "passes": 2,
+    "seconds": 1.663,
+    "input_tokens": 3177,
+    "cached_tokens": 2816,
+    "output_tokens": 41,
+    "cost": 0.00029,
+    "tools": [
+     {
+      "tool": "confirm_booking",
+      "args": {},
+      "result": {
+       "ok": true,
+       "booked": "Skin Cancer Screening with Dr. Kenji Kim at Midtown Medical Group, 2099 Market St, on Tuesday 13 October at 11 AM. It takes about 30 minutes."
+      },
+      "stage": "booking",
+      "next_stage": "end"
+     }
+    ],
+    "problems": [],
+    "order": [
+     {
+      "tool": 0
+     },
+     {
+      "said": "Your Skin Cancer Screening with Dr. Kenji Kim is scheduled for Tuesday, October 13th at 11 AM. Thank you, and goodbye!"
+     }
+    ]
+   },
+   "after_check_in": false
+  }
+ ],
+ "ended_by": "agent_ended",
+ "stopped_because": "",
+ "outcome": {
+  "status": "booked",
+  "bookings": [
+   {
+    "caller": "Lena Park",
+    "patient_id": null,
+    "visit_type_id": "appt_027",
+    "provider_id": "prov_027",
+    "location_id": "loc_005",
+    "start": "2026-10-13T11:00:00",
+    "duration_min": 30
+   }
+  ],
+  "name_confirmed": true
+ },
+ "totals": {
+  "agent_input_tokens": 39548,
+  "agent_cached_tokens": 34816,
+  "agent_output_tokens": 467,
+  "agent_passes": 18,
+  "agent_cost": 0.003602,
+  "slowest_reply_seconds": 3.659,
+  "caller_lines": 13,
+  "caller_cost": 0.001213
+ },
+ "score": {
+  "passed": true,
+  "reasons": [],
+  "bad_bookings": 0,
+  "staff_promise": false
+ }
+}

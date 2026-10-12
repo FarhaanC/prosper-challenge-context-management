@@ -1,0 +1,333 @@
+{
+ "version": "ours_mini",
+ "model": "gpt-4o-mini",
+ "caller_model": "gpt-4o-mini",
+ "scenario": "knee_mri_new_patient",
+ "title": "New patient: a knee MRI (needs a referral; existing patients only)",
+ "run": 1,
+ "clinic_time": "2026-10-13T09:00",
+ "ran_at": "2026-10-12T18:49:42",
+ "greeting": {
+  "said": [
+   "Hello, you've reached the clinics' scheduling line. How can I help you today?"
+  ],
+  "passes": 0,
+  "seconds": 0.0,
+  "input_tokens": 0,
+  "cached_tokens": 0,
+  "output_tokens": 0,
+  "cost": 0.0,
+  "tools": [],
+  "problems": [],
+  "order": [
+   {
+    "said": "Hello, you've reached the clinics' scheduling line. How can I help you today?"
+   }
+  ]
+ },
+ "turns": [
+  {
+   "caller": "Hi, my name is Omar Haddad. I would like to book a knee MRI.",
+   "agent": {
+    "said": [
+     "Have you been a patient with us before?"
+    ],
+    "passes": 1,
+    "seconds": 0.72,
+    "input_tokens": 2380,
+    "cached_tokens": 2304,
+    "output_tokens": 10,
+    "cost": 0.00019,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "Have you been a patient with us before?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "No, I haven't.",
+   "agent": {
+    "said": [
+     "Can you please spell your first name for me, letter by letter?"
+    ],
+    "passes": 1,
+    "seconds": 0.83,
+    "input_tokens": 2402,
+    "cached_tokens": 2304,
+    "output_tokens": 15,
+    "cost": 0.000196,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "Can you please spell your first name for me, letter by letter?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "Sure, it's O, M, A, R.",
+   "agent": {
+    "said": [
+     "Is that correct?"
+    ],
+    "passes": 1,
+    "seconds": 0.733,
+    "input_tokens": 2435,
+    "cached_tokens": 2304,
+    "output_tokens": 5,
+    "cost": 0.000195,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "Is that correct?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "Yes, that's correct.",
+   "agent": {
+    "said": [
+     "Now, please spell your last name, Haddad, letter by letter."
+    ],
+    "passes": 1,
+    "seconds": 0.813,
+    "input_tokens": 2452,
+    "cached_tokens": 2304,
+    "output_tokens": 16,
+    "cost": 0.000205,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "Now, please spell your last name, Haddad, letter by letter."
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "It's H, A, D, D, A, D.",
+   "agent": {
+    "said": [
+     "Is that correct?"
+    ],
+    "passes": 1,
+    "seconds": 0.69,
+    "input_tokens": 2488,
+    "cached_tokens": 2432,
+    "output_tokens": 5,
+    "cost": 0.000194,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "Is that correct?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "Yes, that's correct.",
+   "agent": {
+    "said": [
+     "Thank you, one moment.",
+     "Thank you for your patience. A member of our staff will call you back soon. Goodbye!"
+    ],
+    "passes": 4,
+    "seconds": 3.85,
+    "input_tokens": 8113,
+    "cached_tokens": 6272,
+    "output_tokens": 113,
+    "cost": 0.000814,
+    "tools": [
+     {
+      "tool": "start_booking",
+      "args": {
+       "full_name": "Omar Haddad",
+       "returning": false,
+       "spelled_first_name": "O,M,A,R",
+       "spelled_last_name": "H,A,D,D,A,D",
+       "visit_description": "knee MRI"
+      },
+      "result": {
+       "ok": true
+      },
+      "stage": "identify",
+      "next_stage": "visit_type"
+     },
+     {
+      "tool": "list_visit_types",
+      "args": {
+       "specialty": "Radiology"
+      },
+      "result": {
+       "ok": true,
+       "specialty": "Radiology",
+       "visit_types": [
+        {
+         "id": "appt_062",
+         "name": "X-Ray",
+         "minutes": 20,
+         "needs_referral": true,
+         "open_to_new_patients": false,
+         "can_book": false,
+         "why_not": [
+          "X-Ray is only for existing patients.",
+          "X-Ray needs a referral to Radiology, and there isn't one on file."
+         ]
+        },
+        {
+         "id": "appt_063",
+         "name": "MRI - Brain",
+         "minutes": 60,
+         "needs_referral": true,
+         "open_to_new_patients": false,
+         "can_book": false,
+         "why_not": [
+          "MRI - Brain is only for existing patients.",
+          "MRI - Brain needs a referral to Radiology, and there isn't one on file."
+         ]
+        },
+        {
+         "id": "appt_064",
+         "name": "MRI - Spine",
+         "minutes": 60,
+         "needs_referral": true,
+         "open_to_new_patients": false,
+         "can_book": false,
+         "why_not": [
+          "MRI - Spine is only for existing patients.",
+          "MRI - Spine needs a referral to Radiology, and there isn't one on file."
+         ]
+        },
+        {
+         "id": "appt_065",
+         "name": "MRI - Knee",
+         "minutes": 45,
+         "needs_referral": true,
+         "open_to_new_patients": false,
+         "can_book": false,
+         "why_not": [
+          "MRI - Knee is only for existing patients.",
+          "MRI - Knee needs a referral to Radiology, and there isn't one on file."
+         ]
+        },
+        {
+         "id": "appt_066",
+         "name": "CT Scan",
+         "minutes": 30,
+         "needs_referral": true,
+         "open_to_new_patients": false,
+         "can_book": false,
+         "why_not": [
+          "CT Scan is only for existing patients.",
+          "CT Scan needs a referral to Radiology, and there isn't one on file."
+         ]
+        },
+        {
+         "id": "appt_067",
+         "name": "Ultrasound",
+         "minutes": 30,
+         "needs_referral": true,
+         "open_to_new_patients": false,
+         "can_book": false,
+         "why_not": [
+          "Ultrasound is only for existing patients.",
+          "Ultrasound needs a referral to Radiology, and there isn't one on file."
+         ]
+        },
+        {
+         "id": "appt_068",
+         "name": "Mammogram",
+         "minutes": 30,
+         "needs_referral": false,
+         "open_to_new_patients": true,
+         "can_book": true,
+         "why_not": []
+        },
+        {
+         "id": "appt_069",
+         "name": "Bone Density Scan (DEXA)",
+         "minutes": 30,
+         "needs_referral": true,
+         "open_to_new_patients": false,
+         "can_book": false,
+         "why_not": [
+          "Bone Density Scan (DEXA) is only for existing patients.",
+          "Bone Density Scan (DEXA) needs a referral to Radiology, and there isn't one on file."
+         ]
+        }
+       ]
+      },
+      "stage": "visit_type",
+      "next_stage": null
+     },
+     {
+      "tool": "hand_off",
+      "args": {
+       "reason": "speak_to_staff"
+      },
+      "result": {
+       "ok": true,
+       "handed_off": true
+      },
+      "stage": "visit_type",
+      "next_stage": "end"
+     }
+    ],
+    "problems": [],
+    "order": [
+     {
+      "said": "Thank you, one moment."
+     },
+     {
+      "tool": 0
+     },
+     {
+      "tool": 1
+     },
+     {
+      "tool": 2
+     },
+     {
+      "said": "Thank you for your patience. A member of our staff will call you back soon. Goodbye!"
+     }
+    ]
+   },
+   "after_check_in": false
+  }
+ ],
+ "ended_by": "agent_ended",
+ "stopped_because": "",
+ "outcome": {
+  "status": "handed_off",
+  "bookings": [],
+  "name_confirmed": true
+ },
+ "totals": {
+  "agent_input_tokens": 20270,
+  "agent_cached_tokens": 17920,
+  "agent_output_tokens": 164,
+  "agent_passes": 9,
+  "agent_cost": 0.001794,
+  "slowest_reply_seconds": 3.85,
+  "caller_lines": 6,
+  "caller_cost": 0.000384
+ },
+ "score": {
+  "passed": true,
+  "reasons": [],
+  "bad_bookings": 0,
+  "staff_promise": false
+ }
+}

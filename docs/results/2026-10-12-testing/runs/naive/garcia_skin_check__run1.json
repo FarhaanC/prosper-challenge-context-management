@@ -1,0 +1,277 @@
+{
+ "version": "naive",
+ "model": "gpt-4o",
+ "caller_model": "gpt-4o-mini",
+ "scenario": "garcia_skin_check",
+ "title": "New patient: a skin check with Dr. Garcia (no Garcia does skin checks)",
+ "run": 1,
+ "clinic_time": "2026-10-13T09:00",
+ "ran_at": "2026-10-12T18:47:55",
+ "greeting": {
+  "said": [
+   "Hello, you've reached the clinics' scheduling line. How can I help you today?"
+  ],
+  "passes": 0,
+  "seconds": 0.0,
+  "input_tokens": 0,
+  "cached_tokens": 0,
+  "output_tokens": 0,
+  "cost": 0.0,
+  "tools": [],
+  "problems": [],
+  "order": [
+   {
+    "said": "Hello, you've reached the clinics' scheduling line. How can I help you today?"
+   }
+  ]
+ },
+ "turns": [
+  {
+   "caller": "Hi, I’d like to schedule a skin check for a couple of moles. A friend recommended Dr. Garcia.",
+   "agent": {
+    "said": [
+     "Please let me know your full name and if you've been a patient with us before."
+    ],
+    "passes": 1,
+    "seconds": 1.154,
+    "input_tokens": 10002,
+    "cached_tokens": 9088,
+    "output_tokens": 18,
+    "cost": 0.013825,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "Please let me know your full name and if you've been a patient with us before."
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "My name is Lena Park. No, I have never been a patient here before.",
+   "agent": {
+    "said": [
+     "As a new patient, you can book a first visit with Dr. Maria Garcia, the Dermatologist at our North Beach Specialty Center. Does that work for you?"
+    ],
+    "passes": 1,
+    "seconds": 1.222,
+    "input_tokens": 10044,
+    "cached_tokens": 9856,
+    "output_tokens": 34,
+    "cost": 0.01313,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "As a new patient, you can book a first visit with Dr. Maria Garcia, the Dermatologist at our North Beach Specialty Center. Does that work for you?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "Yes, that works for me!",
+   "agent": {
+    "said": [
+     "Great! Let me check available times over the next two weeks for your visit with Dr. Maria Garcia.",
+     "Dr. Maria Garcia is available today at North Beach Specialty Center at eleven AM, one PM, or one thirty PM. Which time works best for you?"
+    ],
+    "passes": 2,
+    "seconds": 2.071,
+    "input_tokens": 20643,
+    "cached_tokens": 19840,
+    "output_tokens": 80,
+    "cost": 0.027608,
+    "tools": [
+     {
+      "tool": "find_open_times",
+      "args": {
+       "visit_type_id": "appt_026",
+       "provider_id": "prov_003"
+      },
+      "result": {
+       "ok": true,
+       "times": [
+        {
+         "start": "2026-10-13T11:00",
+         "spoken": "Tuesday 13 October at 11 AM",
+         "provider_id": "prov_003",
+         "doctor": "Dr. Maria Garcia",
+         "location_id": "loc_002",
+         "location": "North Beach Specialty Center"
+        },
+        {
+         "start": "2026-10-13T13:00",
+         "spoken": "Tuesday 13 October at 1 PM",
+         "provider_id": "prov_003",
+         "doctor": "Dr. Maria Garcia",
+         "location_id": "loc_002",
+         "location": "North Beach Specialty Center"
+        },
+        {
+         "start": "2026-10-13T13:30",
+         "spoken": "Tuesday 13 October at 1:30 PM",
+         "provider_id": "prov_003",
+         "doctor": "Dr. Maria Garcia",
+         "location_id": "loc_002",
+         "location": "North Beach Specialty Center"
+        },
+        {
+         "start": "2026-10-13T14:00",
+         "spoken": "Tuesday 13 October at 2 PM",
+         "provider_id": "prov_003",
+         "doctor": "Dr. Maria Garcia",
+         "location_id": "loc_002",
+         "location": "North Beach Specialty Center"
+        },
+        {
+         "start": "2026-10-13T14:30",
+         "spoken": "Tuesday 13 October at 2:30 PM",
+         "provider_id": "prov_003",
+         "doctor": "Dr. Maria Garcia",
+         "location_id": "loc_002",
+         "location": "North Beach Specialty Center"
+        },
+        {
+         "start": "2026-10-13T15:30",
+         "spoken": "Tuesday 13 October at 3:30 PM",
+         "provider_id": "prov_003",
+         "doctor": "Dr. Maria Garcia",
+         "location_id": "loc_002",
+         "location": "North Beach Specialty Center"
+        }
+       ]
+      },
+      "stage": "naive",
+      "next_stage": null
+     }
+    ],
+    "problems": [],
+    "order": [
+     {
+      "said": "Great! Let me check available times over the next two weeks for your visit with Dr. Maria Garcia."
+     },
+     {
+      "tool": 0
+     },
+     {
+      "said": "Dr. Maria Garcia is available today at North Beach Specialty Center at eleven AM, one PM, or one thirty PM. Which time works best for you?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "I can do eleven AM.",
+   "agent": {
+    "said": [
+     "I'll book your Dermatology Consultation with Dr. Maria Garcia at North Beach Specialty Center today at eleven AM. Would you like me to proceed with the booking?"
+    ],
+    "passes": 1,
+    "seconds": 1.22,
+    "input_tokens": 10596,
+    "cached_tokens": 10368,
+    "output_tokens": 32,
+    "cost": 0.01385,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "I'll book your Dermatology Consultation with Dr. Maria Garcia at North Beach Specialty Center today at eleven AM. Would you like me to proceed with the booking?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "Yes, please proceed with the booking.",
+   "agent": {
+    "said": [
+     "Your appointment with Dr. Maria Garcia is confirmed for today at eleven AM at North Beach Specialty Center. Thank you and goodbye!"
+    ],
+    "passes": 2,
+    "seconds": 1.815,
+    "input_tokens": 21415,
+    "cached_tokens": 20992,
+    "output_tokens": 79,
+    "cost": 0.028088,
+    "tools": [
+     {
+      "tool": "book_appointment",
+      "args": {
+       "patient_name": "Lena Park",
+       "visit_type_id": "appt_026",
+       "provider_id": "prov_003",
+       "location_id": "loc_002",
+       "start": "2026-10-13T11:00"
+      },
+      "result": {
+       "ok": true,
+       "booked": {
+        "patient_name": "Lena Park",
+        "patient_id": null,
+        "visit_type_id": "appt_026",
+        "provider_id": "prov_003",
+        "location_id": "loc_002",
+        "start": "2026-10-13T11:00"
+       }
+      },
+      "stage": "naive",
+      "next_stage": null
+     }
+    ],
+    "problems": [],
+    "order": [
+     {
+      "tool": 0
+     },
+     {
+      "said": "Your appointment with Dr. Maria Garcia is confirmed for today at eleven AM at North Beach Specialty Center. Thank you and goodbye!"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "Thank you! Goodbye!",
+   "agent": null
+  }
+ ],
+ "ended_by": "caller_hung_up",
+ "stopped_because": "",
+ "outcome": {
+  "status": "booked",
+  "bookings": [
+   {
+    "patient_name": "Lena Park",
+    "patient_id": null,
+    "visit_type_id": "appt_026",
+    "provider_id": "prov_003",
+    "location_id": "loc_002",
+    "start": "2026-10-13T11:00"
+   }
+  ],
+  "name_confirmed": null
+ },
+ "totals": {
+  "agent_input_tokens": 72700,
+  "agent_cached_tokens": 70144,
+  "agent_output_tokens": 243,
+  "agent_passes": 7,
+  "agent_cost": 0.096501,
+  "slowest_reply_seconds": 2.071,
+  "caller_lines": 6,
+  "caller_cost": 0.000483
+ },
+ "score": {
+  "passed": false,
+  "reasons": [
+   "A booking breaks the rules: Dermatology Consultation needs a referral to Dermatology, and there isn't one on file. Dr. Maria Garcia doesn't offer Dermatology Consultation.",
+   "Booked visit type appt_026, expected one of appt_027, appt_028.",
+   "Booked doctor prov_003, expected one of prov_001, prov_027, prov_035."
+  ],
+  "bad_bookings": 1,
+  "staff_promise": false
+ }
+}

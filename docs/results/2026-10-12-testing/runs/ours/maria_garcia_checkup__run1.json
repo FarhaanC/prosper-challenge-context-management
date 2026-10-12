@@ -1,0 +1,422 @@
+{
+ "version": "ours",
+ "model": "gpt-4o",
+ "caller_model": "gpt-4o-mini",
+ "scenario": "maria_garcia_checkup",
+ "title": "New patient: a check-up with Dr. Maria Garcia (there are two)",
+ "run": 1,
+ "clinic_time": "2026-10-13T09:00",
+ "ran_at": "2026-10-12T18:51:43",
+ "greeting": {
+  "said": [
+   "Hello, you've reached the clinics' scheduling line. How can I help you today?"
+  ],
+  "passes": 0,
+  "seconds": 0.0,
+  "input_tokens": 0,
+  "cached_tokens": 0,
+  "output_tokens": 0,
+  "cost": 0.0,
+  "tools": [],
+  "problems": [],
+  "order": [
+   {
+    "said": "Hello, you've reached the clinics' scheduling line. How can I help you today?"
+   }
+  ]
+ },
+ "turns": [
+  {
+   "caller": "Hi, I’d like to schedule a yearly check-up with Dr. Maria Garcia. A colleague recommended her.",
+   "agent": {
+    "said": [
+     "May I have your full name, please?"
+    ],
+    "passes": 1,
+    "seconds": 0.906,
+    "input_tokens": 2384,
+    "cached_tokens": 1920,
+    "output_tokens": 10,
+    "cost": 0.00366,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "May I have your full name, please?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "Sure, it's Priya Nair. That's P, R, I, Y, A and N, A, I, R.",
+   "agent": {
+    "said": [
+     "Have you been a patient with us before, Priya?"
+    ],
+    "passes": 1,
+    "seconds": 0.756,
+    "input_tokens": 2428,
+    "cached_tokens": 2176,
+    "output_tokens": 13,
+    "cost": 0.00348,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "Have you been a patient with us before, Priya?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "No, I've never been a patient here before.",
+   "agent": {
+    "said": [
+     "Thank you, Priya. Let me confirm the spelling of your first name. Is it P, R, I, Y, A?"
+    ],
+    "passes": 1,
+    "seconds": 0.894,
+    "input_tokens": 2458,
+    "cached_tokens": 2304,
+    "output_tokens": 29,
+    "cost": 0.003555,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "Thank you, Priya. Let me confirm the spelling of your first name. Is it P, R, I, Y, A?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "Yes, that's correct.",
+   "agent": {
+    "said": [
+     "And is your last name spelled N, A, I, R?"
+    ],
+    "passes": 1,
+    "seconds": 1.006,
+    "input_tokens": 2499,
+    "cached_tokens": 2304,
+    "output_tokens": 15,
+    "cost": 0.003517,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "And is your last name spelled N, A, I, R?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "Yes, that's right.",
+   "agent": {
+    "said": [
+     "Thank you, one moment.",
+     "Priya, we have two suitable options for new patients: a New Patient Consultation, which is a longer visit to discuss your health history and concerns, or the usual New Patient Visit,  a standard first visit to meet your new doctor. Which one would you prefer?"
+    ],
+    "passes": 3,
+    "seconds": 3.006,
+    "input_tokens": 6856,
+    "cached_tokens": 4096,
+    "output_tokens": 145,
+    "cost": 0.01347,
+    "tools": [
+     {
+      "tool": "start_booking",
+      "args": {
+       "full_name": "Priya Nair",
+       "returning": false,
+       "spelled_first_name": "P, R, I, Y, A",
+       "spelled_last_name": "N, A, I, R",
+       "visit_description": "yearly check-up",
+       "doctor_name": "Dr. Maria Garcia"
+      },
+      "result": {
+       "ok": true
+      },
+      "stage": "identify",
+      "next_stage": "visit_type"
+     },
+     {
+      "tool": "list_visit_types",
+      "args": {
+       "specialty": "General"
+      },
+      "result": {
+       "ok": true,
+       "specialty": "General",
+       "visit_types": [
+        {
+         "id": "appt_000",
+         "name": "New Patient Consultation",
+         "minutes": 40,
+         "needs_referral": false,
+         "open_to_new_patients": true,
+         "can_book": true,
+         "why_not": [],
+         "description": "A longer first visit to go through your health history and any concerns.",
+         "usual_choice": false
+        },
+        {
+         "id": "appt_001",
+         "name": "New Patient Visit",
+         "minutes": 30,
+         "needs_referral": false,
+         "open_to_new_patients": true,
+         "can_book": true,
+         "why_not": [],
+         "description": "A standard first visit to get to know a doctor.",
+         "usual_choice": true
+        },
+        {
+         "id": "appt_004",
+         "name": "Follow-up Visit",
+         "minutes": 20,
+         "needs_referral": false,
+         "open_to_new_patients": false,
+         "can_book": false,
+         "why_not": [
+          "Follow-up Visit is only for existing patients."
+         ],
+         "description": "An in-person check after an earlier visit.",
+         "usual_choice": true
+        },
+        {
+         "id": "appt_005",
+         "name": "Follow-up Consultation",
+         "minutes": 20,
+         "needs_referral": false,
+         "open_to_new_patients": false,
+         "can_book": false,
+         "why_not": [
+          "Follow-up Consultation is only for existing patients."
+         ],
+         "description": "A follow-up conversation about results or a treatment plan.",
+         "usual_choice": false
+        },
+        {
+         "id": "appt_006",
+         "name": "Telehealth Follow-up",
+         "minutes": 15,
+         "needs_referral": false,
+         "open_to_new_patients": false,
+         "can_book": false,
+         "why_not": [
+          "Telehealth Follow-up is only for existing patients."
+         ],
+         "description": "A follow-up by video or phone instead of in person.",
+         "usual_choice": false
+        },
+        {
+         "id": "appt_009",
+         "name": "Medication Review",
+         "minutes": 15,
+         "needs_referral": false,
+         "open_to_new_patients": false,
+         "can_book": false,
+         "why_not": [
+          "Medication Review is only for existing patients."
+         ]
+        }
+       ]
+      },
+      "stage": "visit_type",
+      "next_stage": null
+     }
+    ],
+    "problems": [],
+    "order": [
+     {
+      "said": "Thank you, one moment."
+     },
+     {
+      "tool": 0
+     },
+     {
+      "tool": 1
+     },
+     {
+      "said": "Priya, we have two suitable options for new patients: a New Patient Consultation, which is a longer visit to discuss your health history and concerns, or the usual New Patient Visit,  a standard first visit to meet your new doctor. Which one would you prefer?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "I’d like to go with the usual New Patient Visit, please.",
+   "agent": {
+    "said": [
+     "There are two doctors matching \"Dr. Maria Garcia\" for a New Patient Visit: one in Pediatrics at Mission Bay Health Center and another in Family Medicine at Midtown Medical Group, North Beach Specialty Center, and Richmond Care Center. Which Dr. Maria Garcia do you mean?"
+    ],
+    "passes": 2,
+    "seconds": 1.726,
+    "input_tokens": 4138,
+    "cached_tokens": 2304,
+    "output_tokens": 74,
+    "cost": 0.008205,
+    "tools": [
+     {
+      "tool": "choose_visit_type",
+      "args": {
+       "visit_type_id": "appt_001"
+      },
+      "result": {
+       "ok": true
+      },
+      "stage": "visit_type",
+      "next_stage": "booking"
+     }
+    ],
+    "problems": [],
+    "order": [
+     {
+      "tool": 0
+     },
+     {
+      "said": "There are two doctors matching \"Dr. Maria Garcia\" for a New Patient Visit: one in Pediatrics at Mission Bay Health Center and another in Family Medicine at Midtown Medical Group, North Beach Specialty Center, and Richmond Care Center. Which Dr. Maria Garcia do you mean?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "I mean the one in Family Medicine.",
+   "agent": {
+    "said": [
+     "Here are the available options with Dr. Maria Garcia in Family Medicine: at North Beach Specialty Center today at 11 AM, at Midtown Medical Group Wednesday at 8 AM. Which one works for you?"
+    ],
+    "passes": 1,
+    "seconds": 1.023,
+    "input_tokens": 1725,
+    "cached_tokens": 1536,
+    "output_tokens": 42,
+    "cost": 0.002812,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "Here are the available options with Dr. Maria Garcia in Family Medicine: at North Beach Specialty Center today at 11 AM, at Midtown Medical Group Wednesday at 8 AM. Which one works for you?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "I’ll take the appointment at North Beach Specialty Center today at 11 AM.",
+   "agent": {
+    "said": [
+     "To confirm: New Patient Visit with Dr. Maria Garcia at North Beach Specialty Center, 481 Mission St, on Tuesday 13 October at 11 AM. It takes about 30 minutes. Would you like me to book it?"
+    ],
+    "passes": 1,
+    "seconds": 0.737,
+    "input_tokens": 1790,
+    "cached_tokens": 1536,
+    "output_tokens": 15,
+    "cost": 0.002705,
+    "tools": [
+     {
+      "tool": "choose_option",
+      "args": {
+       "option_id": "1"
+      },
+      "result": {
+       "ok": true,
+       "read_back": "New Patient Visit with Dr. Maria Garcia at North Beach Specialty Center, 481 Mission St, on Tuesday 13 October at 11 AM. It takes about 30 minutes.",
+       "note": "The code is reading the read_back to the caller and asking if they'd like to book it: don't repeat it. Call confirm_booking only after they say yes."
+      },
+      "stage": "booking",
+      "next_stage": null
+     }
+    ],
+    "problems": [],
+    "order": [
+     {
+      "tool": 0
+     },
+     {
+      "said": "To confirm: New Patient Visit with Dr. Maria Garcia at North Beach Specialty Center, 481 Mission St, on Tuesday 13 October at 11 AM. It takes about 30 minutes. Would you like me to book it?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "Yes, please book it.",
+   "agent": {
+    "said": [
+     "Your appointment is confirmed with Dr. Maria Garcia on Tuesday, October 13th at 11 AM. Thank you for calling, and goodbye!"
+    ],
+    "passes": 2,
+    "seconds": 1.655,
+    "input_tokens": 3114,
+    "cached_tokens": 1664,
+    "output_tokens": 40,
+    "cost": 0.006105,
+    "tools": [
+     {
+      "tool": "confirm_booking",
+      "args": {},
+      "result": {
+       "ok": true,
+       "booked": "New Patient Visit with Dr. Maria Garcia at North Beach Specialty Center, 481 Mission St, on Tuesday 13 October at 11 AM. It takes about 30 minutes."
+      },
+      "stage": "booking",
+      "next_stage": "end"
+     }
+    ],
+    "problems": [],
+    "order": [
+     {
+      "tool": 0
+     },
+     {
+      "said": "Your appointment is confirmed with Dr. Maria Garcia on Tuesday, October 13th at 11 AM. Thank you for calling, and goodbye!"
+     }
+    ]
+   },
+   "after_check_in": false
+  }
+ ],
+ "ended_by": "agent_ended",
+ "stopped_because": "",
+ "outcome": {
+  "status": "booked",
+  "bookings": [
+   {
+    "caller": "Priya Nair",
+    "patient_id": null,
+    "visit_type_id": "appt_001",
+    "provider_id": "prov_003",
+    "location_id": "loc_002",
+    "start": "2026-10-13T11:00:00",
+    "duration_min": 30
+   }
+  ],
+  "name_confirmed": true
+ },
+ "totals": {
+  "agent_input_tokens": 27392,
+  "agent_cached_tokens": 19840,
+  "agent_output_tokens": 383,
+  "agent_passes": 13,
+  "agent_cost": 0.047509,
+  "slowest_reply_seconds": 3.006,
+  "caller_lines": 9,
+  "caller_cost": 0.000829
+ },
+ "score": {
+  "passed": false,
+  "reasons": [
+   "Booked visit type appt_001, expected one of appt_002, appt_003."
+  ],
+  "bad_bookings": 0,
+  "staff_promise": false
+ }
+}
