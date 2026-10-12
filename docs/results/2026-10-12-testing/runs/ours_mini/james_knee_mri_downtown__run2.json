@@ -1,0 +1,427 @@
+{
+ "version": "ours_mini",
+ "model": "gpt-4o-mini",
+ "caller_model": "gpt-4o-mini",
+ "scenario": "james_knee_mri_downtown",
+ "title": "James Wilson: a knee MRI near Downtown (only 2 valid doctor-place pairs)",
+ "run": 2,
+ "clinic_time": "2026-10-13T09:00",
+ "ran_at": "2026-10-12T19:01:50",
+ "greeting": {
+  "said": [
+   "Hello, you've reached the clinics' scheduling line. How can I help you today?"
+  ],
+  "passes": 0,
+  "seconds": 0.0,
+  "input_tokens": 0,
+  "cached_tokens": 0,
+  "output_tokens": 0,
+  "cost": 0.0,
+  "tools": [],
+  "problems": [],
+  "order": [
+   {
+    "said": "Hello, you've reached the clinics' scheduling line. How can I help you today?"
+   }
+  ]
+ },
+ "turns": [
+  {
+   "caller": "Hi, I’d like to schedule a knee MRI.",
+   "agent": {
+    "said": [
+     "May I have your full name, please?"
+    ],
+    "passes": 1,
+    "seconds": 0.965,
+    "input_tokens": 2373,
+    "cached_tokens": 2304,
+    "output_tokens": 10,
+    "cost": 0.000189,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "May I have your full name, please?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "My name is James Wilson.",
+   "agent": {
+    "said": [
+     "Have you been a patient with us before?"
+    ],
+    "passes": 1,
+    "seconds": 0.796,
+    "input_tokens": 2396,
+    "cached_tokens": 2304,
+    "output_tokens": 10,
+    "cost": 0.000193,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "Have you been a patient with us before?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "Yes, I have.",
+   "agent": {
+    "said": [
+     "Please provide your date of birth."
+    ],
+    "passes": 1,
+    "seconds": 0.78,
+    "input_tokens": 2418,
+    "cached_tokens": 2304,
+    "output_tokens": 8,
+    "cost": 0.000195,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "Please provide your date of birth."
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "It's March 12th, 1984.",
+   "agent": {
+    "said": [
+     "Thank you. One moment, while I check your information."
+    ],
+    "passes": 1,
+    "seconds": 0.756,
+    "input_tokens": 2443,
+    "cached_tokens": 2304,
+    "output_tokens": 13,
+    "cost": 0.000201,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "Thank you. One moment, while I check your information."
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "Sure, take your time.",
+   "agent": {
+    "said": [
+     "Thank you for calling, James. For your knee MRI, there are several options available, specifically the MRI for the knee, which takes forty-five minutes and requires a referral. Would you like to proceed with that option?"
+    ],
+    "passes": 3,
+    "seconds": 3.333,
+    "input_tokens": 6746,
+    "cached_tokens": 5760,
+    "output_tokens": 101,
+    "cost": 0.000641,
+    "tools": [
+     {
+      "tool": "start_booking",
+      "args": {
+       "full_name": "James Wilson",
+       "returning": true,
+       "date_of_birth": "1984-03-12",
+       "visit_description": "knee MRI"
+      },
+      "result": {
+       "ok": true
+      },
+      "stage": "identify",
+      "next_stage": "visit_type"
+     },
+     {
+      "tool": "list_visit_types",
+      "args": {
+       "specialty": "Radiology"
+      },
+      "result": {
+       "ok": true,
+       "specialty": "Radiology",
+       "visit_types": [
+        {
+         "id": "appt_062",
+         "name": "X-Ray",
+         "minutes": 20,
+         "needs_referral": true,
+         "open_to_new_patients": false,
+         "can_book": true,
+         "why_not": []
+        },
+        {
+         "id": "appt_063",
+         "name": "MRI - Brain",
+         "minutes": 60,
+         "needs_referral": true,
+         "open_to_new_patients": false,
+         "can_book": true,
+         "why_not": []
+        },
+        {
+         "id": "appt_064",
+         "name": "MRI - Spine",
+         "minutes": 60,
+         "needs_referral": true,
+         "open_to_new_patients": false,
+         "can_book": true,
+         "why_not": []
+        },
+        {
+         "id": "appt_065",
+         "name": "MRI - Knee",
+         "minutes": 45,
+         "needs_referral": true,
+         "open_to_new_patients": false,
+         "can_book": true,
+         "why_not": []
+        },
+        {
+         "id": "appt_066",
+         "name": "CT Scan",
+         "minutes": 30,
+         "needs_referral": true,
+         "open_to_new_patients": false,
+         "can_book": true,
+         "why_not": []
+        },
+        {
+         "id": "appt_067",
+         "name": "Ultrasound",
+         "minutes": 30,
+         "needs_referral": true,
+         "open_to_new_patients": false,
+         "can_book": true,
+         "why_not": []
+        },
+        {
+         "id": "appt_068",
+         "name": "Mammogram",
+         "minutes": 30,
+         "needs_referral": false,
+         "open_to_new_patients": true,
+         "can_book": true,
+         "why_not": []
+        },
+        {
+         "id": "appt_069",
+         "name": "Bone Density Scan (DEXA)",
+         "minutes": 30,
+         "needs_referral": true,
+         "open_to_new_patients": false,
+         "can_book": true,
+         "why_not": []
+        }
+       ]
+      },
+      "stage": "visit_type",
+      "next_stage": null
+     }
+    ],
+    "problems": [],
+    "order": [
+     {
+      "tool": 0
+     },
+     {
+      "tool": 1
+     },
+     {
+      "said": "Thank you for calling, James. For your knee MRI, there are several options available, specifically the MRI for the knee, which takes forty-five minutes and requires a referral. Would you like to proceed with that option?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "Yes, that sounds good.",
+   "agent": {
+    "said": [
+     "You can see Dr. Linda Ramirez at Downtown Health Center on Tuesday at eleven, or Dr. Hannah Nguyen at Midtown Medical Group on Tuesday at two, or back with Dr. Linda Ramirez on Thursday at ten thirty. Which option would you like?"
+    ],
+    "passes": 2,
+    "seconds": 2.204,
+    "input_tokens": 3998,
+    "cached_tokens": 3328,
+    "output_tokens": 69,
+    "cost": 0.000392,
+    "tools": [
+     {
+      "tool": "choose_visit_type",
+      "args": {
+       "visit_type_id": "appt_065"
+      },
+      "result": {
+       "ok": true
+      },
+      "stage": "visit_type",
+      "next_stage": "booking"
+     }
+    ],
+    "problems": [],
+    "order": [
+     {
+      "tool": 0
+     },
+     {
+      "said": "You can see Dr. Linda Ramirez at Downtown Health Center on Tuesday at eleven, or Dr. Hannah Nguyen at Midtown Medical Group on Tuesday at two, or back with Dr. Linda Ramirez on Thursday at ten thirty. Which option would you like?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "I’d like to see Dr. Linda Ramirez on Tuesday at eleven.",
+   "agent": {
+    "said": [
+     "Great choice! I’ll confirm your appointment with Dr. Linda Ramirez at Downtown Health Center on Tuesday at eleven. Shall I go ahead and book it?"
+    ],
+    "passes": 1,
+    "seconds": 1.601,
+    "input_tokens": 1650,
+    "cached_tokens": 1536,
+    "output_tokens": 31,
+    "cost": 0.000151,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "Great choice! I’ll confirm your appointment with Dr. Linda Ramirez at Downtown Health Center on Tuesday at eleven. Shall I go ahead and book it?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "Yes, please book it.",
+   "agent": {
+    "said": [
+     "To confirm: MRI - Knee with Dr. Linda Ramirez at Downtown Health Center, 4455 Geary Blvd, on Tuesday 13 October at 11 AM. It takes about 45 minutes. Would you like me to book it?"
+    ],
+    "passes": 2,
+    "seconds": 1.777,
+    "input_tokens": 3434,
+    "cached_tokens": 3200,
+    "output_tokens": 25,
+    "cost": 0.00029,
+    "tools": [
+     {
+      "tool": "confirm_booking",
+      "args": {},
+      "result": {
+       "ok": false,
+       "error": "Nothing is chosen yet. Call choose_option first, read back, and ask the caller."
+      },
+      "stage": "booking",
+      "next_stage": null
+     },
+     {
+      "tool": "choose_option",
+      "args": {
+       "option_id": "1"
+      },
+      "result": {
+       "ok": true,
+       "read_back": "MRI - Knee with Dr. Linda Ramirez at Downtown Health Center, 4455 Geary Blvd, on Tuesday 13 October at 11 AM. It takes about 45 minutes.",
+       "note": "The code is reading the read_back to the caller and asking if they'd like to book it: don't repeat it. Call confirm_booking only after they say yes."
+      },
+      "stage": "booking",
+      "next_stage": null
+     }
+    ],
+    "problems": [],
+    "order": [
+     {
+      "tool": 0
+     },
+     {
+      "tool": 1
+     },
+     {
+      "said": "To confirm: MRI - Knee with Dr. Linda Ramirez at Downtown Health Center, 4455 Geary Blvd, on Tuesday 13 October at 11 AM. It takes about 45 minutes. Would you like me to book it?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "Yes, please go ahead and book it.",
+   "agent": {
+    "said": [
+     "Your MRI for the knee is confirmed with Dr. Linda Ramirez at Downtown Health Center on Tuesday, October 13th at 11 AM. Thank you, and have a great day!"
+    ],
+    "passes": 2,
+    "seconds": 1.957,
+    "input_tokens": 3070,
+    "cached_tokens": 2688,
+    "output_tokens": 48,
+    "cost": 0.000288,
+    "tools": [
+     {
+      "tool": "confirm_booking",
+      "args": {},
+      "result": {
+       "ok": true,
+       "booked": "MRI - Knee with Dr. Linda Ramirez at Downtown Health Center, 4455 Geary Blvd, on Tuesday 13 October at 11 AM. It takes about 45 minutes."
+      },
+      "stage": "booking",
+      "next_stage": "end"
+     }
+    ],
+    "problems": [],
+    "order": [
+     {
+      "tool": 0
+     },
+     {
+      "said": "Your MRI for the knee is confirmed with Dr. Linda Ramirez at Downtown Health Center on Tuesday, October 13th at 11 AM. Thank you, and have a great day!"
+     }
+    ]
+   },
+   "after_check_in": false
+  }
+ ],
+ "ended_by": "agent_ended",
+ "stopped_because": "",
+ "outcome": {
+  "status": "booked",
+  "bookings": [
+   {
+    "caller": "James Wilson",
+    "patient_id": "pat_001",
+    "visit_type_id": "appt_065",
+    "provider_id": "prov_014",
+    "location_id": "loc_004",
+    "start": "2026-10-13T11:00:00",
+    "duration_min": 45
+   }
+  ],
+  "name_confirmed": true
+ },
+ "totals": {
+  "agent_input_tokens": 28528,
+  "agent_cached_tokens": 25728,
+  "agent_output_tokens": 315,
+  "agent_passes": 14,
+  "agent_cost": 0.00254,
+  "slowest_reply_seconds": 3.333,
+  "caller_lines": 9,
+  "caller_cost": 0.000622
+ },
+ "score": {
+  "passed": true,
+  "reasons": [],
+  "bad_bookings": 0,
+  "staff_promise": false
+ }
+}

@@ -1,0 +1,501 @@
+{
+ "version": "ours_mini",
+ "model": "gpt-4o-mini",
+ "caller_model": "gpt-4o-mini",
+ "scenario": "james_changes_to_mri",
+ "title": "James Wilson: a Garcia skin check, then 'actually, a knee MRI'",
+ "run": 2,
+ "clinic_time": "2026-10-13T09:00",
+ "ran_at": "2026-10-12T19:03:08",
+ "greeting": {
+  "said": [
+   "Hello, you've reached the clinics' scheduling line. How can I help you today?"
+  ],
+  "passes": 0,
+  "seconds": 0.0,
+  "input_tokens": 0,
+  "cached_tokens": 0,
+  "output_tokens": 0,
+  "cost": 0.0,
+  "tools": [],
+  "problems": [],
+  "order": [
+   {
+    "said": "Hello, you've reached the clinics' scheduling line. How can I help you today?"
+   }
+  ]
+ },
+ "turns": [
+  {
+   "caller": "Hi, I’d like to schedule a skin check with Dr. Garcia, please.",
+   "agent": {
+    "said": [
+     "May I have your full name, please?"
+    ],
+    "passes": 1,
+    "seconds": 0.757,
+    "input_tokens": 2379,
+    "cached_tokens": 2304,
+    "output_tokens": 10,
+    "cost": 0.00019,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "May I have your full name, please?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "Sure, it's James Wilson.",
+   "agent": {
+    "said": [
+     "Have you been a patient with us before, James?"
+    ],
+    "passes": 1,
+    "seconds": 0.989,
+    "input_tokens": 2402,
+    "cached_tokens": 2304,
+    "output_tokens": 12,
+    "cost": 0.000195,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "Have you been a patient with us before, James?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "Yes, I have.",
+   "agent": {
+    "said": [
+     "Could you please provide your date of birth?"
+    ],
+    "passes": 1,
+    "seconds": 1.075,
+    "input_tokens": 2426,
+    "cached_tokens": 2304,
+    "output_tokens": 10,
+    "cost": 0.000197,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "Could you please provide your date of birth?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "It's March 12th, 1984.",
+   "agent": {
+    "said": [
+     "Thank you, James. I'll check the visit types for a skin check under Dermatology. One moment please.",
+     "For a skin check, you can choose between a Skin Cancer Screening or a Full Body Skin Exam, which is our usual choice. The Full Body Skin Exam includes a complete check of your skin, moles, and spots. Would you like to proceed with that option?"
+    ],
+    "passes": 3,
+    "seconds": 3.859,
+    "input_tokens": 6776,
+    "cached_tokens": 6016,
+    "output_tokens": 141,
+    "cost": 0.00065,
+    "tools": [
+     {
+      "tool": "start_booking",
+      "args": {
+       "full_name": "James Wilson",
+       "returning": true,
+       "date_of_birth": "1984-03-12",
+       "visit_description": "skin check",
+       "doctor_name": "Dr. Garcia"
+      },
+      "result": {
+       "ok": true
+      },
+      "stage": "identify",
+      "next_stage": "visit_type"
+     },
+     {
+      "tool": "list_visit_types",
+      "args": {
+       "specialty": "Dermatology"
+      },
+      "result": {
+       "ok": true,
+       "specialty": "Dermatology",
+       "visit_types": [
+        {
+         "id": "appt_026",
+         "name": "Dermatology Consultation",
+         "minutes": 30,
+         "needs_referral": true,
+         "open_to_new_patients": true,
+         "can_book": false,
+         "why_not": [
+          "Dermatology Consultation needs a referral to Dermatology, and there isn't one on file."
+         ],
+         "description": "A first visit with a dermatologist about a skin problem.",
+         "usual_choice": false
+        },
+        {
+         "id": "appt_027",
+         "name": "Skin Cancer Screening",
+         "minutes": 30,
+         "needs_referral": false,
+         "open_to_new_patients": true,
+         "can_book": true,
+         "why_not": [],
+         "description": "A check of particular moles or spots you're worried about.",
+         "usual_choice": false
+        },
+        {
+         "id": "appt_028",
+         "name": "Full Body Skin Exam",
+         "minutes": 30,
+         "needs_referral": false,
+         "open_to_new_patients": true,
+         "can_book": true,
+         "why_not": [],
+         "description": "A head-to-toe check of all your skin, moles and spots included.",
+         "usual_choice": true
+        },
+        {
+         "id": "appt_029",
+         "name": "Mole Removal",
+         "minutes": 30,
+         "needs_referral": true,
+         "open_to_new_patients": false,
+         "can_book": false,
+         "why_not": [
+          "Mole Removal needs a referral to Dermatology, and there isn't one on file."
+         ]
+        },
+        {
+         "id": "appt_030",
+         "name": "Acne Follow-up",
+         "minutes": 15,
+         "needs_referral": false,
+         "open_to_new_patients": false,
+         "can_book": true,
+         "why_not": []
+        },
+        {
+         "id": "appt_031",
+         "name": "Cosmetic Consultation",
+         "minutes": 30,
+         "needs_referral": false,
+         "open_to_new_patients": true,
+         "can_book": true,
+         "why_not": []
+        }
+       ]
+      },
+      "stage": "visit_type",
+      "next_stage": null
+     }
+    ],
+    "problems": [],
+    "order": [
+     {
+      "tool": 0
+     },
+     {
+      "said": "Thank you, James. I'll check the visit types for a skin check under Dermatology. One moment please."
+     },
+     {
+      "tool": 1
+     },
+     {
+      "said": "For a skin check, you can choose between a Skin Cancer Screening or a Full Body Skin Exam, which is our usual choice. The Full Body Skin Exam includes a complete check of your skin, moles, and spots. Would you like to proceed with that option?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "Actually, I think the skin check can wait. What I really need is a knee MRI, which my doctor referred me for.",
+   "agent": {
+    "said": [
+     "I'll look up the options for a knee MRI. One moment, please."
+    ],
+    "passes": 1,
+    "seconds": 0.76,
+    "input_tokens": 2489,
+    "cached_tokens": 2432,
+    "output_tokens": 16,
+    "cost": 0.000201,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "I'll look up the options for a knee MRI. One moment, please."
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "Sure, thank you.",
+   "agent": {
+    "said": [
+     "You can schedule a knee MRI, which requires a referral. Would you like to proceed with booking that?"
+    ],
+    "passes": 2,
+    "seconds": 1.935,
+    "input_tokens": 5479,
+    "cached_tokens": 4864,
+    "output_tokens": 39,
+    "cost": 0.00048,
+    "tools": [
+     {
+      "tool": "list_visit_types",
+      "args": {
+       "specialty": "Radiology"
+      },
+      "result": {
+       "ok": true,
+       "specialty": "Radiology",
+       "visit_types": [
+        {
+         "id": "appt_062",
+         "name": "X-Ray",
+         "minutes": 20,
+         "needs_referral": true,
+         "open_to_new_patients": false,
+         "can_book": true,
+         "why_not": []
+        },
+        {
+         "id": "appt_063",
+         "name": "MRI - Brain",
+         "minutes": 60,
+         "needs_referral": true,
+         "open_to_new_patients": false,
+         "can_book": true,
+         "why_not": []
+        },
+        {
+         "id": "appt_064",
+         "name": "MRI - Spine",
+         "minutes": 60,
+         "needs_referral": true,
+         "open_to_new_patients": false,
+         "can_book": true,
+         "why_not": []
+        },
+        {
+         "id": "appt_065",
+         "name": "MRI - Knee",
+         "minutes": 45,
+         "needs_referral": true,
+         "open_to_new_patients": false,
+         "can_book": true,
+         "why_not": []
+        },
+        {
+         "id": "appt_066",
+         "name": "CT Scan",
+         "minutes": 30,
+         "needs_referral": true,
+         "open_to_new_patients": false,
+         "can_book": true,
+         "why_not": []
+        },
+        {
+         "id": "appt_067",
+         "name": "Ultrasound",
+         "minutes": 30,
+         "needs_referral": true,
+         "open_to_new_patients": false,
+         "can_book": true,
+         "why_not": []
+        },
+        {
+         "id": "appt_068",
+         "name": "Mammogram",
+         "minutes": 30,
+         "needs_referral": false,
+         "open_to_new_patients": true,
+         "can_book": true,
+         "why_not": []
+        },
+        {
+         "id": "appt_069",
+         "name": "Bone Density Scan (DEXA)",
+         "minutes": 30,
+         "needs_referral": true,
+         "open_to_new_patients": false,
+         "can_book": true,
+         "why_not": []
+        }
+       ]
+      },
+      "stage": "visit_type",
+      "next_stage": null
+     }
+    ],
+    "problems": [],
+    "order": [
+     {
+      "tool": 0
+     },
+     {
+      "said": "You can schedule a knee MRI, which requires a referral. Would you like to proceed with booking that?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "Yes, let's go ahead and book it.",
+   "agent": {
+    "said": [
+     "It looks like Dr. Garcia doesn't offer MRI - Knee. You can choose between Dr. Linda Ramirez at Downtown Health Center today at 11 AM, Dr. Hannah Nguyen at Midtown Medical Group at 2 PM today, or Dr. Linda Ramirez again on Thursday at 10:30 AM. Which option would you prefer?"
+    ],
+    "passes": 2,
+    "seconds": 2.315,
+    "input_tokens": 4656,
+    "cached_tokens": 4480,
+    "output_tokens": 85,
+    "cost": 0.000413,
+    "tools": [
+     {
+      "tool": "choose_visit_type",
+      "args": {
+       "visit_type_id": "appt_065"
+      },
+      "result": {
+       "ok": true
+      },
+      "stage": "visit_type",
+      "next_stage": "booking"
+     }
+    ],
+    "problems": [],
+    "order": [
+     {
+      "tool": 0
+     },
+     {
+      "said": "It looks like Dr. Garcia doesn't offer MRI - Knee. You can choose between Dr. Linda Ramirez at Downtown Health Center today at 11 AM, Dr. Hannah Nguyen at Midtown Medical Group at 2 PM today, or Dr. Linda Ramirez again on Thursday at 10:30 AM. Which option would you prefer?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "I'll go with Dr. Linda Ramirez at Downtown Health Center today at 11 AM.",
+   "agent": {
+    "said": [
+     "To confirm: MRI - Knee with Dr. Linda Ramirez at Downtown Health Center, 4455 Geary Blvd, on Tuesday 13 October at 11 AM. It takes about 45 minutes. Would you like me to book it?"
+    ],
+    "passes": 1,
+    "seconds": 1.038,
+    "input_tokens": 1746,
+    "cached_tokens": 1664,
+    "output_tokens": 15,
+    "cost": 0.000146,
+    "tools": [
+     {
+      "tool": "choose_option",
+      "args": {
+       "option_id": "1"
+      },
+      "result": {
+       "ok": true,
+       "read_back": "MRI - Knee with Dr. Linda Ramirez at Downtown Health Center, 4455 Geary Blvd, on Tuesday 13 October at 11 AM. It takes about 45 minutes.",
+       "note": "The code is reading the read_back to the caller and asking if they'd like to book it: don't repeat it. Call confirm_booking only after they say yes."
+      },
+      "stage": "booking",
+      "next_stage": null
+     }
+    ],
+    "problems": [],
+    "order": [
+     {
+      "tool": 0
+     },
+     {
+      "said": "To confirm: MRI - Knee with Dr. Linda Ramirez at Downtown Health Center, 4455 Geary Blvd, on Tuesday 13 October at 11 AM. It takes about 45 minutes. Would you like me to book it?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "Yes, please book it.",
+   "agent": {
+    "said": [
+     "Your MRI for your knee with Dr. Linda Ramirez is confirmed for Tuesday, October 13th at 11 AM. Thank you, and have a great day!"
+    ],
+    "passes": 2,
+    "seconds": 1.824,
+    "input_tokens": 3073,
+    "cached_tokens": 2688,
+    "output_tokens": 44,
+    "cost": 0.000286,
+    "tools": [
+     {
+      "tool": "confirm_booking",
+      "args": {},
+      "result": {
+       "ok": true,
+       "booked": "MRI - Knee with Dr. Linda Ramirez at Downtown Health Center, 4455 Geary Blvd, on Tuesday 13 October at 11 AM. It takes about 45 minutes."
+      },
+      "stage": "booking",
+      "next_stage": "end"
+     }
+    ],
+    "problems": [],
+    "order": [
+     {
+      "tool": 0
+     },
+     {
+      "said": "Your MRI for your knee with Dr. Linda Ramirez is confirmed for Tuesday, October 13th at 11 AM. Thank you, and have a great day!"
+     }
+    ]
+   },
+   "after_check_in": false
+  }
+ ],
+ "ended_by": "agent_ended",
+ "stopped_because": "",
+ "outcome": {
+  "status": "booked",
+  "bookings": [
+   {
+    "caller": "James Wilson",
+    "patient_id": "pat_001",
+    "visit_type_id": "appt_065",
+    "provider_id": "prov_014",
+    "location_id": "loc_004",
+    "start": "2026-10-13T11:00:00",
+    "duration_min": 45
+   }
+  ],
+  "name_confirmed": true
+ },
+ "totals": {
+  "agent_input_tokens": 31426,
+  "agent_cached_tokens": 29056,
+  "agent_output_tokens": 372,
+  "agent_passes": 14,
+  "agent_cost": 0.002758,
+  "slowest_reply_seconds": 3.859,
+  "caller_lines": 9,
+  "caller_cost": 0.000759
+ },
+ "score": {
+  "passed": true,
+  "reasons": [],
+  "bad_bookings": 0,
+  "staff_promise": false
+ }
+}

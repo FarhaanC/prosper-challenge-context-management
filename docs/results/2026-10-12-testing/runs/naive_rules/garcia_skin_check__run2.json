@@ -1,0 +1,430 @@
+{
+ "version": "naive_rules",
+ "model": "gpt-4o",
+ "caller_model": "gpt-4o-mini",
+ "scenario": "garcia_skin_check",
+ "title": "New patient: a skin check with Dr. Garcia (no Garcia does skin checks)",
+ "run": 2,
+ "clinic_time": "2026-10-13T09:00",
+ "ran_at": "2026-10-12T18:59:23",
+ "greeting": {
+  "said": [
+   "Hello, you've reached the clinics' scheduling line. How can I help you today?"
+  ],
+  "passes": 0,
+  "seconds": 0.0,
+  "input_tokens": 0,
+  "cached_tokens": 0,
+  "output_tokens": 0,
+  "cost": 0.0,
+  "tools": [],
+  "problems": [],
+  "order": [
+   {
+    "said": "Hello, you've reached the clinics' scheduling line. How can I help you today?"
+   }
+  ]
+ },
+ "turns": [
+  {
+   "caller": "Hi, I’d like to schedule a skin check for a couple of moles, please. A friend recommended Dr. Garcia.",
+   "agent": {
+    "said": [
+     "Could you please provide your full name and let me know if you've been a patient with us before?"
+    ],
+    "passes": 1,
+    "seconds": 0.787,
+    "input_tokens": 10004,
+    "cached_tokens": 9088,
+    "output_tokens": 21,
+    "cost": 0.01386,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "Could you please provide your full name and let me know if you've been a patient with us before?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "My name is Lena Park, spelled L, E, N, A and P, A, R, K. I have never been a patient here.",
+   "agent": {
+    "said": [
+     "Thank you, Lena. For a new patient like you, the most suitable visit is a \"Skin Cancer Screening,\" a check of particular moles or spots you're worried about. Would that work for you?"
+    ],
+    "passes": 1,
+    "seconds": 1.036,
+    "input_tokens": 10063,
+    "cached_tokens": 9856,
+    "output_tokens": 42,
+    "cost": 0.013258,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "Thank you, Lena. For a new patient like you, the most suitable visit is a \"Skin Cancer Screening,\" a check of particular moles or spots you're worried about. Would that work for you?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "Yes, that works for me.",
+   "agent": {
+    "said": [
+     "Dr. Maria Garcia practices Family Medicine and offers dermatology visits at Mission Bay, North Beach, and Richmond locations. Which location would you prefer?"
+    ],
+    "passes": 1,
+    "seconds": 0.898,
+    "input_tokens": 10119,
+    "cached_tokens": 9088,
+    "output_tokens": 30,
+    "cost": 0.014238,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "Dr. Maria Garcia practices Family Medicine and offers dermatology visits at Mission Bay, North Beach, and Richmond locations. Which location would you prefer?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "I’d prefer the Mission Bay location, please.",
+   "agent": {
+    "said": [
+     "Let's find some available times for your skin cancer screening with Dr. Maria Garcia at the Mission Bay location. Please hold on a moment.",
+     "Currently, there are no available times with Dr. Maria Garcia at the Mission Bay location for your appointment type. Would you be open to seeing another doctor or visiting a different location?"
+    ],
+    "passes": 2,
+    "seconds": 2.119,
+    "input_tokens": 20797,
+    "cached_tokens": 19968,
+    "output_tokens": 91,
+    "cost": 0.027943,
+    "tools": [
+     {
+      "tool": "find_open_times",
+      "args": {
+       "visit_type_id": "appt_027",
+       "provider_id": "prov_003"
+      },
+      "result": {
+       "ok": true,
+       "times": [
+        {
+         "start": "2026-10-13T11:00",
+         "spoken": "Tuesday 13 October at 11 AM",
+         "provider_id": "prov_003",
+         "doctor": "Dr. Maria Garcia",
+         "location_id": "loc_002",
+         "location": "North Beach Specialty Center"
+        },
+        {
+         "start": "2026-10-13T13:00",
+         "spoken": "Tuesday 13 October at 1 PM",
+         "provider_id": "prov_003",
+         "doctor": "Dr. Maria Garcia",
+         "location_id": "loc_002",
+         "location": "North Beach Specialty Center"
+        },
+        {
+         "start": "2026-10-13T13:30",
+         "spoken": "Tuesday 13 October at 1:30 PM",
+         "provider_id": "prov_003",
+         "doctor": "Dr. Maria Garcia",
+         "location_id": "loc_002",
+         "location": "North Beach Specialty Center"
+        },
+        {
+         "start": "2026-10-13T14:00",
+         "spoken": "Tuesday 13 October at 2 PM",
+         "provider_id": "prov_003",
+         "doctor": "Dr. Maria Garcia",
+         "location_id": "loc_002",
+         "location": "North Beach Specialty Center"
+        },
+        {
+         "start": "2026-10-13T14:30",
+         "spoken": "Tuesday 13 October at 2:30 PM",
+         "provider_id": "prov_003",
+         "doctor": "Dr. Maria Garcia",
+         "location_id": "loc_002",
+         "location": "North Beach Specialty Center"
+        },
+        {
+         "start": "2026-10-13T15:30",
+         "spoken": "Tuesday 13 October at 3:30 PM",
+         "provider_id": "prov_003",
+         "doctor": "Dr. Maria Garcia",
+         "location_id": "loc_002",
+         "location": "North Beach Specialty Center"
+        }
+       ]
+      },
+      "stage": "naive",
+      "next_stage": null
+     }
+    ],
+    "problems": [],
+    "order": [
+     {
+      "said": "Let's find some available times for your skin cancer screening with Dr. Maria Garcia at the Mission Bay location. Please hold on a moment."
+     },
+     {
+      "tool": 0
+     },
+     {
+      "said": "Currently, there are no available times with Dr. Maria Garcia at the Mission Bay location for your appointment type. Would you be open to seeing another doctor or visiting a different location?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "Yes, that's fine. Which other doctors and locations do you have available?",
+   "agent": {
+    "said": [
+     "Let me check the availability of other doctors for a skin cancer screening. Please hold on a moment.",
+     "I have available appointments with Dr. Wei Sato at Mission Bay Health Center tomorrow at eleven AM, or with Dr. Daniel Chen at Richmond Care Center at one PM. Which do you prefer?"
+    ],
+    "passes": 2,
+    "seconds": 2.101,
+    "input_tokens": 21835,
+    "cached_tokens": 20992,
+    "output_tokens": 80,
+    "cost": 0.029147,
+    "tools": [
+     {
+      "tool": "find_open_times",
+      "args": {
+       "visit_type_id": "appt_027"
+      },
+      "result": {
+       "ok": true,
+       "times": [
+        {
+         "start": "2026-10-13T11:00",
+         "spoken": "Tuesday 13 October at 11 AM",
+         "provider_id": "prov_027",
+         "doctor": "Dr. Kenji Kim",
+         "location_id": "loc_005",
+         "location": "Midtown Medical Group"
+        },
+        {
+         "start": "2026-10-13T11:00",
+         "spoken": "Tuesday 13 October at 11 AM",
+         "provider_id": "prov_048",
+         "doctor": "Dr. Wei Sato",
+         "location_id": "loc_000",
+         "location": "Mission Bay Health Center"
+        },
+        {
+         "start": "2026-10-13T11:30",
+         "spoken": "Tuesday 13 October at 11:30 AM",
+         "provider_id": "prov_027",
+         "doctor": "Dr. Kenji Kim",
+         "location_id": "loc_005",
+         "location": "Midtown Medical Group"
+        },
+        {
+         "start": "2026-10-13T11:30",
+         "spoken": "Tuesday 13 October at 11:30 AM",
+         "provider_id": "prov_035",
+         "doctor": "Dr. Daniel Smith",
+         "location_id": "loc_001",
+         "location": "Mission District Family Clinic"
+        },
+        {
+         "start": "2026-10-13T11:30",
+         "spoken": "Tuesday 13 October at 11:30 AM",
+         "provider_id": "prov_048",
+         "doctor": "Dr. Wei Sato",
+         "location_id": "loc_000",
+         "location": "Mission Bay Health Center"
+        },
+        {
+         "start": "2026-10-13T13:00",
+         "spoken": "Tuesday 13 October at 1 PM",
+         "provider_id": "prov_001",
+         "doctor": "Dr. Daniel Chen",
+         "location_id": "loc_007",
+         "location": "Richmond Care Center"
+        }
+       ]
+      },
+      "stage": "naive",
+      "next_stage": null
+     }
+    ],
+    "problems": [],
+    "order": [
+     {
+      "said": "Let me check the availability of other doctors for a skin cancer screening. Please hold on a moment."
+     },
+     {
+      "tool": 0
+     },
+     {
+      "said": "I have available appointments with Dr. Wei Sato at Mission Bay Health Center tomorrow at eleven AM, or with Dr. Daniel Chen at Richmond Care Center at one PM. Which do you prefer?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "I’ll go with Dr. Wei Sato at the Mission Bay Health Center tomorrow at eleven AM.",
+   "agent": {
+    "said": [
+     "Just to confirm, you want to book a Skin Cancer Screening with Dr. Wei Sato at Mission Bay Health Center on Tuesday, 13 October at eleven AM. Would you like me to proceed with the booking?"
+    ],
+    "passes": 1,
+    "seconds": 1.022,
+    "input_tokens": 11212,
+    "cached_tokens": 11008,
+    "output_tokens": 44,
+    "cost": 0.01471,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "Just to confirm, you want to book a Skin Cancer Screening with Dr. Wei Sato at Mission Bay Health Center on Tuesday, 13 October at eleven AM. Would you like me to proceed with the booking?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "Yes, please proceed with the booking.",
+   "agent": {
+    "said": [
+     "It seems there was an issue, as Dr. Wei Sato unfortunately isn't accepting new patients. How about booking with Dr. Daniel Chen at Richmond Care Center instead?"
+    ],
+    "passes": 2,
+    "seconds": 2.007,
+    "input_tokens": 22626,
+    "cached_tokens": 22272,
+    "output_tokens": 87,
+    "cost": 0.029595,
+    "tools": [
+     {
+      "tool": "book_appointment",
+      "args": {
+       "patient_name": "Lena Park",
+       "visit_type_id": "appt_027",
+       "provider_id": "prov_048",
+       "location_id": "loc_000",
+       "start": "2026-10-13T11:00"
+      },
+      "result": {
+       "ok": false,
+       "problems": [
+        "Dr. Wei Sato isn't taking new patients."
+       ]
+      },
+      "stage": "naive",
+      "next_stage": null
+     }
+    ],
+    "problems": [],
+    "order": [
+     {
+      "tool": 0
+     },
+     {
+      "said": "It seems there was an issue, as Dr. Wei Sato unfortunately isn't accepting new patients. How about booking with Dr. Daniel Chen at Richmond Care Center instead?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "That sounds good. I’d like to book with Dr. Daniel Chen at Richmond Care Center, then.",
+   "agent": {
+    "said": [
+     "Your appointment with Dr. Daniel Chen at Richmond Care Center is booked for Tuesday, 13 October at one PM. Thank you for calling, and take care!"
+    ],
+    "passes": 2,
+    "seconds": 2.034,
+    "input_tokens": 22963,
+    "cached_tokens": 22528,
+    "output_tokens": 86,
+    "cost": 0.030108,
+    "tools": [
+     {
+      "tool": "book_appointment",
+      "args": {
+       "patient_name": "Lena Park",
+       "visit_type_id": "appt_027",
+       "provider_id": "prov_001",
+       "location_id": "loc_007",
+       "start": "2026-10-13T13:00"
+      },
+      "result": {
+       "ok": true,
+       "booked": {
+        "patient_name": "Lena Park",
+        "patient_id": null,
+        "visit_type_id": "appt_027",
+        "provider_id": "prov_001",
+        "location_id": "loc_007",
+        "start": "2026-10-13T13:00"
+       }
+      },
+      "stage": "naive",
+      "next_stage": null
+     }
+    ],
+    "problems": [],
+    "order": [
+     {
+      "tool": 0
+     },
+     {
+      "said": "Your appointment with Dr. Daniel Chen at Richmond Care Center is booked for Tuesday, 13 October at one PM. Thank you for calling, and take care!"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "Thank you! Goodbye!",
+   "agent": null
+  }
+ ],
+ "ended_by": "caller_hung_up",
+ "stopped_because": "",
+ "outcome": {
+  "status": "booked",
+  "bookings": [
+   {
+    "patient_name": "Lena Park",
+    "patient_id": null,
+    "visit_type_id": "appt_027",
+    "provider_id": "prov_001",
+    "location_id": "loc_007",
+    "start": "2026-10-13T13:00"
+   }
+  ],
+  "name_confirmed": null
+ },
+ "totals": {
+  "agent_input_tokens": 129619,
+  "agent_cached_tokens": 124800,
+  "agent_output_tokens": 481,
+  "agent_passes": 12,
+  "agent_cost": 0.172859,
+  "slowest_reply_seconds": 2.119,
+  "caller_lines": 9,
+  "caller_cost": 0.00092
+ },
+ "score": {
+  "passed": true,
+  "reasons": [],
+  "bad_bookings": 0,
+  "staff_promise": false
+ }
+}

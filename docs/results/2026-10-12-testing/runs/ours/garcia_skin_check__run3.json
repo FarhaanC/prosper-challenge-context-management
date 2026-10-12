@@ -1,0 +1,310 @@
+{
+ "version": "ours",
+ "model": "gpt-4o",
+ "caller_model": "gpt-4o-mini",
+ "scenario": "garcia_skin_check",
+ "title": "New patient: a skin check with Dr. Garcia (no Garcia does skin checks)",
+ "run": 3,
+ "clinic_time": "2026-10-13T09:00",
+ "ran_at": "2026-10-12T19:06:39",
+ "greeting": {
+  "said": [
+   "Hello, you've reached the clinics' scheduling line. How can I help you today?"
+  ],
+  "passes": 0,
+  "seconds": 0.0,
+  "input_tokens": 0,
+  "cached_tokens": 0,
+  "output_tokens": 0,
+  "cost": 0.0,
+  "tools": [],
+  "problems": [],
+  "order": [
+   {
+    "said": "Hello, you've reached the clinics' scheduling line. How can I help you today?"
+   }
+  ]
+ },
+ "turns": [
+  {
+   "caller": "Hi, I'd like to schedule a skin check for a couple of moles. A friend recommended Dr. Garcia.",
+   "agent": {
+    "said": [
+     "Can I get your full name, please?"
+    ],
+    "passes": 1,
+    "seconds": 1.021,
+    "input_tokens": 2385,
+    "cached_tokens": 1920,
+    "output_tokens": 10,
+    "cost": 0.003662,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "Can I get your full name, please?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "Sure, it's Lena Park. That's L, E, N, A, and P, A, R, K.",
+   "agent": {
+    "said": [
+     "Thank you. Have you been a patient with us before, Lena?"
+    ],
+    "passes": 1,
+    "seconds": 0.967,
+    "input_tokens": 2426,
+    "cached_tokens": 2176,
+    "output_tokens": 15,
+    "cost": 0.003495,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "Thank you. Have you been a patient with us before, Lena?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "No, I've never been a patient here.",
+   "agent": {
+    "said": [
+     "Let me confirm your first name spelling: L, E, N, A. Is that correct?"
+    ],
+    "passes": 1,
+    "seconds": 0.732,
+    "input_tokens": 2457,
+    "cached_tokens": 2304,
+    "output_tokens": 21,
+    "cost": 0.003472,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "Let me confirm your first name spelling: L, E, N, A. Is that correct?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "Yes, that's correct.",
+   "agent": {
+    "said": [
+     "Now, let's confirm your last name: P, A, R, K. Is that right?"
+    ],
+    "passes": 1,
+    "seconds": 0.761,
+    "input_tokens": 2490,
+    "cached_tokens": 2304,
+    "output_tokens": 21,
+    "cost": 0.003555,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "Now, let's confirm your last name: P, A, R, K. Is that right?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "Yes, that's right.",
+   "agent": {
+    "said": [
+     "Thank you, Lena. We can book a Skin Cancer Screening, a Full Body Skin Exam, or a Cosmetic Consultation. Which one suits your needs?"
+    ],
+    "passes": 2,
+    "seconds": 2.228,
+    "input_tokens": 4669,
+    "cached_tokens": 4224,
+    "output_tokens": 105,
+    "cost": 0.007443,
+    "tools": [
+     {
+      "tool": "start_booking",
+      "args": {
+       "full_name": "Lena Park",
+       "returning": false,
+       "spelled_first_name": "L, E, N, A",
+       "spelled_last_name": "P, A, R, K",
+       "visit_description": "skin check for a couple of moles",
+       "specialty": "Dermatology",
+       "doctor_name": "Dr. Garcia"
+      },
+      "result": {
+       "ok": true
+      },
+      "stage": "identify",
+      "next_stage": "visit_type"
+     }
+    ],
+    "problems": [],
+    "order": [
+     {
+      "tool": 0
+     },
+     {
+      "said": "Thank you, Lena. We can book a Skin Cancer Screening, a Full Body Skin Exam, or a Cosmetic Consultation. Which one suits your needs?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "I just want my moles checked, so a Skin Cancer Screening would be fine.",
+   "agent": {
+    "said": [
+     "Great choice. I'll start setting up the Skin Cancer Screening for you.",
+     "Dr. Garcia doesn't offer Skin Cancer Screenings, but we have options available with other doctors. You can see Dr. Kenji Kim at 11 AM in Hayes Valley, Dr. Daniel Smith at 11:30 AM in the Mission District, or Dr. Daniel Chen at 1 PM in Richmond. Which would you prefer?"
+    ],
+    "passes": 2,
+    "seconds": 2.011,
+    "input_tokens": 3865,
+    "cached_tokens": 2048,
+    "output_tokens": 102,
+    "cost": 0.008122,
+    "tools": [
+     {
+      "tool": "choose_visit_type",
+      "args": {
+       "visit_type_id": "appt_027"
+      },
+      "result": {
+       "ok": true
+      },
+      "stage": "visit_type",
+      "next_stage": "booking"
+     }
+    ],
+    "problems": [],
+    "order": [
+     {
+      "said": "Great choice. I'll start setting up the Skin Cancer Screening for you."
+     },
+     {
+      "tool": 0
+     },
+     {
+      "said": "Dr. Garcia doesn't offer Skin Cancer Screenings, but we have options available with other doctors. You can see Dr. Kenji Kim at 11 AM in Hayes Valley, Dr. Daniel Smith at 11:30 AM in the Mission District, or Dr. Daniel Chen at 1 PM in Richmond. Which would you prefer?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "I'll go with Dr. Kenji Kim at 11 AM in Hayes Valley.",
+   "agent": {
+    "said": [
+     "To confirm: Skin Cancer Screening with Dr. Kenji Kim at Midtown Medical Group, 2099 Market St, on Tuesday 13 October at 11 AM. It takes about 30 minutes. Would you like me to book it?"
+    ],
+    "passes": 1,
+    "seconds": 0.63,
+    "input_tokens": 1755,
+    "cached_tokens": 1536,
+    "output_tokens": 15,
+    "cost": 0.002618,
+    "tools": [
+     {
+      "tool": "choose_option",
+      "args": {
+       "option_id": "1"
+      },
+      "result": {
+       "ok": true,
+       "read_back": "Skin Cancer Screening with Dr. Kenji Kim at Midtown Medical Group, 2099 Market St, on Tuesday 13 October at 11 AM. It takes about 30 minutes.",
+       "note": "The code is reading the read_back to the caller and asking if they'd like to book it: don't repeat it. Call confirm_booking only after they say yes."
+      },
+      "stage": "booking",
+      "next_stage": null
+     }
+    ],
+    "problems": [],
+    "order": [
+     {
+      "tool": 0
+     },
+     {
+      "said": "To confirm: Skin Cancer Screening with Dr. Kenji Kim at Midtown Medical Group, 2099 Market St, on Tuesday 13 October at 11 AM. It takes about 30 minutes. Would you like me to book it?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "Yes, please book it.",
+   "agent": {
+    "said": [
+     "Your Skin Cancer Screening with Dr. Kenji Kim is confirmed for Tuesday, October 13th at 11 AM. Thank you for choosing us and goodbye!"
+    ],
+    "passes": 2,
+    "seconds": 1.567,
+    "input_tokens": 3082,
+    "cached_tokens": 2560,
+    "output_tokens": 43,
+    "cost": 0.004935,
+    "tools": [
+     {
+      "tool": "confirm_booking",
+      "args": {},
+      "result": {
+       "ok": true,
+       "booked": "Skin Cancer Screening with Dr. Kenji Kim at Midtown Medical Group, 2099 Market St, on Tuesday 13 October at 11 AM. It takes about 30 minutes."
+      },
+      "stage": "booking",
+      "next_stage": "end"
+     }
+    ],
+    "problems": [],
+    "order": [
+     {
+      "tool": 0
+     },
+     {
+      "said": "Your Skin Cancer Screening with Dr. Kenji Kim is confirmed for Tuesday, October 13th at 11 AM. Thank you for choosing us and goodbye!"
+     }
+    ]
+   },
+   "after_check_in": false
+  }
+ ],
+ "ended_by": "agent_ended",
+ "stopped_because": "",
+ "outcome": {
+  "status": "booked",
+  "bookings": [
+   {
+    "caller": "Lena Park",
+    "patient_id": null,
+    "visit_type_id": "appt_027",
+    "provider_id": "prov_027",
+    "location_id": "loc_005",
+    "start": "2026-10-13T11:00:00",
+    "duration_min": 30
+   }
+  ],
+  "name_confirmed": true
+ },
+ "totals": {
+  "agent_input_tokens": 23129,
+  "agent_cached_tokens": 19072,
+  "agent_output_tokens": 332,
+  "agent_passes": 11,
+  "agent_cost": 0.037302,
+  "slowest_reply_seconds": 2.228,
+  "caller_lines": 8,
+  "caller_cost": 0.000679
+ },
+ "score": {
+  "passed": true,
+  "reasons": [],
+  "bad_bookings": 0,
+  "staff_promise": false
+ }
+}

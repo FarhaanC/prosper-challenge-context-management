@@ -1,0 +1,494 @@
+{
+ "version": "ours_mini",
+ "model": "gpt-4o-mini",
+ "caller_model": "gpt-4o-mini",
+ "scenario": "maria_garcia_checkup",
+ "title": "New patient: a check-up with Dr. Maria Garcia (there are two)",
+ "run": 3,
+ "clinic_time": "2026-10-13T09:00",
+ "ran_at": "2026-10-12T19:11:06",
+ "greeting": {
+  "said": [
+   "Hello, you've reached the clinics' scheduling line. How can I help you today?"
+  ],
+  "passes": 0,
+  "seconds": 0.0,
+  "input_tokens": 0,
+  "cached_tokens": 0,
+  "output_tokens": 0,
+  "cost": 0.0,
+  "tools": [],
+  "problems": [],
+  "order": [
+   {
+    "said": "Hello, you've reached the clinics' scheduling line. How can I help you today?"
+   }
+  ]
+ },
+ "turns": [
+  {
+   "caller": "Hi, I’d like to schedule a yearly check-up with Dr. Maria Garcia. A colleague recommended her.",
+   "agent": {
+    "said": [
+     "Can I have your full name, please?"
+    ],
+    "passes": 1,
+    "seconds": 0.778,
+    "input_tokens": 2384,
+    "cached_tokens": 2304,
+    "output_tokens": 10,
+    "cost": 0.000191,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "Can I have your full name, please?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "Sure, it's Priya Nair.",
+   "agent": {
+    "said": [
+     "Have you been a patient with us before?"
+    ],
+    "passes": 1,
+    "seconds": 1.193,
+    "input_tokens": 2409,
+    "cached_tokens": 2304,
+    "output_tokens": 10,
+    "cost": 0.000195,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "Have you been a patient with us before?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "No, I’ve never been a patient here before.",
+   "agent": {
+    "said": [
+     "Could you please spell your first name for me?"
+    ],
+    "passes": 1,
+    "seconds": 0.797,
+    "input_tokens": 2437,
+    "cached_tokens": 2304,
+    "output_tokens": 11,
+    "cost": 0.000199,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "Could you please spell your first name for me?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "Of course, it's P, R, I, Y, A.",
+   "agent": {
+    "said": [
+     "Is that correct?"
+    ],
+    "passes": 1,
+    "seconds": 0.982,
+    "input_tokens": 2469,
+    "cached_tokens": 2304,
+    "output_tokens": 5,
+    "cost": 0.000201,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "Is that correct?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "Yes, that’s correct.",
+   "agent": {
+    "said": [
+     "Now, please spell your last name."
+    ],
+    "passes": 1,
+    "seconds": 0.746,
+    "input_tokens": 2487,
+    "cached_tokens": 2432,
+    "output_tokens": 9,
+    "cost": 0.000196,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "Now, please spell your last name."
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "It's N, A, I, R.",
+   "agent": {
+    "said": [
+     "Is that correct?"
+    ],
+    "passes": 1,
+    "seconds": 0.792,
+    "input_tokens": 2512,
+    "cached_tokens": 2432,
+    "output_tokens": 5,
+    "cost": 0.000197,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "Is that correct?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "Yes, that's correct.",
+   "agent": {
+    "said": [
+     "Thank you, one moment."
+    ],
+    "passes": 1,
+    "seconds": 0.845,
+    "input_tokens": 2529,
+    "cached_tokens": 2432,
+    "output_tokens": 7,
+    "cost": 0.000201,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "Thank you, one moment."
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "Sure, take your time.",
+   "agent": {
+    "said": [
+     "Thank you, Priya. For your yearly check-up, you can choose an Annual Physical, which is a thirty-minute appointment and does not need a referral. Would you like to proceed with that?"
+    ],
+    "passes": 3,
+    "seconds": 3.24,
+    "input_tokens": 6856,
+    "cached_tokens": 5376,
+    "output_tokens": 125,
+    "cost": 0.0007,
+    "tools": [
+     {
+      "tool": "start_booking",
+      "args": {
+       "full_name": "Priya Nair",
+       "returning": false,
+       "spelled_first_name": "P, R, I, Y, A",
+       "spelled_last_name": "N, A, I, R",
+       "visit_description": "yearly check-up",
+       "doctor_name": "Dr. Maria Garcia"
+      },
+      "result": {
+       "ok": true
+      },
+      "stage": "identify",
+      "next_stage": "visit_type"
+     },
+     {
+      "tool": "list_visit_types",
+      "args": {
+       "specialty": "Family Medicine"
+      },
+      "result": {
+       "ok": true,
+       "specialty": "Family Medicine",
+       "visit_types": [
+        {
+         "id": "appt_002",
+         "name": "Annual Physical",
+         "minutes": 30,
+         "needs_referral": false,
+         "open_to_new_patients": true,
+         "can_book": true,
+         "why_not": [],
+         "description": "A yearly check-up with a family doctor.",
+         "usual_choice": true
+        },
+        {
+         "id": "appt_007",
+         "name": "Sick Visit",
+         "minutes": 20,
+         "needs_referral": false,
+         "open_to_new_patients": true,
+         "can_book": true,
+         "why_not": [],
+         "description": "For a new illness that isn't an emergency, like a cold or an infection.",
+         "usual_choice": true
+        },
+        {
+         "id": "appt_008",
+         "name": "Urgent Care Visit",
+         "minutes": 25,
+         "needs_referral": false,
+         "open_to_new_patients": true,
+         "can_book": true,
+         "why_not": [],
+         "description": "For something that needs seeing today but isn't an emergency.",
+         "usual_choice": false
+        },
+        {
+         "id": "appt_010",
+         "name": "Vaccination / Immunization",
+         "minutes": 10,
+         "needs_referral": false,
+         "open_to_new_patients": true,
+         "can_book": true,
+         "why_not": []
+        },
+        {
+         "id": "appt_011",
+         "name": "Flu Shot",
+         "minutes": 10,
+         "needs_referral": false,
+         "open_to_new_patients": true,
+         "can_book": true,
+         "why_not": []
+        },
+        {
+         "id": "appt_012",
+         "name": "COVID-19 Vaccine",
+         "minutes": 10,
+         "needs_referral": false,
+         "open_to_new_patients": true,
+         "can_book": true,
+         "why_not": []
+        },
+        {
+         "id": "appt_013",
+         "name": "Travel Vaccination Consult",
+         "minutes": 20,
+         "needs_referral": false,
+         "open_to_new_patients": true,
+         "can_book": true,
+         "why_not": []
+        }
+       ]
+      },
+      "stage": "visit_type",
+      "next_stage": null
+     }
+    ],
+    "problems": [],
+    "order": [
+     {
+      "tool": 0
+     },
+     {
+      "tool": 1
+     },
+     {
+      "said": "Thank you, Priya. For your yearly check-up, you can choose an Annual Physical, which is a thirty-minute appointment and does not need a referral. Would you like to proceed with that?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "Yes, that sounds good.",
+   "agent": {
+    "said": [
+     "There are two doctors named Dr. Maria Garcia who offer an Annual Physical. Would you like to see Dr. Maria Garcia, MD at Mission Bay Health Center or Dr. Maria Garcia, NP at Midtown Medical Group?"
+    ],
+    "passes": 2,
+    "seconds": 1.986,
+    "input_tokens": 4089,
+    "cached_tokens": 3328,
+    "output_tokens": 63,
+    "cost": 0.000402,
+    "tools": [
+     {
+      "tool": "choose_visit_type",
+      "args": {
+       "visit_type_id": "appt_002"
+      },
+      "result": {
+       "ok": true
+      },
+      "stage": "visit_type",
+      "next_stage": "booking"
+     }
+    ],
+    "problems": [],
+    "order": [
+     {
+      "tool": 0
+     },
+     {
+      "said": "There are two doctors named Dr. Maria Garcia who offer an Annual Physical. Would you like to see Dr. Maria Garcia, MD at Mission Bay Health Center or Dr. Maria Garcia, NP at Midtown Medical Group?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "I'll go with Dr. Maria Garcia, MD at Mission Bay Health Center.",
+   "agent": {
+    "said": [
+     "I have two options for you with Dr. Maria Garcia at Mission Bay Health Center: there's an appointment available on Tuesday, October 13th at 1 PM. Would you like to book this appointment?"
+    ],
+    "passes": 1,
+    "seconds": 1.039,
+    "input_tokens": 1717,
+    "cached_tokens": 1664,
+    "output_tokens": 42,
+    "cost": 0.000158,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "I have two options for you with Dr. Maria Garcia at Mission Bay Health Center: there's an appointment available on Tuesday, October 13th at 1 PM. Would you like to book this appointment?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "Yes, please book that appointment.",
+   "agent": {
+    "said": [
+     "To confirm: Annual Physical with Dr. Maria Garcia at Mission Bay Health Center, 4874 Main St, on Tuesday 13 October at 1 PM. It takes about 30 minutes. Would you like me to book it?"
+    ],
+    "passes": 2,
+    "seconds": 1.478,
+    "input_tokens": 3592,
+    "cached_tokens": 3328,
+    "output_tokens": 25,
+    "cost": 0.000304,
+    "tools": [
+     {
+      "tool": "confirm_booking",
+      "args": {},
+      "result": {
+       "ok": false,
+       "error": "Nothing is chosen yet. Call choose_option first, read back, and ask the caller."
+      },
+      "stage": "booking",
+      "next_stage": null
+     },
+     {
+      "tool": "choose_option",
+      "args": {
+       "option_id": "2"
+      },
+      "result": {
+       "ok": true,
+       "read_back": "Annual Physical with Dr. Maria Garcia at Mission Bay Health Center, 4874 Main St, on Tuesday 13 October at 1 PM. It takes about 30 minutes.",
+       "note": "The code is reading the read_back to the caller and asking if they'd like to book it: don't repeat it. Call confirm_booking only after they say yes."
+      },
+      "stage": "booking",
+      "next_stage": null
+     }
+    ],
+    "problems": [],
+    "order": [
+     {
+      "tool": 0
+     },
+     {
+      "tool": 1
+     },
+     {
+      "said": "To confirm: Annual Physical with Dr. Maria Garcia at Mission Bay Health Center, 4874 Main St, on Tuesday 13 October at 1 PM. It takes about 30 minutes. Would you like me to book it?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "Yes, please book it.",
+   "agent": {
+    "said": [
+     "Your Annual Physical is confirmed with Dr. Maria Garcia at Mission Bay Health Center on Tuesday, October 13th at 1 PM. Thank you, and have a great day!"
+    ],
+    "passes": 2,
+    "seconds": 2.115,
+    "input_tokens": 3143,
+    "cached_tokens": 2816,
+    "output_tokens": 47,
+    "cost": 0.000288,
+    "tools": [
+     {
+      "tool": "confirm_booking",
+      "args": {},
+      "result": {
+       "ok": true,
+       "booked": "Annual Physical with Dr. Maria Garcia at Mission Bay Health Center, 4874 Main St, on Tuesday 13 October at 1 PM. It takes about 30 minutes."
+      },
+      "stage": "booking",
+      "next_stage": "end"
+     }
+    ],
+    "problems": [],
+    "order": [
+     {
+      "tool": 0
+     },
+     {
+      "said": "Your Annual Physical is confirmed with Dr. Maria Garcia at Mission Bay Health Center on Tuesday, October 13th at 1 PM. Thank you, and have a great day!"
+     }
+    ]
+   },
+   "after_check_in": false
+  }
+ ],
+ "ended_by": "agent_ended",
+ "stopped_because": "",
+ "outcome": {
+  "status": "booked",
+  "bookings": [
+   {
+    "caller": "Priya Nair",
+    "patient_id": null,
+    "visit_type_id": "appt_002",
+    "provider_id": "prov_002",
+    "location_id": "loc_000",
+    "start": "2026-10-13T13:00:00",
+    "duration_min": 30
+   }
+  ],
+  "name_confirmed": true
+ },
+ "totals": {
+  "agent_input_tokens": 36624,
+  "agent_cached_tokens": 33024,
+  "agent_output_tokens": 359,
+  "agent_passes": 17,
+  "agent_cost": 0.003232,
+  "slowest_reply_seconds": 3.24,
+  "caller_lines": 12,
+  "caller_cost": 0.001048
+ },
+ "score": {
+  "passed": false,
+  "reasons": [
+   "Booked doctor prov_002, expected one of prov_003."
+  ],
+  "bad_bookings": 0,
+  "staff_promise": false
+ }
+}

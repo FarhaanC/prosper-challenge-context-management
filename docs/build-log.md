@@ -252,3 +252,76 @@ Run it: build once (`cd frontend`, `npm install`, `npm run build`), start the ag
 **Checks kept proportionate (P5):** no separate review round for 81–83 (Farhaan: "just fix the errors and let's get the version update out"); the next voice call confirms them, and the testing step gets its own independent check.
 
 **Lesson:** the 25 s silence came from a default inside Pipecat, not our code, and only a real call with a real speech service could show it. Reading the console log line by line (not just our call log) found it.
+
+---
+
+## Step 4: testing — AI-played callers against three versions, and the scale test, version 0.4.0
+
+**Planned for Sat 10; done Sun 11 night to Mon 12 evening.** The plan was reviewed and approved by Farhaan first (decisions 84–88): a $7 hard stop on OpenAI spending, the caller played by gpt-4o-mini, the same data tools for the naive versions, six scenarios scored by code. Farhaan started every paid run himself, because Claude's shell can't reach OpenAI.
+
+### What it is
+
+`backend/evals/`: the typed test runs of decision 22. A small loop of our own drives a call between an AI playing the caller and one of four versions:
+1. **naive**: the whole catalog and the rules pasted in, and a book tool with no checks;
+2. **naive + rule checks**: the same, but the book tool runs our final rule check;
+3. **ours**: `clinic_agent.json` with the same tool code as the voice agent, on gpt-4o;
+4. **ours on gpt-4o-mini** (decision 68).
+
+The loop copies what Pipecat Flows does in a call: the conversation is wiped on a stage move, a second AI pass follows a tool that stays, and after choose_option the code's read-back is the agent's turn with no second pass. Each call is scored in code against what was actually saved, for the scenario's real caller. It also checks the booking's name, any hand-off, and any promise that staff will call back without a hand-off. Every call is saved word for word.
+
+### How it was checked
+
+| Version | What | Tests |
+| --- | --- | --- |
+| `e599581` | **Build** | 39 builder tests with a pretend AI |
+| `0fb83e1` | **One fresh reviewer** (P5). Before reading our code, it worked out each scenario's right answer from the raw catalog: 4 of 6 matched ours. 15 findings, 3 high, the worst a crash that would have lost a paid call and paid for it again. | the reviewer's 23 tests, 18 failing |
+| `8ed4799` | **Fixes, all 15** (`docs/reviews/2026-10-12-test-runner/triage.md`), decisions 89–90 | builder 74; the reviewer's 23 of 23, unchanged |
+| `cc35190` | Smoke run and round 1 (Farhaan); decision 91: three runs for every version, since a naive call cost about $0.10, not the $0.60 feared | — |
+| (this commit) | Rounds 2 and 3, and the scale test (Farhaan) | — |
+
+### The results (`docs/results/2026-10-12-testing/results.md`)
+
+Each version, 6 scenarios × 3 runs:
+
+| Version | Passed | Bad bookings | Input tokens per call | Agent cost per call |
+| --- | --- | --- | --- | --- |
+| Naive | 11 of 18 | 2 | about 82,600 | $0.110 |
+| Naive + rule checks | 11 of 18 | 0 | about 82,200 | $0.109 |
+| Ours (gpt-4o) | 17 of 18 | 0 | about 23,000 | $0.039 |
+| Ours (gpt-4o-mini) | 16 of 18 | 0 | about 28,600 | $0.003 |
+
+- **Cost:** ours reads about 3.6 times fewer tokens per call. Most of what naive reads is cached, so the price gap is about 2.8 times.
+- **Speed:** ours is a little slower at its worst moment (slowest reply typically 2.7 s against 2.2 s), because one turn records a choice and then searches.
+- **The smaller model:** it passed 16 of 18 for about one-thirteenth of the cost.
+
+**Scale** (`scale/scale.md`): on a made-up catalog of 500 locations and 2,000 doctors:
+- Ours gave the AI instructions of the same size, and passed both calls run on it, at about 2,000 tokens per AI pass.
+- The naive version's instructions came to **235,181 tokens**, measured by OpenAI's refusal: too big for gpt-4o's 128,000 limit.
+- The code's search took at most 0.3 s, up from 8 ms.
+
+**What the naive versions got wrong** (every fail read and confirmed):
+- Called a family doctor "the Dermatologist" and booked a consultation she doesn't offer, which also needs a referral (the baseline call's mistake).
+- Booked an MRI of the **spine** for a knee MRI, then said "Your MRI appointment is confirmed".
+- Said "You're confirmed" **without ever booking**.
+- Booked a new patient with a doctor who isn't taking new patients.
+- Saved bookings under "Unknown", "New Patient" or "Caller".
+- Promised a staff call-back without handing off.
+
+The rule checks stopped the rule-breaking bookings, but not the wrong-but-valid ones, the missing booking, the wrong names or the wrong doctor. That is what the stages and the code-built read-back add.
+
+**Where ours fell short** (decision 91: reported, not changed):
+- On "a yearly check-up with Dr. Maria Garcia", gpt-4o once offered only first visits.
+- gpt-4o-mini twice offered the two Dr. Maria Garcias as "MD" and "NP", without saying which is the children's doctor, and the caller chose wrong.
+- So the code stops every invalid booking, but choosing the right valid one still depends on the AI.
+
+### Things to say plainly
+
+- **Every call is typed:** no speech, no mishearing, no silences. Timing is to the whole written reply.
+- **The caller is an AI,** so a few fails are partly the caller's choice. The transcripts show each one.
+- **Spent:** $4.85 of the $7 stop, including the scale test.
+
+### Lessons
+
+1. **Most of the interesting failures broke no rule.** A knee MRI booked as a spine MRI, "confirmed" with nothing saved: rule checks can't catch these. Holding the choices and the read-back in code can.
+2. **A fresh reviewer paid for itself before a cent was spent.** It found the crash that would have paid twice for the same call.
+3. **Measure the cost before cutting the plan for it.** The first estimate was five times too high; the smoke run fixed that, and every version got three runs.

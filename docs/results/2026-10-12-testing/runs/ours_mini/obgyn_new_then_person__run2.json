@@ -1,0 +1,292 @@
+{
+ "version": "ours_mini",
+ "model": "gpt-4o-mini",
+ "caller_model": "gpt-4o-mini",
+ "scenario": "obgyn_new_then_person",
+ "title": "New patient: an OB/GYN visit (no OB/GYN takes new patients), then 'a person'",
+ "run": 2,
+ "clinic_time": "2026-10-13T09:00",
+ "ran_at": "2026-10-12T19:05:24",
+ "greeting": {
+  "said": [
+   "Hello, you've reached the clinics' scheduling line. How can I help you today?"
+  ],
+  "passes": 0,
+  "seconds": 0.0,
+  "input_tokens": 0,
+  "cached_tokens": 0,
+  "output_tokens": 0,
+  "cost": 0.0,
+  "tools": [],
+  "problems": [],
+  "order": [
+   {
+    "said": "Hello, you've reached the clinics' scheduling line. How can I help you today?"
+   }
+  ]
+ },
+ "turns": [
+  {
+   "caller": "Hi, I’d like to schedule an annual well-woman exam with an OB/GYN, please.",
+   "agent": {
+    "said": [
+     "Can I have your full name, please?"
+    ],
+    "passes": 1,
+    "seconds": 0.727,
+    "input_tokens": 2383,
+    "cached_tokens": 2176,
+    "output_tokens": 10,
+    "cost": 0.0002,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "Can I have your full name, please?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "Sure, it's Sofia Reyes.",
+   "agent": {
+    "said": [
+     "Have you been a patient with us before?"
+    ],
+    "passes": 1,
+    "seconds": 0.75,
+    "input_tokens": 2406,
+    "cached_tokens": 2304,
+    "output_tokens": 10,
+    "cost": 0.000194,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "Have you been a patient with us before?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "No, I have not been a patient here before.",
+   "agent": {
+    "said": [
+     "Could you please spell your first name for me?"
+    ],
+    "passes": 1,
+    "seconds": 1.089,
+    "input_tokens": 2434,
+    "cached_tokens": 2304,
+    "output_tokens": 11,
+    "cost": 0.000199,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "Could you please spell your first name for me?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "Of course, it's S, O, F, I, A.",
+   "agent": {
+    "said": [
+     "Is that correct?"
+    ],
+    "passes": 1,
+    "seconds": 0.686,
+    "input_tokens": 2466,
+    "cached_tokens": 2304,
+    "output_tokens": 5,
+    "cost": 0.0002,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "Is that correct?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "Yes, that's correct.",
+   "agent": {
+    "said": [
+     "Now, could you please spell your last name?"
+    ],
+    "passes": 1,
+    "seconds": 0.758,
+    "input_tokens": 2483,
+    "cached_tokens": 2432,
+    "output_tokens": 11,
+    "cost": 0.000197,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "Now, could you please spell your last name?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "Sure, it's R, E, Y, E, S.",
+   "agent": {
+    "said": [
+     "Is that correct?"
+    ],
+    "passes": 1,
+    "seconds": 0.854,
+    "input_tokens": 2514,
+    "cached_tokens": 2432,
+    "output_tokens": 5,
+    "cost": 0.000198,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "Is that correct?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "Yes, that’s correct.",
+   "agent": {
+    "said": [
+     "Thank you, one moment."
+    ],
+    "passes": 1,
+    "seconds": 1.121,
+    "input_tokens": 2532,
+    "cached_tokens": 2432,
+    "output_tokens": 7,
+    "cost": 0.000202,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "Thank you, one moment."
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "Sure, take your time.",
+   "agent": {
+    "said": [
+     "Thank you, Sofia! It seems the Annual Well-Woman Exam can't be booked right now because no doctors are taking new patients for that visit type. Would you like to consider another specialty for a visit type?"
+    ],
+    "passes": 2,
+    "seconds": 3.283,
+    "input_tokens": 4633,
+    "cached_tokens": 4480,
+    "output_tokens": 110,
+    "cost": 0.000425,
+    "tools": [
+     {
+      "tool": "start_booking",
+      "args": {
+       "full_name": "Sofia Reyes",
+       "returning": false,
+       "spelled_first_name": "S,O,F,I,A",
+       "spelled_last_name": "R,E,Y,E,S",
+       "name_not_confirmed": false,
+       "visit_description": "annual well-woman exam",
+       "specialty": "OB/GYN"
+      },
+      "result": {
+       "ok": true
+      },
+      "stage": "identify",
+      "next_stage": "visit_type"
+     }
+    ],
+    "problems": [],
+    "order": [
+     {
+      "tool": 0
+     },
+     {
+      "said": "Thank you, Sofia! It seems the Annual Well-Woman Exam can't be booked right now because no doctors are taking new patients for that visit type. Would you like to consider another specialty for a visit type?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "No, I really want to schedule the well-woman exam. Can I speak to someone about this?",
+   "agent": {
+    "said": [
+     "I can certainly help with that. Let me connect you to a staff member who can assist you further.",
+     "Thank you for your patience. A member of our staff will call you back soon. Goodbye!"
+    ],
+    "passes": 2,
+    "seconds": 2.879,
+    "input_tokens": 3289,
+    "cached_tokens": 3072,
+    "output_tokens": 59,
+    "cost": 0.000298,
+    "tools": [
+     {
+      "tool": "hand_off",
+      "args": {
+       "reason": "speak_to_staff"
+      },
+      "result": {
+       "ok": true,
+       "handed_off": true
+      },
+      "stage": "visit_type",
+      "next_stage": "end"
+     }
+    ],
+    "problems": [],
+    "order": [
+     {
+      "said": "I can certainly help with that. Let me connect you to a staff member who can assist you further."
+     },
+     {
+      "tool": 0
+     },
+     {
+      "said": "Thank you for your patience. A member of our staff will call you back soon. Goodbye!"
+     }
+    ]
+   },
+   "after_check_in": false
+  }
+ ],
+ "ended_by": "agent_ended",
+ "stopped_because": "",
+ "outcome": {
+  "status": "handed_off",
+  "bookings": [],
+  "name_confirmed": true
+ },
+ "totals": {
+  "agent_input_tokens": 25140,
+  "agent_cached_tokens": 23936,
+  "agent_output_tokens": 228,
+  "agent_passes": 11,
+  "agent_cost": 0.002113,
+  "slowest_reply_seconds": 3.283,
+  "caller_lines": 9,
+  "caller_cost": 0.000626
+ },
+ "score": {
+  "passed": true,
+  "reasons": [],
+  "bad_bookings": 0,
+  "staff_promise": false
+ }
+}

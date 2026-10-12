@@ -1,0 +1,102 @@
+{
+ "made_at": "2026-10-12T18:58:07",
+ "catalogs": {
+  "normal": {
+   "doctors": 50,
+   "locations": 8,
+   "visit_types": 82
+  },
+  "big": {
+   "doctors": 2000,
+   "locations": 500,
+   "visit_types": 82
+  }
+ },
+ "search_ms": {
+  "normal": [
+   {
+    "search": "James Wilson's knee MRI near Downtown",
+    "milliseconds": 1.1,
+    "options_text_characters": 416
+   },
+   {
+    "search": "A new patient's skin check with Dr. Garcia",
+    "milliseconds": 2.4,
+    "options_text_characters": 700
+   },
+   {
+    "search": "A new patient's check-up with Dr. Maria Garcia",
+    "milliseconds": 7.7,
+    "options_text_characters": 699
+   }
+  ],
+  "big": [
+   {
+    "search": "James Wilson's knee MRI near Downtown",
+    "milliseconds": 30.6,
+    "options_text_characters": 402
+   },
+   {
+    "search": "A new patient's skin check with Dr. Garcia",
+    "milliseconds": 80.0,
+    "options_text_characters": 696
+   },
+   {
+    "search": "A new patient's check-up with Dr. Maria Garcia",
+    "milliseconds": 308.8,
+    "options_text_characters": 699
+   }
+  ]
+ },
+ "ours_stage_characters": {
+  "normal": {
+   "identify": 2077,
+   "visit_type": 2215,
+   "booking": 1813
+  },
+  "big": {
+   "identify": 2077,
+   "visit_type": 2215,
+   "booking": 1799
+  }
+ },
+ "naive_instruction_characters": {
+  "normal": 34922,
+  "big": 764937
+ },
+ "naive_big_tokens": {
+  "refused": true,
+  "tokens": 235181,
+  "said": "Error code: 400 - {'error': {'message': \"This model's maximum context length is 128000 tokens. However, your messages resulted in 235181 tokens. Please reduce the length of the messages.\", 'type': 'invalid_request_error', 'param': 'messages', 'code': 'context_length_exceeded'}}"
+ },
+ "ours_on_big": [
+  {
+   "scenario": "garcia_skin_check",
+   "ended_by": "agent_ended",
+   "passed": true,
+   "reasons": [],
+   "agent_input_tokens": 23196,
+   "agent_cached_tokens": 19200,
+   "agent_output_tokens": 346,
+   "agent_passes": 11,
+   "agent_cost": 0.037451,
+   "slowest_reply_seconds": 1.976,
+   "caller_lines": 8,
+   "caller_cost": 0.00069
+  },
+  {
+   "scenario": "james_knee_mri_downtown",
+   "ended_by": "agent_ended",
+   "passed": true,
+   "reasons": [],
+   "agent_input_tokens": 17725,
+   "agent_cached_tokens": 12032,
+   "agent_output_tokens": 251,
+   "agent_passes": 9,
+   "agent_cost": 0.031782,
+   "slowest_reply_seconds": 4.103,
+   "caller_lines": 5,
+   "caller_cost": 0.000327
+  }
+ ]
+}

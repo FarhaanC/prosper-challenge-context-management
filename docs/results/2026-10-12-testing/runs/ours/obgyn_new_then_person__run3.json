@@ -1,0 +1,265 @@
+{
+ "version": "ours",
+ "model": "gpt-4o",
+ "caller_model": "gpt-4o-mini",
+ "scenario": "obgyn_new_then_person",
+ "title": "New patient: an OB/GYN visit (no OB/GYN takes new patients), then 'a person'",
+ "run": 3,
+ "clinic_time": "2026-10-13T09:00",
+ "ran_at": "2026-10-12T19:11:49",
+ "greeting": {
+  "said": [
+   "Hello, you've reached the clinics' scheduling line. How can I help you today?"
+  ],
+  "passes": 0,
+  "seconds": 0.0,
+  "input_tokens": 0,
+  "cached_tokens": 0,
+  "output_tokens": 0,
+  "cost": 0.0,
+  "tools": [],
+  "problems": [],
+  "order": [
+   {
+    "said": "Hello, you've reached the clinics' scheduling line. How can I help you today?"
+   }
+  ]
+ },
+ "turns": [
+  {
+   "caller": "Hi, my name is Sofia Reyes. I’d like to schedule an annual well-woman exam with an OB/GYN.",
+   "agent": {
+    "said": [
+     "Have you been a patient with us before, Sofia?"
+    ],
+    "passes": 1,
+    "seconds": 0.648,
+    "input_tokens": 2387,
+    "cached_tokens": 1920,
+    "output_tokens": 12,
+    "cost": 0.003687,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "Have you been a patient with us before, Sofia?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "No, I’ve never been a patient there before.",
+   "agent": {
+    "said": [
+     "Alright, can you please spell out your first name for me, letter by letter?"
+    ],
+    "passes": 1,
+    "seconds": 0.714,
+    "input_tokens": 2417,
+    "cached_tokens": 2176,
+    "output_tokens": 18,
+    "cost": 0.003502,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "Alright, can you please spell out your first name for me, letter by letter?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "Sure, it's S, O, F, I, A.",
+   "agent": {
+    "said": [
+     "Is that S, O, F, I, A?"
+    ],
+    "passes": 1,
+    "seconds": 0.724,
+    "input_tokens": 2455,
+    "cached_tokens": 1920,
+    "output_tokens": 13,
+    "cost": 0.003867,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "Is that S, O, F, I, A?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "Yes, that's correct.",
+   "agent": {
+    "said": [
+     "Great, now could you please spell your last name letter by letter?"
+    ],
+    "passes": 1,
+    "seconds": 0.794,
+    "input_tokens": 2480,
+    "cached_tokens": 2304,
+    "output_tokens": 15,
+    "cost": 0.00347,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "Great, now could you please spell your last name letter by letter?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "Of course, it's R, E, Y, E, S.",
+   "agent": {
+    "said": [
+     "Is that R, E, Y, E, S?"
+    ],
+    "passes": 1,
+    "seconds": 0.717,
+    "input_tokens": 2516,
+    "cached_tokens": 2304,
+    "output_tokens": 13,
+    "cost": 0.00354,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "Is that R, E, Y, E, S?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "Yes, that's right.",
+   "agent": {
+    "said": [
+     "Thank you, one moment."
+    ],
+    "passes": 1,
+    "seconds": 0.714,
+    "input_tokens": 2541,
+    "cached_tokens": 2304,
+    "output_tokens": 7,
+    "cost": 0.003543,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "Thank you, one moment."
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "Sure, no problem.",
+   "agent": {
+    "said": [
+     "Thanks for sharing your information, Sofia. Unfortunately, no doctor is currently taking new patients for an annual well-woman exam or any related OB/GYN visits. Would you be interested in exploring other types of visits in a different specialty?"
+    ],
+    "passes": 2,
+    "seconds": 2.166,
+    "input_tokens": 4646,
+    "cached_tokens": 2304,
+    "output_tokens": 121,
+    "cost": 0.009945,
+    "tools": [
+     {
+      "tool": "start_booking",
+      "args": {
+       "full_name": "Sofia Reyes",
+       "returning": false,
+       "spelled_first_name": "S, O, F, I, A",
+       "spelled_last_name": "R, E, Y, E, S",
+       "visit_description": "annual well-woman exam with an OB/GYN",
+       "specialty": "OB/GYN"
+      },
+      "result": {
+       "ok": true
+      },
+      "stage": "identify",
+      "next_stage": "visit_type"
+     }
+    ],
+    "problems": [],
+    "order": [
+     {
+      "tool": 0
+     },
+     {
+      "said": "Thanks for sharing your information, Sofia. Unfortunately, no doctor is currently taking new patients for an annual well-woman exam or any related OB/GYN visits. Would you be interested in exploring other types of visits in a different specialty?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "I'm not sure. Could I speak to someone about possibly getting an appointment for the well-woman exam?",
+   "agent": {
+    "said": [
+     "A member of our staff will call you back about your request. Thank you for reaching out, and have a great day! Goodbye."
+    ],
+    "passes": 2,
+    "seconds": 1.582,
+    "input_tokens": 3299,
+    "cached_tokens": 1920,
+    "output_tokens": 45,
+    "cost": 0.006297,
+    "tools": [
+     {
+      "tool": "hand_off",
+      "args": {
+       "reason": "speak_to_staff"
+      },
+      "result": {
+       "ok": true,
+       "handed_off": true
+      },
+      "stage": "visit_type",
+      "next_stage": "end"
+     }
+    ],
+    "problems": [],
+    "order": [
+     {
+      "tool": 0
+     },
+     {
+      "said": "A member of our staff will call you back about your request. Thank you for reaching out, and have a great day! Goodbye."
+     }
+    ]
+   },
+   "after_check_in": false
+  }
+ ],
+ "ended_by": "agent_ended",
+ "stopped_because": "",
+ "outcome": {
+  "status": "handed_off",
+  "bookings": [],
+  "name_confirmed": true
+ },
+ "totals": {
+  "agent_input_tokens": 22741,
+  "agent_cached_tokens": 17152,
+  "agent_output_tokens": 244,
+  "agent_passes": 10,
+  "agent_cost": 0.037851,
+  "slowest_reply_seconds": 2.166,
+  "caller_lines": 8,
+  "caller_cost": 0.000573
+ },
+ "score": {
+  "passed": true,
+  "reasons": [],
+  "bad_bookings": 0,
+  "staff_promise": false
+ }
+}

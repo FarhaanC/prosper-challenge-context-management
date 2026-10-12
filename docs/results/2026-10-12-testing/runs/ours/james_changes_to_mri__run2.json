@@ -1,0 +1,386 @@
+{
+ "version": "ours",
+ "model": "gpt-4o",
+ "caller_model": "gpt-4o-mini",
+ "scenario": "james_changes_to_mri",
+ "title": "James Wilson: a Garcia skin check, then 'actually, a knee MRI'",
+ "run": 2,
+ "clinic_time": "2026-10-13T09:00",
+ "ran_at": "2026-10-12T19:02:45",
+ "greeting": {
+  "said": [
+   "Hello, you've reached the clinics' scheduling line. How can I help you today?"
+  ],
+  "passes": 0,
+  "seconds": 0.0,
+  "input_tokens": 0,
+  "cached_tokens": 0,
+  "output_tokens": 0,
+  "cost": 0.0,
+  "tools": [],
+  "problems": [],
+  "order": [
+   {
+    "said": "Hello, you've reached the clinics' scheduling line. How can I help you today?"
+   }
+  ]
+ },
+ "turns": [
+  {
+   "caller": "Hi, I’d like to schedule a skin check with Dr. Garcia, please.",
+   "agent": {
+    "said": [
+     "Can I have your full name, please?"
+    ],
+    "passes": 1,
+    "seconds": 0.746,
+    "input_tokens": 2379,
+    "cached_tokens": 2176,
+    "output_tokens": 10,
+    "cost": 0.003328,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "Can I have your full name, please?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "Sure, it's James Wilson.",
+   "agent": {
+    "said": [
+     "Have you been a patient with us before, James?"
+    ],
+    "passes": 1,
+    "seconds": 0.849,
+    "input_tokens": 2402,
+    "cached_tokens": 1920,
+    "output_tokens": 12,
+    "cost": 0.003725,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "Have you been a patient with us before, James?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "Yes, I have.",
+   "agent": {
+    "said": [
+     "Can you please provide your date of birth?"
+    ],
+    "passes": 1,
+    "seconds": 0.69,
+    "input_tokens": 2426,
+    "cached_tokens": 2176,
+    "output_tokens": 10,
+    "cost": 0.003445,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "Can you please provide your date of birth?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "It's March 12th, 1984.",
+   "agent": {
+    "said": [
+     "Thank you for calling, James. For your skin check with Dr. Garcia, we have a few options: a Skin Cancer Screening, a Full Body Skin Exam, an Acne Follow-up, or a Cosmetic Consultation. Which do you prefer?"
+    ],
+    "passes": 2,
+    "seconds": 2.269,
+    "input_tokens": 4587,
+    "cached_tokens": 2304,
+    "output_tokens": 105,
+    "cost": 0.009638,
+    "tools": [
+     {
+      "tool": "start_booking",
+      "args": {
+       "full_name": "James Wilson",
+       "returning": true,
+       "date_of_birth": "1984-03-12",
+       "visit_description": "skin check with Dr. Garcia",
+       "specialty": "Dermatology",
+       "doctor_name": "Dr. Garcia"
+      },
+      "result": {
+       "ok": true
+      },
+      "stage": "identify",
+      "next_stage": "visit_type"
+     }
+    ],
+    "problems": [],
+    "order": [
+     {
+      "tool": 0
+     },
+     {
+      "said": "Thank you for calling, James. For your skin check with Dr. Garcia, we have a few options: a Skin Cancer Screening, a Full Body Skin Exam, an Acne Follow-up, or a Cosmetic Consultation. Which do you prefer?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "Actually, the skin check can wait. I need to schedule a knee MRI instead, which my doctor referred me for.",
+   "agent": {
+    "said": [
+     "I'll set up an MRI for your knee. Could you let me know if you have any preferences regarding the day or time?"
+    ],
+    "passes": 1,
+    "seconds": 1.081,
+    "input_tokens": 2214,
+    "cached_tokens": 2048,
+    "output_tokens": 26,
+    "cost": 0.003235,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "I'll set up an MRI for your knee. Could you let me know if you have any preferences regarding the day or time?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "No specific preferences. Any day and location is fine.",
+   "agent": {
+    "said": [
+     "No doctor named Dr. Garcia offers Skin Cancer Screening, but we have Dr. Kenji Kim at Midtown at eleven, Dr. Wei Sato at Mission Bay at eleven, and Dr. Daniel Smith in Mission District at eleven-thirty available today. Which would work best for you?"
+    ],
+    "passes": 2,
+    "seconds": 2.035,
+    "input_tokens": 3934,
+    "cached_tokens": 2048,
+    "output_tokens": 84,
+    "cost": 0.008115,
+    "tools": [
+     {
+      "tool": "choose_visit_type",
+      "args": {
+       "visit_type_id": "appt_027",
+       "doctor_name": "Dr. Garcia"
+      },
+      "result": {
+       "ok": true
+      },
+      "stage": "visit_type",
+      "next_stage": "booking"
+     }
+    ],
+    "problems": [],
+    "order": [
+     {
+      "tool": 0
+     },
+     {
+      "said": "No doctor named Dr. Garcia offers Skin Cancer Screening, but we have Dr. Kenji Kim at Midtown at eleven, Dr. Wei Sato at Mission Bay at eleven, and Dr. Daniel Smith in Mission District at eleven-thirty available today. Which would work best for you?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "I’m actually looking for the knee MRI, not the skin check. Can you help me with that?",
+   "agent": {
+    "said": [
+     "Let me check what's available for a knee MRI.",
+     "James, for a knee MRI, we can book it for forty-five minutes. Would you like me to go ahead and choose that for you?"
+    ],
+    "passes": 2,
+    "seconds": 1.752,
+    "input_tokens": 3818,
+    "cached_tokens": 1536,
+    "output_tokens": 64,
+    "cost": 0.008265,
+    "tools": [
+     {
+      "tool": "change_choice",
+      "args": {
+       "visit_type": "knee MRI",
+       "specialty": "Radiology"
+      },
+      "result": {
+       "ok": true
+      },
+      "stage": "booking",
+      "next_stage": "visit_type"
+     }
+    ],
+    "problems": [],
+    "order": [
+     {
+      "said": "Let me check what's available for a knee MRI."
+     },
+     {
+      "tool": 0
+     },
+     {
+      "said": "James, for a knee MRI, we can book it for forty-five minutes. Would you like me to go ahead and choose that for you?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "Yes, please go ahead and book it.",
+   "agent": {
+    "said": [
+     "Dr. Garcia isn't available for your MRI, but Dr. Linda Ramirez and Dr. Hannah Nguyen can assist you. We have an opening with Dr. Linda Ramirez at Downtown Health Center today at eleven in the morning, or you could see Dr. Hannah Nguyen in Hayes Valley this afternoon at two, or again visit Dr. Linda Ramirez this Thursday morning at half past ten in Downtown. Which of these works for you?"
+    ],
+    "passes": 2,
+    "seconds": 2.228,
+    "input_tokens": 3758,
+    "cached_tokens": 1920,
+    "output_tokens": 110,
+    "cost": 0.008095,
+    "tools": [
+     {
+      "tool": "choose_visit_type",
+      "args": {
+       "visit_type_id": "appt_065",
+       "doctor_name": "Dr. Garcia"
+      },
+      "result": {
+       "ok": true
+      },
+      "stage": "visit_type",
+      "next_stage": "booking"
+     }
+    ],
+    "problems": [],
+    "order": [
+     {
+      "tool": 0
+     },
+     {
+      "said": "Dr. Garcia isn't available for your MRI, but Dr. Linda Ramirez and Dr. Hannah Nguyen can assist you. We have an opening with Dr. Linda Ramirez at Downtown Health Center today at eleven in the morning, or you could see Dr. Hannah Nguyen in Hayes Valley this afternoon at two, or again visit Dr. Linda Ramirez this Thursday morning at half past ten in Downtown. Which of these works for you?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "I'll take the appointment with Dr. Linda Ramirez at Downtown Health Center today at eleven.",
+   "agent": {
+    "said": [
+     "To confirm: MRI - Knee with Dr. Linda Ramirez at Downtown Health Center, 4455 Geary Blvd, on Tuesday 13 October at 11 AM. It takes about 45 minutes. Would you like me to book it?"
+    ],
+    "passes": 1,
+    "seconds": 0.697,
+    "input_tokens": 1764,
+    "cached_tokens": 1536,
+    "output_tokens": 15,
+    "cost": 0.00264,
+    "tools": [
+     {
+      "tool": "choose_option",
+      "args": {
+       "option_id": "4"
+      },
+      "result": {
+       "ok": true,
+       "read_back": "MRI - Knee with Dr. Linda Ramirez at Downtown Health Center, 4455 Geary Blvd, on Tuesday 13 October at 11 AM. It takes about 45 minutes.",
+       "note": "The code is reading the read_back to the caller and asking if they'd like to book it: don't repeat it. Call confirm_booking only after they say yes."
+      },
+      "stage": "booking",
+      "next_stage": null
+     }
+    ],
+    "problems": [],
+    "order": [
+     {
+      "tool": 0
+     },
+     {
+      "said": "To confirm: MRI - Knee with Dr. Linda Ramirez at Downtown Health Center, 4455 Geary Blvd, on Tuesday 13 October at 11 AM. It takes about 45 minutes. Would you like me to book it?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "Yes, please book it.",
+   "agent": {
+    "said": [
+     "Your appointment is confirmed for an MRI - Knee with Dr. Linda Ramirez at Downtown Health Center on Tuesday, 13 October at 11 AM. Thank you for choosing us and goodbye."
+    ],
+    "passes": 2,
+    "seconds": 1.664,
+    "input_tokens": 3091,
+    "cached_tokens": 1664,
+    "output_tokens": 48,
+    "cost": 0.006128,
+    "tools": [
+     {
+      "tool": "confirm_booking",
+      "args": {},
+      "result": {
+       "ok": true,
+       "booked": "MRI - Knee with Dr. Linda Ramirez at Downtown Health Center, 4455 Geary Blvd, on Tuesday 13 October at 11 AM. It takes about 45 minutes."
+      },
+      "stage": "booking",
+      "next_stage": "end"
+     }
+    ],
+    "problems": [],
+    "order": [
+     {
+      "tool": 0
+     },
+     {
+      "said": "Your appointment is confirmed for an MRI - Knee with Dr. Linda Ramirez at Downtown Health Center on Tuesday, 13 October at 11 AM. Thank you for choosing us and goodbye."
+     }
+    ]
+   },
+   "after_check_in": false
+  }
+ ],
+ "ended_by": "agent_ended",
+ "stopped_because": "",
+ "outcome": {
+  "status": "booked",
+  "bookings": [
+   {
+    "caller": "James Wilson",
+    "patient_id": "pat_001",
+    "visit_type_id": "appt_065",
+    "provider_id": "prov_014",
+    "location_id": "loc_004",
+    "start": "2026-10-13T11:00:00",
+    "duration_min": 45
+   }
+  ],
+  "name_confirmed": true
+ },
+ "totals": {
+  "agent_input_tokens": 30373,
+  "agent_cached_tokens": 19328,
+  "agent_output_tokens": 484,
+  "agent_passes": 15,
+  "agent_cost": 0.056614,
+  "slowest_reply_seconds": 2.269,
+  "caller_lines": 10,
+  "caller_cost": 0.000905
+ },
+ "score": {
+  "passed": true,
+  "reasons": [],
+  "bad_bookings": 0,
+  "staff_promise": false
+ }
+}

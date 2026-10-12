@@ -1,0 +1,270 @@
+{
+ "version": "naive",
+ "model": "gpt-4o",
+ "caller_model": "gpt-4o-mini",
+ "scenario": "obgyn_new_then_person",
+ "title": "New patient: an OB/GYN visit (no OB/GYN takes new patients), then 'a person'",
+ "run": 2,
+ "clinic_time": "2026-10-13T09:00",
+ "ran_at": "2026-10-12T19:04:37",
+ "greeting": {
+  "said": [
+   "Hello, you've reached the clinics' scheduling line. How can I help you today?"
+  ],
+  "passes": 0,
+  "seconds": 0.0,
+  "input_tokens": 0,
+  "cached_tokens": 0,
+  "output_tokens": 0,
+  "cost": 0.0,
+  "tools": [],
+  "problems": [],
+  "order": [
+   {
+    "said": "Hello, you've reached the clinics' scheduling line. How can I help you today?"
+   }
+  ]
+ },
+ "turns": [
+  {
+   "caller": "Hi, I’d like to schedule an annual well-woman exam with an OB/GYN, please.",
+   "agent": {
+    "said": [
+     "I can help with that. May I have your full name, and have you been a patient with us before?"
+    ],
+    "passes": 1,
+    "seconds": 0.997,
+    "input_tokens": 9999,
+    "cached_tokens": 9088,
+    "output_tokens": 24,
+    "cost": 0.013877,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "I can help with that. May I have your full name, and have you been a patient with us before?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "My name is Sofia Reyes, and I have not been a patient there before.",
+   "agent": {
+    "said": [
+     "Welcome, Sofia. Since you're new, we'll book your annual well-woman exam with an OB/GYN who accepts new patients. Do you have a preference for a doctor?"
+    ],
+    "passes": 1,
+    "seconds": 1.172,
+    "input_tokens": 10046,
+    "cached_tokens": 9856,
+    "output_tokens": 36,
+    "cost": 0.013155,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "Welcome, Sofia. Since you're new, we'll book your annual well-woman exam with an OB/GYN who accepts new patients. Do you have a preference for a doctor?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "I'm not sure; I don't know the doctors there.",
+   "agent": {
+    "said": [
+     "No worries, I can find an OB/GYN for you. One moment, please."
+    ],
+    "passes": 1,
+    "seconds": 0.839,
+    "input_tokens": 10100,
+    "cached_tokens": 9856,
+    "output_tokens": 19,
+    "cost": 0.01312,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "No worries, I can find an OB/GYN for you. One moment, please."
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "Okay, thank you.",
+   "agent": {
+    "said": [
+     "I'll check for available times with Dr. Jennifer Nguyen in either our Downtown or Hayes Valley locations. Please hold on for a moment.",
+     "We have openings for an annual well-woman exam with Dr. Priya Williams at the Downtown Health Center today at 11 AM or 3:30 PM, and at Midtown Medical Group tomorrow at 8 AM, 8:30 AM, 9:30 AM, or 10 AM. Which time works for you?"
+    ],
+    "passes": 2,
+    "seconds": 2.217,
+    "input_tokens": 20732,
+    "cached_tokens": 19968,
+    "output_tokens": 121,
+    "cost": 0.02808,
+    "tools": [
+     {
+      "tool": "find_open_times",
+      "args": {
+       "visit_type_id": "appt_041",
+       "provider_id": "prov_013"
+      },
+      "result": {
+       "ok": true,
+       "times": [
+        {
+         "start": "2026-10-13T11:00",
+         "spoken": "Tuesday 13 October at 11 AM",
+         "provider_id": "prov_013",
+         "doctor": "Dr. Priya Williams",
+         "location_id": "loc_004",
+         "location": "Downtown Health Center"
+        },
+        {
+         "start": "2026-10-13T15:30",
+         "spoken": "Tuesday 13 October at 3:30 PM",
+         "provider_id": "prov_013",
+         "doctor": "Dr. Priya Williams",
+         "location_id": "loc_004",
+         "location": "Downtown Health Center"
+        },
+        {
+         "start": "2026-10-14T08:00",
+         "spoken": "Wednesday 14 October at 8 AM",
+         "provider_id": "prov_013",
+         "doctor": "Dr. Priya Williams",
+         "location_id": "loc_005",
+         "location": "Midtown Medical Group"
+        },
+        {
+         "start": "2026-10-14T08:30",
+         "spoken": "Wednesday 14 October at 8:30 AM",
+         "provider_id": "prov_013",
+         "doctor": "Dr. Priya Williams",
+         "location_id": "loc_005",
+         "location": "Midtown Medical Group"
+        },
+        {
+         "start": "2026-10-14T09:30",
+         "spoken": "Wednesday 14 October at 9:30 AM",
+         "provider_id": "prov_013",
+         "doctor": "Dr. Priya Williams",
+         "location_id": "loc_005",
+         "location": "Midtown Medical Group"
+        },
+        {
+         "start": "2026-10-14T10:00",
+         "spoken": "Wednesday 14 October at 10 AM",
+         "provider_id": "prov_013",
+         "doctor": "Dr. Priya Williams",
+         "location_id": "loc_005",
+         "location": "Midtown Medical Group"
+        }
+       ]
+      },
+      "stage": "naive",
+      "next_stage": null
+     }
+    ],
+    "problems": [],
+    "order": [
+     {
+      "said": "I'll check for available times with Dr. Jennifer Nguyen in either our Downtown or Hayes Valley locations. Please hold on for a moment."
+     },
+     {
+      "tool": 0
+     },
+     {
+      "said": "We have openings for an annual well-woman exam with Dr. Priya Williams at the Downtown Health Center today at 11 AM or 3:30 PM, and at Midtown Medical Group tomorrow at 8 AM, 8:30 AM, 9:30 AM, or 10 AM. Which time works for you?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "It sounds like I might not be able to book the well-woman exam since I’m a new patient. Can I speak to someone about it?",
+   "agent": {
+    "said": [
+     "A member of our staff will call you back to discuss your appointment needs. Thank you for your patience, Sofia. Goodbye."
+    ],
+    "passes": 2,
+    "seconds": 1.952,
+    "input_tokens": 21442,
+    "cached_tokens": 20992,
+    "output_tokens": 43,
+    "cost": 0.027795,
+    "tools": [
+     {
+      "tool": "hand_off",
+      "args": {
+       "reason": "speak_to_staff"
+      },
+      "result": {
+       "ok": true
+      },
+      "stage": "naive",
+      "next_stage": null
+     }
+    ],
+    "problems": [],
+    "order": [
+     {
+      "tool": 0
+     },
+     {
+      "said": "A member of our staff will call you back to discuss your appointment needs. Thank you for your patience, Sofia. Goodbye."
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "Thank you! Goodbye.",
+   "agent": {
+    "said": [
+     "You're welcome! Goodbye."
+    ],
+    "passes": 1,
+    "seconds": 0.789,
+    "input_tokens": 10774,
+    "cached_tokens": 10624,
+    "output_tokens": 6,
+    "cost": 0.013715,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "You're welcome! Goodbye."
+     }
+    ]
+   },
+   "after_check_in": false
+  }
+ ],
+ "ended_by": "caller_hung_up",
+ "stopped_because": "",
+ "outcome": {
+  "status": "handed_off",
+  "bookings": [],
+  "name_confirmed": null
+ },
+ "totals": {
+  "agent_input_tokens": 83093,
+  "agent_cached_tokens": 80384,
+  "agent_output_tokens": 249,
+  "agent_passes": 8,
+  "agent_cost": 0.109742,
+  "slowest_reply_seconds": 2.217,
+  "caller_lines": 6,
+  "caller_cost": 0.000556
+ },
+ "score": {
+  "passed": true,
+  "reasons": [],
+  "bad_bookings": 0,
+  "staff_promise": false
+ }
+}

@@ -1,0 +1,249 @@
+{
+ "version": "ours",
+ "model": "gpt-4o",
+ "caller_model": "gpt-4o-mini",
+ "scenario": "knee_mri_new_patient",
+ "title": "New patient: a knee MRI (needs a referral; existing patients only)",
+ "run": 3,
+ "clinic_time": "2026-10-13T09:00",
+ "ran_at": "2026-10-12T19:07:35",
+ "greeting": {
+  "said": [
+   "Hello, you've reached the clinics' scheduling line. How can I help you today?"
+  ],
+  "passes": 0,
+  "seconds": 0.0,
+  "input_tokens": 0,
+  "cached_tokens": 0,
+  "output_tokens": 0,
+  "cost": 0.0,
+  "tools": [],
+  "problems": [],
+  "order": [
+   {
+    "said": "Hello, you've reached the clinics' scheduling line. How can I help you today?"
+   }
+  ]
+ },
+ "turns": [
+  {
+   "caller": "Hi, my name is Omar Haddad. I'm looking to book an MRI for my knee.",
+   "agent": {
+    "said": [
+     "Have you been a patient with us before, Omar?"
+    ],
+    "passes": 1,
+    "seconds": 0.73,
+    "input_tokens": 2381,
+    "cached_tokens": 1920,
+    "output_tokens": 12,
+    "cost": 0.003672,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "Have you been a patient with us before, Omar?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "No, I haven't been a patient there before.",
+   "agent": {
+    "said": [
+     "Could you please spell your first name for me letter by letter?"
+    ],
+    "passes": 1,
+    "seconds": 0.731,
+    "input_tokens": 2410,
+    "cached_tokens": 2176,
+    "output_tokens": 14,
+    "cost": 0.003445,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "Could you please spell your first name for me letter by letter?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "Sure, it's O, M, A, R.",
+   "agent": {
+    "said": [
+     "Great, is that O, M, A, R?"
+    ],
+    "passes": 1,
+    "seconds": 0.735,
+    "input_tokens": 2442,
+    "cached_tokens": 2304,
+    "output_tokens": 13,
+    "cost": 0.003355,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "Great, is that O, M, A, R?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "Yes, that's correct.",
+   "agent": {
+    "said": [
+     "Now, could you please spell your last name letter by letter?"
+    ],
+    "passes": 1,
+    "seconds": 0.827,
+    "input_tokens": 2467,
+    "cached_tokens": 2304,
+    "output_tokens": 14,
+    "cost": 0.003427,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "Now, could you please spell your last name letter by letter?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "Of course, it's H, A, D, D, A, D.",
+   "agent": {
+    "said": [
+     "Is that H, A, D, D, A, D?"
+    ],
+    "passes": 1,
+    "seconds": 0.98,
+    "input_tokens": 2504,
+    "cached_tokens": 2304,
+    "output_tokens": 15,
+    "cost": 0.00353,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "Is that H, A, D, D, A, D?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "Yes, that's right.",
+   "agent": {
+    "said": [
+     "Thank you, Omar. Unfortunately, MRI for the knee is only available for existing patients with a referral, which we don't have on file."
+    ],
+    "passes": 2,
+    "seconds": 1.756,
+    "input_tokens": 4756,
+    "cached_tokens": 2304,
+    "output_tokens": 96,
+    "cost": 0.00997,
+    "tools": [
+     {
+      "tool": "start_booking",
+      "args": {
+       "full_name": "Omar Haddad",
+       "returning": false,
+       "spelled_first_name": "O, M, A, R",
+       "spelled_last_name": "H, A, D, D, A, D",
+       "visit_description": "MRI for my knee",
+       "specialty": "Radiology"
+      },
+      "result": {
+       "ok": true
+      },
+      "stage": "identify",
+      "next_stage": "visit_type"
+     }
+    ],
+    "problems": [],
+    "order": [
+     {
+      "tool": 0
+     },
+     {
+      "said": "Thank you, Omar. Unfortunately, MRI for the knee is only available for existing patients with a referral, which we don't have on file."
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "Is there anything else I can do to book the MRI?",
+   "agent": {
+    "said": [
+     "Without a referral to Radiology and being an existing patient, booking an MRI isn't possible right now."
+    ],
+    "passes": 1,
+    "seconds": 0.77,
+    "input_tokens": 2273,
+    "cached_tokens": 2048,
+    "output_tokens": 21,
+    "cost": 0.003332,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "Without a referral to Radiology and being an existing patient, booking an MRI isn't possible right now."
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "Okay, I'll sort it out with my doctor first. Thank you for your help, and goodbye.",
+   "agent": {
+    "said": [
+     "You're welcome, Omar. Have a great day. Goodbye!"
+    ],
+    "passes": 1,
+    "seconds": 0.683,
+    "input_tokens": 2321,
+    "cached_tokens": 2176,
+    "output_tokens": 13,
+    "cost": 0.003213,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "You're welcome, Omar. Have a great day. Goodbye!"
+     }
+    ]
+   },
+   "after_check_in": false
+  }
+ ],
+ "ended_by": "caller_hung_up",
+ "stopped_because": "",
+ "outcome": {
+  "status": "in_progress",
+  "bookings": [],
+  "name_confirmed": true
+ },
+ "totals": {
+  "agent_input_tokens": 21554,
+  "agent_cached_tokens": 17536,
+  "agent_output_tokens": 198,
+  "agent_passes": 9,
+  "agent_cost": 0.033944,
+  "slowest_reply_seconds": 1.756,
+  "caller_lines": 8,
+  "caller_cost": 0.000675
+ },
+ "score": {
+  "passed": true,
+  "reasons": [],
+  "bad_bookings": 0,
+  "staff_promise": false
+ }
+}

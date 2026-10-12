@@ -1,0 +1,250 @@
+{
+ "version": "naive_rules",
+ "model": "gpt-4o",
+ "caller_model": "gpt-4o-mini",
+ "scenario": "garcia_skin_check",
+ "title": "New patient: a skin check with Dr. Garcia (no Garcia does skin checks)",
+ "run": 3,
+ "clinic_time": "2026-10-13T09:00",
+ "ran_at": "2026-10-12T19:06:23",
+ "greeting": {
+  "said": [
+   "Hello, you've reached the clinics' scheduling line. How can I help you today?"
+  ],
+  "passes": 0,
+  "seconds": 0.0,
+  "input_tokens": 0,
+  "cached_tokens": 0,
+  "output_tokens": 0,
+  "cost": 0.0,
+  "tools": [],
+  "problems": [],
+  "order": [
+   {
+    "said": "Hello, you've reached the clinics' scheduling line. How can I help you today?"
+   }
+  ]
+ },
+ "turns": [
+  {
+   "caller": "Hi, I’d like to schedule a skin check for a couple of moles. A friend recommended Dr. Garcia.",
+   "agent": {
+    "said": [
+     "Certainly. Could you please tell me your full name and whether you have been a patient with us before?"
+    ],
+    "passes": 1,
+    "seconds": 1.154,
+    "input_tokens": 10002,
+    "cached_tokens": 9088,
+    "output_tokens": 22,
+    "cost": 0.013865,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "Certainly. Could you please tell me your full name and whether you have been a patient with us before?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "My name is Lena Park, and I have never been a patient here before.",
+   "agent": {
+    "said": [
+     "Thank you, Lena. We have a few options for your skin check, and as a new patient, let me find a suitable dermatologist and location for you. Dr. Kenji Kim and Dr. Daniel Chen, who are both dermatologists, are accepting new patients. Would you prefer a specific location, or should I find the closest available one?"
+    ],
+    "passes": 1,
+    "seconds": 1.652,
+    "input_tokens": 10047,
+    "cached_tokens": 9856,
+    "output_tokens": 71,
+    "cost": 0.013508,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "Thank you, Lena. We have a few options for your skin check, and as a new patient, let me find a suitable dermatologist and location for you. Dr. Kenji Kim and Dr. Daniel Chen, who are both dermatologists, are accepting new patients. Would you prefer a specific location, or should I find the closest available one?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "I’m okay with whoever is available. Can you schedule me with either Dr. Kim or Dr. Chen?",
+   "agent": {
+    "said": [
+     "Great. I'll check the earliest available times for a \"Skin Cancer Screening\" with Dr. Kim or Dr. Chen. One moment please.",
+     "Lena, I found some openings for you today. How does 11 AM or 11:30 AM with Dr. Kenji Kim at Midtown Medical Group sound?"
+    ],
+    "passes": 2,
+    "seconds": 2.573,
+    "input_tokens": 20757,
+    "cached_tokens": 19968,
+    "output_tokens": 83,
+    "cost": 0.027762,
+    "tools": [
+     {
+      "tool": "find_open_times",
+      "args": {
+       "visit_type_id": "appt_027"
+      },
+      "result": {
+       "ok": true,
+       "times": [
+        {
+         "start": "2026-10-13T11:00",
+         "spoken": "Tuesday 13 October at 11 AM",
+         "provider_id": "prov_027",
+         "doctor": "Dr. Kenji Kim",
+         "location_id": "loc_005",
+         "location": "Midtown Medical Group"
+        },
+        {
+         "start": "2026-10-13T11:00",
+         "spoken": "Tuesday 13 October at 11 AM",
+         "provider_id": "prov_048",
+         "doctor": "Dr. Wei Sato",
+         "location_id": "loc_000",
+         "location": "Mission Bay Health Center"
+        },
+        {
+         "start": "2026-10-13T11:30",
+         "spoken": "Tuesday 13 October at 11:30 AM",
+         "provider_id": "prov_027",
+         "doctor": "Dr. Kenji Kim",
+         "location_id": "loc_005",
+         "location": "Midtown Medical Group"
+        },
+        {
+         "start": "2026-10-13T11:30",
+         "spoken": "Tuesday 13 October at 11:30 AM",
+         "provider_id": "prov_035",
+         "doctor": "Dr. Daniel Smith",
+         "location_id": "loc_001",
+         "location": "Mission District Family Clinic"
+        },
+        {
+         "start": "2026-10-13T11:30",
+         "spoken": "Tuesday 13 October at 11:30 AM",
+         "provider_id": "prov_048",
+         "doctor": "Dr. Wei Sato",
+         "location_id": "loc_000",
+         "location": "Mission Bay Health Center"
+        },
+        {
+         "start": "2026-10-13T13:00",
+         "spoken": "Tuesday 13 October at 1 PM",
+         "provider_id": "prov_001",
+         "doctor": "Dr. Daniel Chen",
+         "location_id": "loc_007",
+         "location": "Richmond Care Center"
+        }
+       ]
+      },
+      "stage": "naive",
+      "next_stage": null
+     }
+    ],
+    "problems": [],
+    "order": [
+     {
+      "said": "Great. I'll check the earliest available times for a \"Skin Cancer Screening\" with Dr. Kim or Dr. Chen. One moment please."
+     },
+     {
+      "tool": 0
+     },
+     {
+      "said": "Lena, I found some openings for you today. How does 11 AM or 11:30 AM with Dr. Kenji Kim at Midtown Medical Group sound?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "11:30 AM with Dr. Kim sounds good. Let’s go with that.",
+   "agent": {
+    "said": [
+     "Your appointment with Dr. Kenji Kim for a skin check is confirmed for today at 11:30 AM at Midtown Medical Group. Thank you, Lena, and have a great day! Goodbye."
+    ],
+    "passes": 2,
+    "seconds": 2.138,
+    "input_tokens": 21467,
+    "cached_tokens": 20992,
+    "output_tokens": 94,
+    "cost": 0.028368,
+    "tools": [
+     {
+      "tool": "book_appointment",
+      "args": {
+       "patient_name": "Lena Park",
+       "visit_type_id": "appt_027",
+       "provider_id": "prov_027",
+       "location_id": "loc_005",
+       "start": "2026-10-13T11:30"
+      },
+      "result": {
+       "ok": true,
+       "booked": {
+        "patient_name": "Lena Park",
+        "patient_id": null,
+        "visit_type_id": "appt_027",
+        "provider_id": "prov_027",
+        "location_id": "loc_005",
+        "start": "2026-10-13T11:30"
+       }
+      },
+      "stage": "naive",
+      "next_stage": null
+     }
+    ],
+    "problems": [],
+    "order": [
+     {
+      "tool": 0
+     },
+     {
+      "said": "Your appointment with Dr. Kenji Kim for a skin check is confirmed for today at 11:30 AM at Midtown Medical Group. Thank you, Lena, and have a great day! Goodbye."
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "Thank you! Goodbye.",
+   "agent": null
+  }
+ ],
+ "ended_by": "caller_hung_up",
+ "stopped_because": "",
+ "outcome": {
+  "status": "booked",
+  "bookings": [
+   {
+    "patient_name": "Lena Park",
+    "patient_id": null,
+    "visit_type_id": "appt_027",
+    "provider_id": "prov_027",
+    "location_id": "loc_005",
+    "start": "2026-10-13T11:30"
+   }
+  ],
+  "name_confirmed": null
+ },
+ "totals": {
+  "agent_input_tokens": 62273,
+  "agent_cached_tokens": 59904,
+  "agent_output_tokens": 270,
+  "agent_passes": 6,
+  "agent_cost": 0.083503,
+  "slowest_reply_seconds": 2.573,
+  "caller_lines": 5,
+  "caller_cost": 0.00043
+ },
+ "score": {
+  "passed": true,
+  "reasons": [],
+  "bad_bookings": 0,
+  "staff_promise": false
+ }
+}

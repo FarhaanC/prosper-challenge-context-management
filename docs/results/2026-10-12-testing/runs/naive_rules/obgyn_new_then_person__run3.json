@@ -1,0 +1,288 @@
+{
+ "version": "naive_rules",
+ "model": "gpt-4o",
+ "caller_model": "gpt-4o-mini",
+ "scenario": "obgyn_new_then_person",
+ "title": "New patient: an OB/GYN visit (no OB/GYN takes new patients), then 'a person'",
+ "run": 3,
+ "clinic_time": "2026-10-13T09:00",
+ "ran_at": "2026-10-12T19:11:35",
+ "greeting": {
+  "said": [
+   "Hello, you've reached the clinics' scheduling line. How can I help you today?"
+  ],
+  "passes": 0,
+  "seconds": 0.0,
+  "input_tokens": 0,
+  "cached_tokens": 0,
+  "output_tokens": 0,
+  "cost": 0.0,
+  "tools": [],
+  "problems": [],
+  "order": [
+   {
+    "said": "Hello, you've reached the clinics' scheduling line. How can I help you today?"
+   }
+  ]
+ },
+ "turns": [
+  {
+   "caller": "Hi, I’d like to schedule an annual well-woman exam with an OB/GYN, please.",
+   "agent": {
+    "said": [
+     "Sure! Are you a returning patient with us, or would this be your first visit?"
+    ],
+    "passes": 1,
+    "seconds": 0.813,
+    "input_tokens": 9999,
+    "cached_tokens": 9088,
+    "output_tokens": 19,
+    "cost": 0.013827,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "Sure! Are you a returning patient with us, or would this be your first visit?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "This would be my first visit.",
+   "agent": {
+    "said": [
+     "Could you please provide your full name? Also, is there a specific OB/GYN you would prefer to see, or should I find one for you?"
+    ],
+    "passes": 1,
+    "seconds": 0.969,
+    "input_tokens": 10032,
+    "cached_tokens": 9856,
+    "output_tokens": 32,
+    "cost": 0.01308,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "Could you please provide your full name? Also, is there a specific OB/GYN you would prefer to see, or should I find one for you?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "My name is Sofia Reyes. I don’t have a specific OB/GYN in mind, so you can find one for me.",
+   "agent": {
+    "said": [
+     "For a new patient visit with an OB/GYN, Dr. Linda Nguyen practices at the Downtown Health Center. Would this location work for you?"
+    ],
+    "passes": 1,
+    "seconds": 0.951,
+    "input_tokens": 10097,
+    "cached_tokens": 9856,
+    "output_tokens": 30,
+    "cost": 0.013222,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "For a new patient visit with an OB/GYN, Dr. Linda Nguyen practices at the Downtown Health Center. Would this location work for you?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "Yes, that location works for me.",
+   "agent": {
+    "said": [
+     "Dr. Linda Nguyen is available for an annual well-woman exam at the Downtown Health Center today at either eleven o'clock or eleven thirty, or at one o'clock. Which time would you prefer?"
+    ],
+    "passes": 2,
+    "seconds": 1.921,
+    "input_tokens": 20716,
+    "cached_tokens": 19968,
+    "output_tokens": 67,
+    "cost": 0.0275,
+    "tools": [
+     {
+      "tool": "find_open_times",
+      "args": {
+       "visit_type_id": "appt_041",
+       "provider_id": "prov_036"
+      },
+      "result": {
+       "ok": true,
+       "times": [
+        {
+         "start": "2026-10-13T11:00",
+         "spoken": "Tuesday 13 October at 11 AM",
+         "provider_id": "prov_036",
+         "doctor": "Dr. Linda Nguyen",
+         "location_id": "loc_004",
+         "location": "Downtown Health Center"
+        },
+        {
+         "start": "2026-10-13T11:30",
+         "spoken": "Tuesday 13 October at 11:30 AM",
+         "provider_id": "prov_036",
+         "doctor": "Dr. Linda Nguyen",
+         "location_id": "loc_004",
+         "location": "Downtown Health Center"
+        },
+        {
+         "start": "2026-10-13T13:00",
+         "spoken": "Tuesday 13 October at 1 PM",
+         "provider_id": "prov_036",
+         "doctor": "Dr. Linda Nguyen",
+         "location_id": "loc_004",
+         "location": "Downtown Health Center"
+        },
+        {
+         "start": "2026-10-13T13:30",
+         "spoken": "Tuesday 13 October at 1:30 PM",
+         "provider_id": "prov_036",
+         "doctor": "Dr. Linda Nguyen",
+         "location_id": "loc_004",
+         "location": "Downtown Health Center"
+        },
+        {
+         "start": "2026-10-13T15:00",
+         "spoken": "Tuesday 13 October at 3 PM",
+         "provider_id": "prov_036",
+         "doctor": "Dr. Linda Nguyen",
+         "location_id": "loc_004",
+         "location": "Downtown Health Center"
+        },
+        {
+         "start": "2026-10-14T08:00",
+         "spoken": "Wednesday 14 October at 8 AM",
+         "provider_id": "prov_036",
+         "doctor": "Dr. Linda Nguyen",
+         "location_id": "loc_004",
+         "location": "Downtown Health Center"
+        }
+       ]
+      },
+      "stage": "naive",
+      "next_stage": null
+     }
+    ],
+    "problems": [],
+    "order": [
+     {
+      "tool": 0
+     },
+     {
+      "said": "Dr. Linda Nguyen is available for an annual well-woman exam at the Downtown Health Center today at either eleven o'clock or eleven thirty, or at one o'clock. Which time would you prefer?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "I’m looking to schedule for a different date. Can you help with that?",
+   "agent": {
+    "said": [
+     "Certainly! How about tomorrow, Wednesday the 14th, at eight o'clock in the morning?"
+    ],
+    "passes": 1,
+    "seconds": 0.838,
+    "input_tokens": 10638,
+    "cached_tokens": 10496,
+    "output_tokens": 21,
+    "cost": 0.013685,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "Certainly! How about tomorrow, Wednesday the 14th, at eight o'clock in the morning?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "I’m not sure if that works for me. Can I speak to someone about my options?",
+   "agent": {
+    "said": [
+     "A member of our staff will call you back to discuss more scheduling options. Thank you for calling!"
+    ],
+    "passes": 2,
+    "seconds": 1.885,
+    "input_tokens": 21400,
+    "cached_tokens": 19584,
+    "output_tokens": 38,
+    "cost": 0.0294,
+    "tools": [
+     {
+      "tool": "hand_off",
+      "args": {
+       "reason": "speak_to_staff"
+      },
+      "result": {
+       "ok": true
+      },
+      "stage": "naive",
+      "next_stage": null
+     }
+    ],
+    "problems": [],
+    "order": [
+     {
+      "tool": 0
+     },
+     {
+      "said": "A member of our staff will call you back to discuss more scheduling options. Thank you for calling!"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "Thank you! Goodbye.",
+   "agent": {
+    "said": [
+     "You're welcome! Goodbye."
+    ],
+    "passes": 1,
+    "seconds": 0.755,
+    "input_tokens": 10748,
+    "cached_tokens": 10496,
+    "output_tokens": 6,
+    "cost": 0.01381,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "You're welcome! Goodbye."
+     }
+    ]
+   },
+   "after_check_in": false
+  }
+ ],
+ "ended_by": "caller_hung_up",
+ "stopped_because": "",
+ "outcome": {
+  "status": "handed_off",
+  "bookings": [],
+  "name_confirmed": null
+ },
+ "totals": {
+  "agent_input_tokens": 93630,
+  "agent_cached_tokens": 89344,
+  "agent_output_tokens": 213,
+  "agent_passes": 9,
+  "agent_cost": 0.124524,
+  "slowest_reply_seconds": 1.921,
+  "caller_lines": 7,
+  "caller_cost": 0.000636
+ },
+ "score": {
+  "passed": true,
+  "reasons": [],
+  "bad_bookings": 0,
+  "staff_promise": false
+ }
+}

@@ -1,0 +1,163 @@
+{
+ "version": "naive_rules",
+ "model": "gpt-4o",
+ "caller_model": "gpt-4o-mini",
+ "scenario": "knee_mri_new_patient",
+ "title": "New patient: a knee MRI (needs a referral; existing patients only)",
+ "run": 2,
+ "clinic_time": "2026-10-13T09:00",
+ "ran_at": "2026-10-12T19:00:18",
+ "greeting": {
+  "said": [
+   "Hello, you've reached the clinics' scheduling line. How can I help you today?"
+  ],
+  "passes": 0,
+  "seconds": 0.0,
+  "input_tokens": 0,
+  "cached_tokens": 0,
+  "output_tokens": 0,
+  "cost": 0.0,
+  "tools": [],
+  "problems": [],
+  "order": [
+   {
+    "said": "Hello, you've reached the clinics' scheduling line. How can I help you today?"
+   }
+  ]
+ },
+ "turns": [
+  {
+   "caller": "Hi, my name is Omar Haddad. I’d like to book a knee MRI, please.",
+   "agent": {
+    "said": [
+     "Welcome, Omar! Have you been a patient with us before?"
+    ],
+    "passes": 1,
+    "seconds": 0.885,
+    "input_tokens": 9998,
+    "cached_tokens": 9088,
+    "output_tokens": 14,
+    "cost": 0.013775,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "Welcome, Omar! Have you been a patient with us before?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "No, I've never been a patient here before.",
+   "agent": {
+    "said": [
+     "We welcome new patients! Before we proceed, we need to confirm whether you have a referral for the knee MRI. Do you have one?"
+    ],
+    "passes": 1,
+    "seconds": 0.88,
+    "input_tokens": 10029,
+    "cached_tokens": 9856,
+    "output_tokens": 29,
+    "cost": 0.013043,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "We welcome new patients! Before we proceed, we need to confirm whether you have a referral for the knee MRI. Do you have one?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "I don't have a referral.",
+   "agent": {
+    "said": [
+     "We cannot book a knee MRI without a referral on file. You might want to speak to our staff about getting a referral. Would you like me to arrange a call back for you?"
+    ],
+    "passes": 1,
+    "seconds": 1.105,
+    "input_tokens": 10071,
+    "cached_tokens": 9856,
+    "output_tokens": 38,
+    "cost": 0.013237,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "We cannot book a knee MRI without a referral on file. You might want to speak to our staff about getting a referral. Would you like me to arrange a call back for you?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "Is there anything else I can do to book the MRI?",
+   "agent": {
+    "said": [
+     "The knee MRI requires a referral, so you'll need one from a qualified healthcare provider before we can proceed with booking. Shall I arrange for a staff member to assist you further?"
+    ],
+    "passes": 1,
+    "seconds": 0.921,
+    "input_tokens": 10128,
+    "cached_tokens": 9984,
+    "output_tokens": 36,
+    "cost": 0.0132,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "The knee MRI requires a referral, so you'll need one from a qualified healthcare provider before we can proceed with booking. Shall I arrange for a staff member to assist you further?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "I'll sort it out with my own doctor first. Thank you for your help. Goodbye!",
+   "agent": {
+    "said": [
+     "You're welcome! Don't hesitate to call us back once you have the referral. Goodbye!"
+    ],
+    "passes": 1,
+    "seconds": 0.813,
+    "input_tokens": 10189,
+    "cached_tokens": 9984,
+    "output_tokens": 18,
+    "cost": 0.013173,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "You're welcome! Don't hesitate to call us back once you have the referral. Goodbye!"
+     }
+    ]
+   },
+   "after_check_in": false
+  }
+ ],
+ "ended_by": "caller_hung_up",
+ "stopped_because": "",
+ "outcome": {
+  "status": "in_progress",
+  "bookings": [],
+  "name_confirmed": null
+ },
+ "totals": {
+  "agent_input_tokens": 50415,
+  "agent_cached_tokens": 48768,
+  "agent_output_tokens": 135,
+  "agent_passes": 5,
+  "agent_cost": 0.066428,
+  "slowest_reply_seconds": 1.105,
+  "caller_lines": 5,
+  "caller_cost": 0.000432
+ },
+ "score": {
+  "passed": true,
+  "reasons": [],
+  "bad_bookings": 0,
+  "staff_promise": false
+ }
+}

@@ -1,0 +1,423 @@
+{
+ "version": "ours",
+ "model": "gpt-4o",
+ "caller_model": "gpt-4o-mini",
+ "scenario": "maria_garcia_checkup",
+ "title": "New patient: a check-up with Dr. Maria Garcia (there are two)",
+ "run": 2,
+ "clinic_time": "2026-10-13T09:00",
+ "ran_at": "2026-10-12T19:03:55",
+ "greeting": {
+  "said": [
+   "Hello, you've reached the clinics' scheduling line. How can I help you today?"
+  ],
+  "passes": 0,
+  "seconds": 0.0,
+  "input_tokens": 0,
+  "cached_tokens": 0,
+  "output_tokens": 0,
+  "cost": 0.0,
+  "tools": [],
+  "problems": [],
+  "order": [
+   {
+    "said": "Hello, you've reached the clinics' scheduling line. How can I help you today?"
+   }
+  ]
+ },
+ "turns": [
+  {
+   "caller": "Hi, I’d like to schedule a yearly check-up with Dr. Maria Garcia. A colleague recommended her.",
+   "agent": {
+    "said": [
+     "Can I have your full name, please?"
+    ],
+    "passes": 1,
+    "seconds": 0.749,
+    "input_tokens": 2384,
+    "cached_tokens": 1920,
+    "output_tokens": 10,
+    "cost": 0.00366,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "Can I have your full name, please?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "Sure, it's Priya Nair.",
+   "agent": {
+    "said": [
+     "Have you been a patient with us before, Priya?"
+    ],
+    "passes": 1,
+    "seconds": 0.745,
+    "input_tokens": 2409,
+    "cached_tokens": 2176,
+    "output_tokens": 13,
+    "cost": 0.003432,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "Have you been a patient with us before, Priya?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "No, I’ve never been a patient at your clinic before.",
+   "agent": {
+    "said": [
+     "Welcome! Could you please spell your first name for me, letter by letter?"
+    ],
+    "passes": 1,
+    "seconds": 0.703,
+    "input_tokens": 2442,
+    "cached_tokens": 2304,
+    "output_tokens": 17,
+    "cost": 0.003395,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "Welcome! Could you please spell your first name for me, letter by letter?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "Of course, it's P, R, I, Y, A.",
+   "agent": {
+    "said": [
+     "Thank you. Is that P, R, I, Y, A?"
+    ],
+    "passes": 1,
+    "seconds": 0.745,
+    "input_tokens": 2480,
+    "cached_tokens": 2304,
+    "output_tokens": 16,
+    "cost": 0.00348,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "Thank you. Is that P, R, I, Y, A?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "Yes, that's correct.",
+   "agent": {
+    "said": [
+     "Great! Could you now spell your last name for me, letter by letter?"
+    ],
+    "passes": 1,
+    "seconds": 0.711,
+    "input_tokens": 2508,
+    "cached_tokens": 2176,
+    "output_tokens": 17,
+    "cost": 0.00372,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "Great! Could you now spell your last name for me, letter by letter?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "Sure, it's N, A, I, R.",
+   "agent": {
+    "said": [
+     "Thank you. Is that N, A, I, R?"
+    ],
+    "passes": 1,
+    "seconds": 0.807,
+    "input_tokens": 2543,
+    "cached_tokens": 2304,
+    "output_tokens": 14,
+    "cost": 0.003618,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "Thank you. Is that N, A, I, R?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "Yes, that's right.",
+   "agent": {
+    "said": [
+     "Thank you, one moment.",
+     "Thanks for your patience, Priya. Let's see what yearly check-up visit types are available for you.",
+     "You can book an \"Annual Wellness Visit,\" which is a 30-minute appointment to review your health and prevention plan with an internal medicine doctor, and it doesn't require a referral. Would you like to proceed with this option?"
+    ],
+    "passes": 3,
+    "seconds": 3.571,
+    "input_tokens": 6637,
+    "cached_tokens": 4224,
+    "output_tokens": 159,
+    "cost": 0.012903,
+    "tools": [
+     {
+      "tool": "start_booking",
+      "args": {
+       "full_name": "Priya Nair",
+       "returning": false,
+       "spelled_first_name": "P, R, I, Y, A",
+       "spelled_last_name": "N, A, I, R",
+       "doctor_name": "Dr. Maria Garcia",
+       "visit_description": "yearly check-up"
+      },
+      "result": {
+       "ok": true
+      },
+      "stage": "identify",
+      "next_stage": "visit_type"
+     },
+     {
+      "tool": "list_visit_types",
+      "args": {
+       "specialty": "Internal Medicine"
+      },
+      "result": {
+       "ok": true,
+       "specialty": "Internal Medicine",
+       "visit_types": [
+        {
+         "id": "appt_003",
+         "name": "Annual Wellness Visit",
+         "minutes": 30,
+         "needs_referral": false,
+         "open_to_new_patients": true,
+         "can_book": true,
+         "why_not": [],
+         "description": "A yearly visit with an internal medicine doctor to review your health and prevention plan.",
+         "usual_choice": false
+        },
+        {
+         "id": "appt_014",
+         "name": "Pre-operative Evaluation",
+         "minutes": 30,
+         "needs_referral": true,
+         "open_to_new_patients": false,
+         "can_book": false,
+         "why_not": [
+          "Pre-operative Evaluation is only for existing patients.",
+          "Pre-operative Evaluation needs a referral to Internal Medicine, and there isn't one on file."
+         ]
+        }
+       ]
+      },
+      "stage": "visit_type",
+      "next_stage": null
+     }
+    ],
+    "problems": [],
+    "order": [
+     {
+      "said": "Thank you, one moment."
+     },
+     {
+      "tool": 0
+     },
+     {
+      "said": "Thanks for your patience, Priya. Let's see what yearly check-up visit types are available for you."
+     },
+     {
+      "tool": 1
+     },
+     {
+      "said": "You can book an \"Annual Wellness Visit,\" which is a 30-minute appointment to review your health and prevention plan with an internal medicine doctor, and it doesn't require a referral. Would you like to proceed with this option?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "Yes, that works for me.",
+   "agent": {
+    "said": [
+     "Great, I'll proceed with the Annual Wellness Visit for you now.",
+     "There are two doctors named Dr. Maria Garcia offering an Annual Wellness Visit. One is Dr. Maria Garcia, MD in Pediatrics at Mission Bay Health Center, and the other is Dr. Maria Garcia, NP in Family Medicine at Midtown, North Beach, or Richmond. Which one did you mean?"
+    ],
+    "passes": 2,
+    "seconds": 1.934,
+    "input_tokens": 3860,
+    "cached_tokens": 2048,
+    "output_tokens": 93,
+    "cost": 0.00802,
+    "tools": [
+     {
+      "tool": "choose_visit_type",
+      "args": {
+       "visit_type_id": "appt_003"
+      },
+      "result": {
+       "ok": true
+      },
+      "stage": "visit_type",
+      "next_stage": "booking"
+     }
+    ],
+    "problems": [],
+    "order": [
+     {
+      "said": "Great, I'll proceed with the Annual Wellness Visit for you now."
+     },
+     {
+      "tool": 0
+     },
+     {
+      "said": "There are two doctors named Dr. Maria Garcia offering an Annual Wellness Visit. One is Dr. Maria Garcia, MD in Pediatrics at Mission Bay Health Center, and the other is Dr. Maria Garcia, NP in Family Medicine at Midtown, North Beach, or Richmond. Which one did you mean?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "I meant Dr. Maria Garcia, NP in Family Medicine.",
+   "agent": {
+    "said": [
+     "Here are the options with Dr. Maria Garcia, NP in Family Medicine: North Beach at eleven a.m. today, Midtown tomorrow at eight a.m., or later in Richmond. Which would you prefer?"
+    ],
+    "passes": 1,
+    "seconds": 0.967,
+    "input_tokens": 1734,
+    "cached_tokens": 1536,
+    "output_tokens": 42,
+    "cost": 0.002835,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "Here are the options with Dr. Maria Garcia, NP in Family Medicine: North Beach at eleven a.m. today, Midtown tomorrow at eight a.m., or later in Richmond. Which would you prefer?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "I’ll take the appointment in North Beach at eleven a.m. today.",
+   "agent": {
+    "said": [
+     "To confirm: Annual Wellness Visit with Dr. Maria Garcia at North Beach Specialty Center, 481 Mission St, on Tuesday 13 October at 11 AM. It takes about 30 minutes. Would you like me to book it?"
+    ],
+    "passes": 1,
+    "seconds": 0.767,
+    "input_tokens": 1798,
+    "cached_tokens": 1536,
+    "output_tokens": 15,
+    "cost": 0.002725,
+    "tools": [
+     {
+      "tool": "choose_option",
+      "args": {
+       "option_id": "1"
+      },
+      "result": {
+       "ok": true,
+       "read_back": "Annual Wellness Visit with Dr. Maria Garcia at North Beach Specialty Center, 481 Mission St, on Tuesday 13 October at 11 AM. It takes about 30 minutes.",
+       "note": "The code is reading the read_back to the caller and asking if they'd like to book it: don't repeat it. Call confirm_booking only after they say yes."
+      },
+      "stage": "booking",
+      "next_stage": null
+     }
+    ],
+    "problems": [],
+    "order": [
+     {
+      "tool": 0
+     },
+     {
+      "said": "To confirm: Annual Wellness Visit with Dr. Maria Garcia at North Beach Specialty Center, 481 Mission St, on Tuesday 13 October at 11 AM. It takes about 30 minutes. Would you like me to book it?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "Yes, please go ahead and book it.",
+   "agent": {
+    "said": [
+     "Your Annual Wellness Visit with Dr. Maria Garcia at North Beach Specialty Center is confirmed for Tuesday, October 13th at 11 AM. Thank you for calling, and goodbye!"
+    ],
+    "passes": 2,
+    "seconds": 1.561,
+    "input_tokens": 3125,
+    "cached_tokens": 1664,
+    "output_tokens": 47,
+    "cost": 0.006202,
+    "tools": [
+     {
+      "tool": "confirm_booking",
+      "args": {},
+      "result": {
+       "ok": true,
+       "booked": "Annual Wellness Visit with Dr. Maria Garcia at North Beach Specialty Center, 481 Mission St, on Tuesday 13 October at 11 AM. It takes about 30 minutes."
+      },
+      "stage": "booking",
+      "next_stage": "end"
+     }
+    ],
+    "problems": [],
+    "order": [
+     {
+      "tool": 0
+     },
+     {
+      "said": "Your Annual Wellness Visit with Dr. Maria Garcia at North Beach Specialty Center is confirmed for Tuesday, October 13th at 11 AM. Thank you for calling, and goodbye!"
+     }
+    ]
+   },
+   "after_check_in": false
+  }
+ ],
+ "ended_by": "agent_ended",
+ "stopped_because": "",
+ "outcome": {
+  "status": "booked",
+  "bookings": [
+   {
+    "caller": "Priya Nair",
+    "patient_id": null,
+    "visit_type_id": "appt_003",
+    "provider_id": "prov_003",
+    "location_id": "loc_002",
+    "start": "2026-10-13T11:00:00",
+    "duration_min": 30
+   }
+  ],
+  "name_confirmed": true
+ },
+ "totals": {
+  "agent_input_tokens": 31920,
+  "agent_cached_tokens": 24192,
+  "agent_output_tokens": 443,
+  "agent_passes": 15,
+  "agent_cost": 0.05399,
+  "slowest_reply_seconds": 3.571,
+  "caller_lines": 11,
+  "caller_cost": 0.00103
+ },
+ "score": {
+  "passed": true,
+  "reasons": [],
+  "bad_bookings": 0,
+  "staff_promise": false
+ }
+}

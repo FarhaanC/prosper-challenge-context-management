@@ -1,0 +1,289 @@
+{
+ "version": "naive_rules",
+ "model": "gpt-4o",
+ "caller_model": "gpt-4o-mini",
+ "scenario": "maria_garcia_checkup",
+ "title": "New patient: a check-up with Dr. Maria Garcia (there are two)",
+ "run": 2,
+ "clinic_time": "2026-10-13T09:00",
+ "ran_at": "2026-10-12T19:03:33",
+ "greeting": {
+  "said": [
+   "Hello, you've reached the clinics' scheduling line. How can I help you today?"
+  ],
+  "passes": 0,
+  "seconds": 0.0,
+  "input_tokens": 0,
+  "cached_tokens": 0,
+  "output_tokens": 0,
+  "cost": 0.0,
+  "tools": [],
+  "problems": [],
+  "order": [
+   {
+    "said": "Hello, you've reached the clinics' scheduling line. How can I help you today?"
+   }
+  ]
+ },
+ "turns": [
+  {
+   "caller": "Hi, I’d like to schedule a yearly check-up with Dr. Maria Garcia. A colleague recommended her.",
+   "agent": {
+    "said": [
+     "Are you a returning patient, or would this be your first visit with our clinic?"
+    ],
+    "passes": 1,
+    "seconds": 0.786,
+    "input_tokens": 10000,
+    "cached_tokens": 9088,
+    "output_tokens": 18,
+    "cost": 0.01382,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "Are you a returning patient, or would this be your first visit with our clinic?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "This will be my first visit.",
+   "agent": {
+    "said": [
+     "Could you confirm if you'd prefer a yearly check-up with a family medicine or internal medicine doctor?"
+    ],
+    "passes": 1,
+    "seconds": 0.912,
+    "input_tokens": 10032,
+    "cached_tokens": 9856,
+    "output_tokens": 20,
+    "cost": 0.01296,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "Could you confirm if you'd prefer a yearly check-up with a family medicine or internal medicine doctor?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "I’d prefer a yearly check-up with the family medicine Dr. Maria Garcia.",
+   "agent": {
+    "said": [
+     "Dr. Maria Garcia, our family medicine specialist, practices at the North Beach Specialty Center, Midtown Medical Group, and Richmond Care Center. Which location would you prefer?"
+    ],
+    "passes": 1,
+    "seconds": 1.073,
+    "input_tokens": 10075,
+    "cached_tokens": 9856,
+    "output_tokens": 34,
+    "cost": 0.013208,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "Dr. Maria Garcia, our family medicine specialist, practices at the North Beach Specialty Center, Midtown Medical Group, and Richmond Care Center. Which location would you prefer?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "I’ll take the first option. North Beach Specialty Center works for me.",
+   "agent": {
+    "said": [
+     "Dr. Garcia has openings at the North Beach Specialty Center today at 11 AM, 1 PM, and 1:30 PM. Do any of these times work for you?"
+    ],
+    "passes": 2,
+    "seconds": 2.001,
+    "input_tokens": 20696,
+    "cached_tokens": 19968,
+    "output_tokens": 64,
+    "cost": 0.02742,
+    "tools": [
+     {
+      "tool": "find_open_times",
+      "args": {
+       "visit_type_id": "appt_002",
+       "provider_id": "prov_003"
+      },
+      "result": {
+       "ok": true,
+       "times": [
+        {
+         "start": "2026-10-13T11:00",
+         "spoken": "Tuesday 13 October at 11 AM",
+         "provider_id": "prov_003",
+         "doctor": "Dr. Maria Garcia",
+         "location_id": "loc_002",
+         "location": "North Beach Specialty Center"
+        },
+        {
+         "start": "2026-10-13T13:00",
+         "spoken": "Tuesday 13 October at 1 PM",
+         "provider_id": "prov_003",
+         "doctor": "Dr. Maria Garcia",
+         "location_id": "loc_002",
+         "location": "North Beach Specialty Center"
+        },
+        {
+         "start": "2026-10-13T13:30",
+         "spoken": "Tuesday 13 October at 1:30 PM",
+         "provider_id": "prov_003",
+         "doctor": "Dr. Maria Garcia",
+         "location_id": "loc_002",
+         "location": "North Beach Specialty Center"
+        },
+        {
+         "start": "2026-10-13T14:00",
+         "spoken": "Tuesday 13 October at 2 PM",
+         "provider_id": "prov_003",
+         "doctor": "Dr. Maria Garcia",
+         "location_id": "loc_002",
+         "location": "North Beach Specialty Center"
+        },
+        {
+         "start": "2026-10-13T14:30",
+         "spoken": "Tuesday 13 October at 2:30 PM",
+         "provider_id": "prov_003",
+         "doctor": "Dr. Maria Garcia",
+         "location_id": "loc_002",
+         "location": "North Beach Specialty Center"
+        },
+        {
+         "start": "2026-10-13T15:30",
+         "spoken": "Tuesday 13 October at 3:30 PM",
+         "provider_id": "prov_003",
+         "doctor": "Dr. Maria Garcia",
+         "location_id": "loc_002",
+         "location": "North Beach Specialty Center"
+        }
+       ]
+      },
+      "stage": "naive",
+      "next_stage": null
+     }
+    ],
+    "problems": [],
+    "order": [
+     {
+      "tool": 0
+     },
+     {
+      "said": "Dr. Garcia has openings at the North Beach Specialty Center today at 11 AM, 1 PM, and 1:30 PM. Do any of these times work for you?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "Yes, I’ll take the 11 AM appointment.",
+   "agent": {
+    "said": [
+     "Your appointment is confirmed for a yearly check-up with Dr. Maria Garcia at the North Beach Specialty Center today at 11 AM. Thank you, and have a great day!"
+    ],
+    "passes": 2,
+    "seconds": 2.118,
+    "input_tokens": 21369,
+    "cached_tokens": 20864,
+    "output_tokens": 88,
+    "cost": 0.028222,
+    "tools": [
+     {
+      "tool": "book_appointment",
+      "args": {
+       "patient_name": "New Patient",
+       "visit_type_id": "appt_002",
+       "provider_id": "prov_003",
+       "location_id": "loc_002",
+       "start": "2026-10-13T11:00"
+      },
+      "result": {
+       "ok": true,
+       "booked": {
+        "patient_name": "New Patient",
+        "patient_id": null,
+        "visit_type_id": "appt_002",
+        "provider_id": "prov_003",
+        "location_id": "loc_002",
+        "start": "2026-10-13T11:00"
+       }
+      },
+      "stage": "naive",
+      "next_stage": null
+     }
+    ],
+    "problems": [],
+    "order": [
+     {
+      "tool": 0
+     },
+     {
+      "said": "Your appointment is confirmed for a yearly check-up with Dr. Maria Garcia at the North Beach Specialty Center today at 11 AM. Thank you, and have a great day!"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "Thank you! Goodbye!",
+   "agent": {
+    "said": [
+     "Goodbye, and take care!"
+    ],
+    "passes": 1,
+    "seconds": 0.832,
+    "input_tokens": 10796,
+    "cached_tokens": 10624,
+    "output_tokens": 8,
+    "cost": 0.01379,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "Goodbye, and take care!"
+     }
+    ]
+   },
+   "after_check_in": false
+  }
+ ],
+ "ended_by": "caller_hung_up",
+ "stopped_because": "",
+ "outcome": {
+  "status": "booked",
+  "bookings": [
+   {
+    "patient_name": "New Patient",
+    "patient_id": null,
+    "visit_type_id": "appt_002",
+    "provider_id": "prov_003",
+    "location_id": "loc_002",
+    "start": "2026-10-13T11:00"
+   }
+  ],
+  "name_confirmed": null
+ },
+ "totals": {
+  "agent_input_tokens": 82968,
+  "agent_cached_tokens": 80256,
+  "agent_output_tokens": 232,
+  "agent_passes": 8,
+  "agent_cost": 0.10942,
+  "slowest_reply_seconds": 2.118,
+  "caller_lines": 6,
+  "caller_cost": 0.000584
+ },
+ "score": {
+  "passed": false,
+  "reasons": [
+   "Booked under the name \"New Patient\", not \"Priya Nair\"."
+  ],
+  "bad_bookings": 0,
+  "staff_promise": false
+ }
+}

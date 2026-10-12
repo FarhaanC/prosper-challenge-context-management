@@ -1,0 +1,290 @@
+{
+ "version": "naive",
+ "model": "gpt-4o",
+ "caller_model": "gpt-4o-mini",
+ "scenario": "garcia_skin_check",
+ "title": "New patient: a skin check with Dr. Garcia (no Garcia does skin checks)",
+ "run": 3,
+ "clinic_time": "2026-10-13T09:00",
+ "ran_at": "2026-10-12T19:06:11",
+ "greeting": {
+  "said": [
+   "Hello, you've reached the clinics' scheduling line. How can I help you today?"
+  ],
+  "passes": 0,
+  "seconds": 0.0,
+  "input_tokens": 0,
+  "cached_tokens": 0,
+  "output_tokens": 0,
+  "cost": 0.0,
+  "tools": [],
+  "problems": [],
+  "order": [
+   {
+    "said": "Hello, you've reached the clinics' scheduling line. How can I help you today?"
+   }
+  ]
+ },
+ "turns": [
+  {
+   "caller": "Hi, my name is Lena Park. I’d like to schedule a skin check for a couple of moles. A friend recommended Dr. Garcia.",
+   "agent": {
+    "said": [
+     "Lena, have you been a patient with us before?"
+    ],
+    "passes": 1,
+    "seconds": 0.95,
+    "input_tokens": 10008,
+    "cached_tokens": 9088,
+    "output_tokens": 13,
+    "cost": 0.01379,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "Lena, have you been a patient with us before?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "No, I’ve never been a patient there before.",
+   "agent": {
+    "said": [
+     "As a new patient, you'll need a dermatologist who accepts new patients. I can find you a skin cancer screening or full body exam—do you have a preference?"
+    ],
+    "passes": 1,
+    "seconds": 1.129,
+    "input_tokens": 10039,
+    "cached_tokens": 9856,
+    "output_tokens": 34,
+    "cost": 0.013118,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "As a new patient, you'll need a dermatologist who accepts new patients. I can find you a skin cancer screening or full body exam—do you have a preference?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "I just want my moles checked, so I don’t mind which.",
+   "agent": {
+    "said": [
+     "Let's go with a full body skin exam, which is a head-to-toe check of all your skin. Would that be acceptable for booking?"
+    ],
+    "passes": 1,
+    "seconds": 1.086,
+    "input_tokens": 10095,
+    "cached_tokens": 9856,
+    "output_tokens": 30,
+    "cost": 0.013218,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "Let's go with a full body skin exam, which is a head-to-toe check of all your skin. Would that be acceptable for booking?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "Yes, that works for me.",
+   "agent": {
+    "said": [
+     "Dr. Daniel Chen and Dr. Kenji Kim are dermatologists who accept new patients. Is there a preference between them, or should I look for the next available appointment?"
+    ],
+    "passes": 1,
+    "seconds": 1.89,
+    "input_tokens": 10139,
+    "cached_tokens": 9984,
+    "output_tokens": 36,
+    "cost": 0.013227,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "Dr. Daniel Chen and Dr. Kenji Kim are dermatologists who accept new patients. Is there a preference between them, or should I look for the next available appointment?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "I’m okay with either of them. Please find the next available appointment.",
+   "agent": {
+    "said": [
+     "I found several times today: Dr. Kenji Kim at 11 AM or 11:30 AM at Midtown Medical Group, or Dr. Daniel Chen at 1 PM at Richmond Care Center. Which do you prefer?"
+    ],
+    "passes": 2,
+    "seconds": 1.708,
+    "input_tokens": 20825,
+    "cached_tokens": 19968,
+    "output_tokens": 65,
+    "cost": 0.027752,
+    "tools": [
+     {
+      "tool": "find_open_times",
+      "args": {
+       "visit_type_id": "appt_028"
+      },
+      "result": {
+       "ok": true,
+       "times": [
+        {
+         "start": "2026-10-13T11:00",
+         "spoken": "Tuesday 13 October at 11 AM",
+         "provider_id": "prov_027",
+         "doctor": "Dr. Kenji Kim",
+         "location_id": "loc_005",
+         "location": "Midtown Medical Group"
+        },
+        {
+         "start": "2026-10-13T11:00",
+         "spoken": "Tuesday 13 October at 11 AM",
+         "provider_id": "prov_048",
+         "doctor": "Dr. Wei Sato",
+         "location_id": "loc_000",
+         "location": "Mission Bay Health Center"
+        },
+        {
+         "start": "2026-10-13T11:30",
+         "spoken": "Tuesday 13 October at 11:30 AM",
+         "provider_id": "prov_027",
+         "doctor": "Dr. Kenji Kim",
+         "location_id": "loc_005",
+         "location": "Midtown Medical Group"
+        },
+        {
+         "start": "2026-10-13T11:30",
+         "spoken": "Tuesday 13 October at 11:30 AM",
+         "provider_id": "prov_035",
+         "doctor": "Dr. Daniel Smith",
+         "location_id": "loc_001",
+         "location": "Mission District Family Clinic"
+        },
+        {
+         "start": "2026-10-13T11:30",
+         "spoken": "Tuesday 13 October at 11:30 AM",
+         "provider_id": "prov_048",
+         "doctor": "Dr. Wei Sato",
+         "location_id": "loc_000",
+         "location": "Mission Bay Health Center"
+        },
+        {
+         "start": "2026-10-13T13:00",
+         "spoken": "Tuesday 13 October at 1 PM",
+         "provider_id": "prov_001",
+         "doctor": "Dr. Daniel Chen",
+         "location_id": "loc_007",
+         "location": "Richmond Care Center"
+        }
+       ]
+      },
+      "stage": "naive",
+      "next_stage": null
+     }
+    ],
+    "problems": [],
+    "order": [
+     {
+      "tool": 0
+     },
+     {
+      "said": "I found several times today: Dr. Kenji Kim at 11 AM or 11:30 AM at Midtown Medical Group, or Dr. Daniel Chen at 1 PM at Richmond Care Center. Which do you prefer?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "I’ll take Dr. Kenji Kim at 11 AM at Midtown Medical Group, please.",
+   "agent": {
+    "said": [
+     "Your appointment with Dr. Kenji Kim for a full body skin exam is confirmed for today at 11 AM at Midtown Medical Group. Thank you, and goodbye!"
+    ],
+    "passes": 2,
+    "seconds": 2.292,
+    "input_tokens": 21529,
+    "cached_tokens": 21120,
+    "output_tokens": 87,
+    "cost": 0.028292,
+    "tools": [
+     {
+      "tool": "book_appointment",
+      "args": {
+       "patient_name": "Lena Park",
+       "visit_type_id": "appt_028",
+       "provider_id": "prov_027",
+       "location_id": "loc_005",
+       "start": "2026-10-13T11:00"
+      },
+      "result": {
+       "ok": true,
+       "booked": {
+        "patient_name": "Lena Park",
+        "patient_id": null,
+        "visit_type_id": "appt_028",
+        "provider_id": "prov_027",
+        "location_id": "loc_005",
+        "start": "2026-10-13T11:00"
+       }
+      },
+      "stage": "naive",
+      "next_stage": null
+     }
+    ],
+    "problems": [],
+    "order": [
+     {
+      "tool": 0
+     },
+     {
+      "said": "Your appointment with Dr. Kenji Kim for a full body skin exam is confirmed for today at 11 AM at Midtown Medical Group. Thank you, and goodbye!"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "Thank you! Goodbye!",
+   "agent": null
+  }
+ ],
+ "ended_by": "caller_hung_up",
+ "stopped_because": "",
+ "outcome": {
+  "status": "booked",
+  "bookings": [
+   {
+    "patient_name": "Lena Park",
+    "patient_id": null,
+    "visit_type_id": "appt_028",
+    "provider_id": "prov_027",
+    "location_id": "loc_005",
+    "start": "2026-10-13T11:00"
+   }
+  ],
+  "name_confirmed": null
+ },
+ "totals": {
+  "agent_input_tokens": 82635,
+  "agent_cached_tokens": 79872,
+  "agent_output_tokens": 265,
+  "agent_passes": 8,
+  "agent_cost": 0.109397,
+  "slowest_reply_seconds": 2.292,
+  "caller_lines": 7,
+  "caller_cost": 0.000603
+ },
+ "score": {
+  "passed": true,
+  "reasons": [],
+  "bad_bookings": 0,
+  "staff_promise": false
+ }
+}

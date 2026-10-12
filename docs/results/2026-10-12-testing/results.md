@@ -13,16 +13,25 @@ Built by `python -m evals.run results` from the saved runs in `runs/`. How the r
 | 3. Ours: stages and small slices (gpt-4o) | 5 of 6 | 0 | 22,671 | 2,159 | 72% | 10.5 | 3.9 s (3.1 s) | $0.039 |
 | 3b. Ours on the smaller model (gpt-4o-mini) | 5 of 6 | 0 | 27,627 | 2,181 | 87% | 12.7 | 3.9 s (3.1 s) | $0.003 |
 
+## Every version over every run (up to 3 per scenario)
+
+| Version | Scenarios passed | Bad bookings | Input tokens per call | Input tokens per AI pass | Of which cached | AI passes per call | Slowest reply: worst (typical) | Agent cost per call |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1. Naive: whole catalog, no checks (gpt-4o) | 11 of 18 | 2 | 82,629 | 10,329 | 95% | 8.0 | 2.7 s (2.2 s) | $0.110 |
+| 2. Naive + rule checks (gpt-4o) | 11 of 18 | 0 | 82,238 | 10,352 | 96% | 7.9 | 3.2 s (2.1 s) | $0.109 |
+| 3. Ours: stages and small slices (gpt-4o) | 17 of 18 | 0 | 22,969 | 2,153 | 74% | 10.7 | 4.0 s (2.7 s) | $0.039 |
+| 3b. Ours on the smaller model (gpt-4o-mini) | 16 of 18 | 0 | 28,621 | 2,202 | 90% | 13.0 | 5.2 s (3.3 s) | $0.003 |
+
 ## Passes by scenario (all runs)
 
 | Scenario | 1. Naive | 2. Naive + rule checks | 3. Ours | 3b. Ours on the smaller model |
 | --- | --- | --- | --- | --- |
-| New patient: a skin check with Dr. Garcia (no Garcia does skin checks) | 0 of 1 | 0 of 1 | 1 of 1 | 1 of 1 |
-| New patient: a knee MRI (needs a referral; existing patients only) | 0 of 1 | 1 of 1 | 1 of 1 | 1 of 1 |
-| James Wilson: a knee MRI near Downtown (only 2 valid doctor-place pairs) | 1 of 1 | 1 of 1 | 1 of 1 | 1 of 1 |
-| James Wilson: a Garcia skin check, then 'actually, a knee MRI' | 1 of 1 | 1 of 1 | 1 of 1 | 1 of 1 |
-| New patient: a check-up with Dr. Maria Garcia (there are two) | 0 of 1 | 0 of 1 | 0 of 1 | 0 of 1 |
-| New patient: an OB/GYN visit (no OB/GYN takes new patients), then 'a person' | 1 of 1 | 1 of 1 | 1 of 1 | 1 of 1 |
+| New patient: a skin check with Dr. Garcia (no Garcia does skin checks) | 2 of 3 | 2 of 3 | 3 of 3 | 3 of 3 |
+| New patient: a knee MRI (needs a referral; existing patients only) | 2 of 3 | 3 of 3 | 3 of 3 | 3 of 3 |
+| James Wilson: a knee MRI near Downtown (only 2 valid doctor-place pairs) | 2 of 3 | 1 of 3 | 3 of 3 | 3 of 3 |
+| James Wilson: a Garcia skin check, then 'actually, a knee MRI' | 2 of 3 | 2 of 3 | 3 of 3 | 3 of 3 |
+| New patient: a check-up with Dr. Maria Garcia (there are two) | 1 of 3 | 0 of 3 | 2 of 3 | 1 of 3 |
+| New patient: an OB/GYN visit (no OB/GYN takes new patients), then 'a person' | 2 of 3 | 3 of 3 | 3 of 3 | 3 of 3 |
 
 ## The check-in after the read-back (decision 71)
 
@@ -31,12 +40,22 @@ James Wilson's knee MRI, with 'Are you still there?' after the read-back: **pass
 ## Every failed run, and why
 
 - 1. Naive: whole catalog, no checks (gpt-4o), garcia_skin_check, run 1: A booking breaks the rules: Dermatology Consultation needs a referral to Dermatology, and there isn't one on file. Dr. Maria Garcia doesn't offer Dermatology Consultation. Booked visit type appt_026, expected one of appt_027, appt_028. Booked doctor prov_003, expected one of prov_001, prov_027, prov_035.
+- 1. Naive: whole catalog, no checks (gpt-4o), james_changes_to_mri, run 3: Booked visit type appt_064, expected one of appt_065.
+- 1. Naive: whole catalog, no checks (gpt-4o), james_knee_mri_downtown, run 3: Booked visit type appt_064, expected one of appt_065.
 - 1. Naive: whole catalog, no checks (gpt-4o), knee_mri_new_patient, run 1: Promised staff would follow up, but the call wasn't handed to staff: "A member of staff will call you back to discuss your options further."
 - 1. Naive: whole catalog, no checks (gpt-4o), maria_garcia_checkup, run 1: Booked under the name "New Patient", not "Priya Nair". Booked doctor prov_002, expected one of prov_003.
+- 1. Naive: whole catalog, no checks (gpt-4o), maria_garcia_checkup, run 2: Booked under the name "Caller", not "Priya Nair".
+- 1. Naive: whole catalog, no checks (gpt-4o), obgyn_new_then_person, run 3: A booking breaks the rules: Dr. Linda Nguyen isn't taking new patients. Expected the call to be handed to staff; it ended 'booked'. Expected no booking, found 1.
 - 2. Naive + rule checks (gpt-4o), garcia_skin_check, run 1: Booked under the name "Unknown", not "Lena Park".
+- 2. Naive + rule checks (gpt-4o), james_changes_to_mri, run 3: Booked visit type appt_064, expected one of appt_065.
+- 2. Naive + rule checks (gpt-4o), james_knee_mri_downtown, run 2: Booked visit type appt_064, expected one of appt_065.
+- 2. Naive + rule checks (gpt-4o), james_knee_mri_downtown, run 3: Expected one booking, found 0.
 - 2. Naive + rule checks (gpt-4o), maria_garcia_checkup, run 1: Booked under the name "New Patient", not "Priya Nair". Booked doctor prov_002, expected one of prov_003.
+- 2. Naive + rule checks (gpt-4o), maria_garcia_checkup, run 2: Booked under the name "New Patient", not "Priya Nair".
+- 2. Naive + rule checks (gpt-4o), maria_garcia_checkup, run 3: Booked visit type appt_001, expected one of appt_002, appt_003.
 - 3. Ours: stages and small slices (gpt-4o), maria_garcia_checkup, run 1: Booked visit type appt_001, expected one of appt_002, appt_003.
 - 3b. Ours on the smaller model (gpt-4o-mini), maria_garcia_checkup, run 1: Booked doctor prov_002, expected one of prov_003.
+- 3b. Ours on the smaller model (gpt-4o-mini), maria_garcia_checkup, run 3: Booked doctor prov_002, expected one of prov_003.
 
 ## What else differs, besides what each version is given
 
@@ -55,4 +74,4 @@ Said here so nobody has to find it in the code (independent review, 12 Oct, R7 a
 
 ## Spending
 
-$1.60 of the $7.00 stop (decision 84): gpt-4o $1.57, gpt-4o-mini $0.03.
+$4.85 of the $7.00 stop (decision 84): gpt-4o $4.76, gpt-4o-mini $0.09.

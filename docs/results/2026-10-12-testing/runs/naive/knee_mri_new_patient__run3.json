@@ -1,0 +1,163 @@
+{
+ "version": "naive",
+ "model": "gpt-4o",
+ "caller_model": "gpt-4o-mini",
+ "scenario": "knee_mri_new_patient",
+ "title": "New patient: a knee MRI (needs a referral; existing patients only)",
+ "run": 3,
+ "clinic_time": "2026-10-13T09:00",
+ "ran_at": "2026-10-12T19:07:12",
+ "greeting": {
+  "said": [
+   "Hello, you've reached the clinics' scheduling line. How can I help you today?"
+  ],
+  "passes": 0,
+  "seconds": 0.0,
+  "input_tokens": 0,
+  "cached_tokens": 0,
+  "output_tokens": 0,
+  "cost": 0.0,
+  "tools": [],
+  "problems": [],
+  "order": [
+   {
+    "said": "Hello, you've reached the clinics' scheduling line. How can I help you today?"
+   }
+  ]
+ },
+ "turns": [
+  {
+   "caller": "Hi, my name is Omar Haddad. I'm looking to book a knee MRI.",
+   "agent": {
+    "said": [
+     "Is this your first time visiting our clinics, or have you been a patient with us before?"
+    ],
+    "passes": 1,
+    "seconds": 0.811,
+    "input_tokens": 9995,
+    "cached_tokens": 9088,
+    "output_tokens": 20,
+    "cost": 0.013827,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "Is this your first time visiting our clinics, or have you been a patient with us before?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "This is my first time visiting your clinic.",
+   "agent": {
+    "said": [
+     "For new patients, we'll need to schedule an appointment type that allows new patients. Would you like me to help you find a suitable appointment type or look for another service?"
+    ],
+    "passes": 1,
+    "seconds": 0.942,
+    "input_tokens": 10031,
+    "cached_tokens": 9856,
+    "output_tokens": 35,
+    "cost": 0.013107,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "For new patients, we'll need to schedule an appointment type that allows new patients. Would you like me to help you find a suitable appointment type or look for another service?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "I just want to book the knee MRI. I don't have a referral, though. Can I still schedule it?",
+   "agent": {
+    "said": [
+     "Booking a knee MRI requires a referral, so you'll need to obtain one before we can schedule it. Is there anything else I can assist you with?"
+    ],
+    "passes": 1,
+    "seconds": 0.89,
+    "input_tokens": 10096,
+    "cached_tokens": 9088,
+    "output_tokens": 31,
+    "cost": 0.01419,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "Booking a knee MRI requires a referral, so you'll need to obtain one before we can schedule it. Is there anything else I can assist you with?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "Is there anything else I can do to get the MRI scheduled?",
+   "agent": {
+    "said": [
+     "Obtaining a referral from a primary care provider or a specialist is necessary to proceed with scheduling the MRI."
+    ],
+    "passes": 1,
+    "seconds": 0.888,
+    "input_tokens": 10147,
+    "cached_tokens": 9856,
+    "output_tokens": 22,
+    "cost": 0.013267,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "Obtaining a referral from a primary care provider or a specialist is necessary to proceed with scheduling the MRI."
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "Okay, I’ll sort it out with my own doctor first. Thank you for your help. Goodbye!",
+   "agent": {
+    "said": [
+     "You're welcome! Feel free to reach out once you have the referral. Goodbye!"
+    ],
+    "passes": 1,
+    "seconds": 0.788,
+    "input_tokens": 10197,
+    "cached_tokens": 9984,
+    "output_tokens": 17,
+    "cost": 0.013182,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "You're welcome! Feel free to reach out once you have the referral. Goodbye!"
+     }
+    ]
+   },
+   "after_check_in": false
+  }
+ ],
+ "ended_by": "caller_hung_up",
+ "stopped_because": "",
+ "outcome": {
+  "status": "in_progress",
+  "bookings": [],
+  "name_confirmed": null
+ },
+ "totals": {
+  "agent_input_tokens": 50466,
+  "agent_cached_tokens": 47872,
+  "agent_output_tokens": 125,
+  "agent_passes": 5,
+  "agent_cost": 0.067573,
+  "slowest_reply_seconds": 0.942,
+  "caller_lines": 5,
+  "caller_cost": 0.000449
+ },
+ "score": {
+  "passed": true,
+  "reasons": [],
+  "bad_bookings": 0,
+  "staff_promise": false
+ }
+}

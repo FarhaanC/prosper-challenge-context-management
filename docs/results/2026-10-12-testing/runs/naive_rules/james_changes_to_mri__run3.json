@@ -1,0 +1,303 @@
+{
+ "version": "naive_rules",
+ "model": "gpt-4o",
+ "caller_model": "gpt-4o-mini",
+ "scenario": "james_changes_to_mri",
+ "title": "James Wilson: a Garcia skin check, then 'actually, a knee MRI'",
+ "run": 3,
+ "clinic_time": "2026-10-13T09:00",
+ "ran_at": "2026-10-12T19:09:19",
+ "greeting": {
+  "said": [
+   "Hello, you've reached the clinics' scheduling line. How can I help you today?"
+  ],
+  "passes": 0,
+  "seconds": 0.0,
+  "input_tokens": 0,
+  "cached_tokens": 0,
+  "output_tokens": 0,
+  "cost": 0.0,
+  "tools": [],
+  "problems": [],
+  "order": [
+   {
+    "said": "Hello, you've reached the clinics' scheduling line. How can I help you today?"
+   }
+  ]
+ },
+ "turns": [
+  {
+   "caller": "Hi, I’d like to schedule a skin check with Dr. Garcia, please.",
+   "agent": {
+    "said": [
+     "Could you tell me your full name and whether you've been a patient with us before?"
+    ],
+    "passes": 1,
+    "seconds": 0.756,
+    "input_tokens": 9995,
+    "cached_tokens": 9088,
+    "output_tokens": 18,
+    "cost": 0.013808,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "Could you tell me your full name and whether you've been a patient with us before?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "My name is James Wilson, and yes, I’ve been a patient here before.",
+   "agent": {
+    "said": [
+     "Could I have your date of birth, James, so I can locate your patient record?"
+    ],
+    "passes": 1,
+    "seconds": 0.852,
+    "input_tokens": 10037,
+    "cached_tokens": 9856,
+    "output_tokens": 19,
+    "cost": 0.012963,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "Could I have your date of birth, James, so I can locate your patient record?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "Sure, it’s March 12th, 1984.",
+   "agent": {
+    "said": [
+     "All set, James. Would you like a head-to-toe skin exam or a check of just a few spots?"
+    ],
+    "passes": 2,
+    "seconds": 1.789,
+    "input_tokens": 20224,
+    "cached_tokens": 19840,
+    "output_tokens": 52,
+    "cost": 0.02628,
+    "tools": [
+     {
+      "tool": "find_patient",
+      "args": {
+       "full_name": "James Wilson",
+       "date_of_birth": "1984-03-12"
+      },
+      "result": {
+       "found": true,
+       "patient_id": "pat_001",
+       "name": "James Wilson",
+       "referrals_on_file": [
+        "Radiology",
+        "Orthopedics"
+       ]
+      },
+      "stage": "naive",
+      "next_stage": null
+     }
+    ],
+    "problems": [],
+    "order": [
+     {
+      "tool": 0
+     },
+     {
+      "said": "All set, James. Would you like a head-to-toe skin exam or a check of just a few spots?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "Actually, the skin check can wait. What I really need is a knee MRI, which my doctor referred me for.",
+   "agent": {
+    "said": [
+     "Great, I see you have a referral for that. Let me check our available times for an MRI for you.",
+     "Here are the available times: Today at eleven AM at the Downtown Health Center, two or two-thirty PM at Midtown Medical Group, and tomorrow at ten-thirty AM at Mission Bay Health Center. Which one works for you?"
+    ],
+    "passes": 2,
+    "seconds": 2.73,
+    "input_tokens": 20732,
+    "cached_tokens": 20096,
+    "output_tokens": 90,
+    "cost": 0.02761,
+    "tools": [
+     {
+      "tool": "find_open_times",
+      "args": {
+       "visit_type_id": "appt_064"
+      },
+      "result": {
+       "ok": true,
+       "times": [
+        {
+         "start": "2026-10-13T11:00",
+         "spoken": "Tuesday 13 October at 11 AM",
+         "provider_id": "prov_014",
+         "doctor": "Dr. Linda Ramirez",
+         "location_id": "loc_004",
+         "location": "Downtown Health Center"
+        },
+        {
+         "start": "2026-10-13T14:00",
+         "spoken": "Tuesday 13 October at 2 PM",
+         "provider_id": "prov_015",
+         "doctor": "Dr. Hannah Nguyen",
+         "location_id": "loc_005",
+         "location": "Midtown Medical Group"
+        },
+        {
+         "start": "2026-10-13T14:30",
+         "spoken": "Tuesday 13 October at 2:30 PM",
+         "provider_id": "prov_015",
+         "doctor": "Dr. Hannah Nguyen",
+         "location_id": "loc_005",
+         "location": "Midtown Medical Group"
+        },
+        {
+         "start": "2026-10-14T10:30",
+         "spoken": "Wednesday 14 October at 10:30 AM",
+         "provider_id": "prov_014",
+         "doctor": "Dr. Linda Ramirez",
+         "location_id": "loc_000",
+         "location": "Mission Bay Health Center"
+        }
+       ]
+      },
+      "stage": "naive",
+      "next_stage": null
+     }
+    ],
+    "problems": [],
+    "order": [
+     {
+      "said": "Great, I see you have a referral for that. Let me check our available times for an MRI for you."
+     },
+     {
+      "tool": 0
+     },
+     {
+      "said": "Here are the available times: Today at eleven AM at the Downtown Health Center, two or two-thirty PM at Midtown Medical Group, and tomorrow at ten-thirty AM at Mission Bay Health Center. Which one works for you?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "Today at eleven AM at the Downtown Health Center works for me.",
+   "agent": {
+    "said": [
+     "Great choice. Let's book this: an MRI of the knee with Dr. Linda Ramirez at the Downtown Health Center today at eleven AM. Shall I go ahead and book it?"
+    ],
+    "passes": 1,
+    "seconds": 1.162,
+    "input_tokens": 10595,
+    "cached_tokens": 10368,
+    "output_tokens": 36,
+    "cost": 0.013888,
+    "tools": [],
+    "problems": [],
+    "order": [
+     {
+      "said": "Great choice. Let's book this: an MRI of the knee with Dr. Linda Ramirez at the Downtown Health Center today at eleven AM. Shall I go ahead and book it?"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "Yes, please go ahead and book it.",
+   "agent": {
+    "said": [
+     "Your MRI appointment is booked for today at eleven AM with Dr. Linda Ramirez at the Downtown Health Center. Thank you, James, and have a great day. Goodbye!"
+    ],
+    "passes": 2,
+    "seconds": 1.867,
+    "input_tokens": 21431,
+    "cached_tokens": 20992,
+    "output_tokens": 94,
+    "cost": 0.028277,
+    "tools": [
+     {
+      "tool": "book_appointment",
+      "args": {
+       "patient_name": "James Wilson",
+       "patient_id": "pat_001",
+       "visit_type_id": "appt_064",
+       "provider_id": "prov_014",
+       "location_id": "loc_004",
+       "start": "2026-10-13T11:00"
+      },
+      "result": {
+       "ok": true,
+       "booked": {
+        "patient_name": "James Wilson",
+        "patient_id": "pat_001",
+        "visit_type_id": "appt_064",
+        "provider_id": "prov_014",
+        "location_id": "loc_004",
+        "start": "2026-10-13T11:00"
+       }
+      },
+      "stage": "naive",
+      "next_stage": null
+     }
+    ],
+    "problems": [],
+    "order": [
+     {
+      "tool": 0
+     },
+     {
+      "said": "Your MRI appointment is booked for today at eleven AM with Dr. Linda Ramirez at the Downtown Health Center. Thank you, James, and have a great day. Goodbye!"
+     }
+    ]
+   },
+   "after_check_in": false
+  },
+  {
+   "caller": "Thank you! Goodbye!",
+   "agent": null
+  }
+ ],
+ "ended_by": "caller_hung_up",
+ "stopped_because": "",
+ "outcome": {
+  "status": "booked",
+  "bookings": [
+   {
+    "patient_name": "James Wilson",
+    "patient_id": "pat_001",
+    "visit_type_id": "appt_064",
+    "provider_id": "prov_014",
+    "location_id": "loc_004",
+    "start": "2026-10-13T11:00"
+   }
+  ],
+  "name_confirmed": null
+ },
+ "totals": {
+  "agent_input_tokens": 93014,
+  "agent_cached_tokens": 90240,
+  "agent_output_tokens": 309,
+  "agent_passes": 9,
+  "agent_cost": 0.122826,
+  "slowest_reply_seconds": 2.73,
+  "caller_lines": 7,
+  "caller_cost": 0.000588
+ },
+ "score": {
+  "passed": false,
+  "reasons": [
+   "Booked visit type appt_064, expected one of appt_065."
+  ],
+  "bad_bookings": 0,
+  "staff_promise": false
+ }
+}
