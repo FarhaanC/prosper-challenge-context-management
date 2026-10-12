@@ -1,4 +1,4 @@
-# Transcripts: 1. Naive: whole catalog, no checks (gpt-4o)
+# Transcripts: 1. Naive (the simple version): whole catalog, no checks (gpt-4o)
 
 ## New patient: a skin check with Dr. Garcia (no Garcia does skin checks) (run 1)
 

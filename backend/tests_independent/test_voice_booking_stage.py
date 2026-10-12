@@ -222,7 +222,8 @@ AFTER_END = [
     ("choose_option", {"option_id": "2"}),
     ("turn_down_doctors", {"current": True}),
     ("confirm_booking", {}),
-    ("start_booking", {"full_name": "Someone Else", "returning": False}),
+    ("start_booking", {"full_name": "Someone Else", "returning": False,  # letters: decisions 77-78
+                       "spelled_first_name": "S, O, M, E, O, N, E", "spelled_last_name": "E, L, S, E"}),
 ]
 
 

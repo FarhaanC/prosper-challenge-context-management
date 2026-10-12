@@ -191,7 +191,17 @@ def test_choose_option_handler_stays(builder, clinic):
     c("choose_visit_type", {"visit_type_id": SKIN_CHECK})
     first = c.session.card.offered_options[0].option_id
     result, nxt = c("choose_option", {"option_id": first})
-    assert result["ok"] is True and nxt is None and c.session.stage == BOOKING
+    # Decision 66 (11 Oct): the handler now returns the same stage as a node, with the
+    # conversation kept, the read-back as a 'say' pre-action and respond_immediately false.
+    # The call still stays in the booking stage (INTERFACE.md: "Can move to: stays").
+    assert result["ok"] is True and c.session.stage == BOOKING
+    assert nxt is not None and nxt["name"] == BOOKING
+    assert nxt["context_strategy"].strategy == ContextStrategy.APPEND, "the conversation must be kept"
+    assert nxt["respond_immediately"] is False
+    says = [a for a in nxt.get("pre_actions", []) if a.get("type") == "say"]
+    assert len(says) == 1 and callable(says[0].get("handler"))
+    assert says[0]["text"] == f"To confirm: {result['read_back']} Would you like me to book it?"
+    assert {f.name for f in nxt["functions"]} >= set(NODE_TOOLS[BOOKING])
 
 
 def test_confirm_handler_moves_to_an_end_node_that_ends_the_call(builder, clinic):

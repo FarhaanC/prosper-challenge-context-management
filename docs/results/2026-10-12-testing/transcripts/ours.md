@@ -1,4 +1,4 @@
-# Transcripts: 3. Ours: stages and small slices (gpt-4o)
+# Transcripts: 3. Ours (my design): stages and small slices (gpt-4o)
 
 ## James Wilson's knee MRI, with 'Are you still there?' after the read-back (run 1)
 

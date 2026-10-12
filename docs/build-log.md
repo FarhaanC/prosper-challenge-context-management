@@ -325,3 +325,17 @@ The rule checks stopped the rule-breaking bookings, but not the wrong-but-valid 
 1. **Most of the interesting failures broke no rule.** A knee MRI booked as a spine MRI, "confirmed" with nothing saved: rule checks can't catch these. Holding the choices and the read-back in code can.
 2. **A fresh reviewer paid for itself before a cent was spent.** It found the crash that would have paid twice for the same call.
 3. **Measure the cost before cutting the plan for it.** The first estimate was five times too high; the smoke run fixed that, and every version got three runs.
+
+### The older independent tests, brought up to date (12 Oct)
+
+Before submitting, the full test suite showed 313 failures, all in older independent tests. These were the voice tests from version 0.2.0 and three editor tests:
+- The voice tests' pretend new patients didn't spell their names, which decisions 77 and 78 later required, so their calls were refused at the first step.
+- The three editor tests expected whichever call log happened to be newest on this computer.
+
+These had been proved expected with a throwaway adapter (P3), but a grader running `pytest` would see hundreds of failures. So a fresh agent, not the builder, updated them (P2). It had a written list of the spec changes, and strict rules: every change cites a decision, and no check is deleted, skipped or loosened.
+- **The fix:** mostly one line. The shared pretend new patient now sends the spelled letters of the same name. The editor tests now make their own call logs in a temporary folder.
+- **One gap it found:** a new patient's `full_name` isn't checked when the letters are sent. Farhaan decided this is fine (decision 92).
+- **Result:** 4,095 passed, 0 failed, on Linux.
+- **One Windows-only point:** saving the agent file while a call starts can fail on Windows, which won't replace a file another program has open. This is in the agent's report.
+
+Record: `docs/reviews/2026-10-12-old-tests-update/report.md`.

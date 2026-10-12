@@ -2,12 +2,19 @@
 
 What each version adds, for someone reading the repository. The full story of how each part was built and checked is in [`docs/build-log.md`](docs/build-log.md).
 
+## 1.0.0 — submission (Mon 12 Oct 2026)
+
+- **`solution.md`:** the write-up. It covers the approach, the booking rules, the results against simpler versions, the scale test, the editor, what was faked, the trade-offs, what's weak, and what I'd do next.
+- **README:** now opens with a pointer to solution.md, and lists the test runs and their results.
+- **The older independent tests,** brought up to date with decisions 66 and 77–78 by a fresh agent (decision 92). The suite: 4,095 pass on Linux. On Windows, 4,093 pass and one fails, a known Windows file-access limit, explained in solution.md.
+- **Defence notes,** Part 6: the testing and its results.
+
 ## 0.4.0 — testing: AI-played callers against three versions, and the scale test (Mon 12 Oct 2026)
 
 - **`backend/evals/`: the typed test runs.** An AI (gpt-4o-mini) plays the caller in six scenarios. It runs against four versions: naive, naive with rule checks, ours, and ours on gpt-4o-mini. Each call is scored in code against what was saved. There is a $7 spending stop that remembers what was spent across runs, and every call is saved word for word. Commands: `python -m evals.run plan | smoke | round1 | round2 | round3 | results | rescore`.
 - **The scale test** (`python -m evals.scale`): a made-up catalog of 500 locations and 2,000 doctors; the code's search timed; what each version gives the AI measured.
 - **Results** (`docs/results/2026-10-12-testing/`): over 18 calls each, ours passed 17, naive 11, naive with rule checks 11. Ours read about 3.6 times fewer tokens per call. On the big catalog, ours was unchanged, while the naive version needed 235,181 tokens, beyond gpt-4o's limit.
-- **Tests:** 74 builder tests. One independent review: 15 findings, all fixed, and its 23 tests pass unchanged (`docs/reviews/2026-10-12-test-runner/`).
+- **Tests:** 74 builder tests. One independent review: 15 findings, all fixed, and its 23 tests pass unchanged (`docs/reviews/2026-10-12-test-runner/`). The older independent tests were brought up to date with decisions 66 and 77–78 by a fresh agent, so the whole suite passes (decision 92).
 
 ## 0.3.0 — silence handling, the code-spoken read-back, and the editor (Sun 11 Oct 2026)
 

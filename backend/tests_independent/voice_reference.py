@@ -37,7 +37,11 @@ KNEE_MRI = "appt_065"        # MRI - Knee (Radiology, referral, existing patient
 GARCIAS = {pid for pid, p in PROV.items() if p["name"].split()[-1] == "Garcia"}
 CHENS = {pid for pid, p in PROV.items() if p["name"].split()[-1] == "Chen"}
 
-NEW = {"full_name": "Farhan Jida", "returning": False}
+# Decisions 77-78 (11 Oct): a new patient's name is saved from the letters the caller
+# confirmed, so a new patient's start_booking carries both spelled names. The letters
+# spell the same name as before, so every expected "Farhan Jida" still holds.
+NEW = {"full_name": "Farhan Jida", "returning": False,
+       "spelled_first_name": "F, A, R, H, A, N", "spelled_last_name": "J, I, D, A"}
 JAMES = {"full_name": "James Wilson", "returning": True, "date_of_birth": PATIENT["James Wilson"]["date_of_birth"]}
 
 

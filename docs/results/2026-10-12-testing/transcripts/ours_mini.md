@@ -1,4 +1,4 @@
-# Transcripts: 3b. Ours on the smaller model (gpt-4o-mini)
+# Transcripts: 4. Ours on gpt-4o-mini (my design, on the smaller model)
 
 ## New patient: a skin check with Dr. Garcia (no Garcia does skin checks) (run 1)
 

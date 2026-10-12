@@ -1,8 +1,14 @@
 """Independent tests of the editor's server routes (Phase 1 plan, items 4 and 6).
 
 Expected answers come from the plan, the decisions, the raw agent file, the raw
-catalog.json and the real call logs, not from what the routes return.
+catalog.json and call logs, not from what the routes return.
 Every test works on a temporary copy of the agent file and a temporary log folder.
+
+The inspector tests used to copy the machine's real backend/call_logs/ and expect one
+particular file to be the newest. That broke as soon as a newer call was made (or on a
+machine with no call logs). They now make their own call logs with the real call code in
+a temporary folder the test controls (fixture real_logs), so the result no longer depends
+on which calls happen to have been made on the machine.
 """
 
 import copy
@@ -18,7 +24,6 @@ from editor_api import editor_routes
 
 BACKEND = Path(__file__).resolve().parents[3]
 REAL_AGENT = BACKEND / "clinic_agent.json"
-REAL_LOGS = BACKEND / "call_logs"
 RAW_CATALOG = json.loads((BACKEND / "data" / "catalog.json").read_text(encoding="utf-8"))
 
 
@@ -373,21 +378,71 @@ def test_inspector_with_empty_log_folder(client):
     assert client.get("/api/editor/calls/latest").json() == {"file": None, "events": [], "card": None}
 
 
-def _copy_real_logs(log_dir):
-    for f in REAL_LOGS.glob("*.jsonl"):
+NEWEST_LOG = "20261010-184339-8e2ba6.jsonl"   # the name the old real newest log had
+OLDER_LOG = "20261010-151208-3c91d0.jsonl"    # an earlier call the same day
+
+
+@pytest.fixture
+def real_logs(tmp_path):
+    """A folder of call logs written by the real call code, in place of backend/call_logs/.
+
+    The newest is the call the old real log held (10 Oct, 18:43): new patient Zoya Chida,
+    New Patient Consultation, afternoon, booked option 2. The older one is a call handed to
+    staff. Each is renamed to a fixed name: the clinic names a log by the moment it opens it,
+    so the names, and so which log is newest, are set by the test, not by the machine.
+    """
+    from datetime import datetime
+    from call import Clinic, run_tool
+
+    made, out = tmp_path / "made", tmp_path / "real_logs"
+    out.mkdir()
+    clinic = Clinic.load(bookings_file=None, log_dir=made)
+
+    def run(now, steps):
+        s = clinic.new_call(clock=lambda: now)
+        s.enter_stage("identify", ["Greet the caller."])
+        for tool, args in steps:
+            o = run_tool(s, tool, args)
+            assert o.result.get("ok") is True, (tool, o.result)
+            if o.next_stage:
+                s.enter_stage(o.next_stage, [f"Stage {o.next_stage}."])
+        return s.log_path
+
+    older = run(datetime(2026, 10, 10, 15, 12), [("hand_off", {"reason": "cancel"})])
+    older.rename(out / OLDER_LOG)
+    newest = run(datetime(2026, 10, 10, 18, 43), [
+        # Decisions 77-78: a new patient's name is saved from the confirmed letters.
+        ("start_booking", {"full_name": "Zoya Chida", "returning": False,
+                           "spelled_first_name": "Z, O, Y, A", "spelled_last_name": "C, H, I, D, A"}),
+        ("list_visit_types", {"specialty": "General"}),
+        ("choose_visit_type", {"visit_type_id": "appt_000", "time_of_day": "afternoon"}),
+        ("choose_option", {"option_id": "2"}),
+        ("confirm_booking", {}),
+    ])
+    newest.rename(out / NEWEST_LOG)
+    return out
+
+
+def _copy_real_logs(real_logs, log_dir):
+    for f in real_logs.glob("*.jsonl"):
         shutil.copy(f, log_dir / f.name)
 
 
-def test_inspector_newest_log_wins(client, log_dir):
-    _copy_real_logs(log_dir)
+def test_inspector_newest_log_wins(client, log_dir, real_logs):
+    _copy_real_logs(real_logs, log_dir)
     body = client.get("/api/editor/calls/latest").json()
-    assert body["file"] == "20261010-184339-8e2ba6.jsonl"
-    raw_lines = (REAL_LOGS / body["file"]).read_text(encoding="utf-8").splitlines()
-    assert len(body["events"]) == len(raw_lines) == 13
+    assert body["file"] == NEWEST_LOG
+    raw_lines = (real_logs / body["file"]).read_text(encoding="utf-8").splitlines()
+    older_lines = (real_logs / OLDER_LOG).read_text(encoding="utf-8").splitlines()
+    # The old real log had 13 lines (it also held lines bot.py writes); this one is made
+    # by the call code alone: a stage line per stage and a tool line per tool call.
+    assert len(body["events"]) == len(raw_lines) == 1 + 5 + 3
+    assert len(older_lines) != len(raw_lines), "the two logs must be told apart"
 
 
-def test_inspector_newer_call_replaces_older(client, log_dir):
-    _copy_real_logs(log_dir)
+def test_inspector_newer_call_replaces_older(client, log_dir, real_logs):
+    _copy_real_logs(real_logs, log_dir)
+    assert client.get("/api/editor/calls/latest").json()["file"] == NEWEST_LOG
     newer = log_dir / "20261011-090000-abcdef.jsonl"
     newer.write_text(json.dumps({"at": "2026-10-11T09:00:00", "event": "stage", "stage": "identify",
                                  "instructions": ["hi"], "card": {"status": "in_progress"}}) + "\n")
@@ -396,18 +451,19 @@ def test_inspector_newer_call_replaces_older(client, log_dir):
     assert [e["event"] for e in body["events"]] == ["stage"]
 
 
-def test_inspector_events_keep_order_and_drop_card(client, log_dir):
-    _copy_real_logs(log_dir)
+def test_inspector_events_keep_order_and_drop_card(client, log_dir, real_logs):
+    _copy_real_logs(real_logs, log_dir)
     body = client.get("/api/editor/calls/latest").json()
-    raw = [json.loads(l) for l in (REAL_LOGS / body["file"]).read_text(encoding="utf-8").splitlines()]
+    raw = [json.loads(l) for l in (real_logs / body["file"]).read_text(encoding="utf-8").splitlines()]
+    assert len(body["events"]) == len(raw)
     for got, want in zip(body["events"], raw):
         want = dict(want)
         want.pop("card")
         assert got == want
 
 
-def test_inspector_card_from_the_real_newest_log(client, log_dir):
-    _copy_real_logs(log_dir)
+def test_inspector_card_from_the_real_newest_log(client, log_dir, real_logs):
+    _copy_real_logs(real_logs, log_dir)
     card = client.get("/api/editor/calls/latest").json()["card"]
     assert card["caller"] == "Zoya Chida"
     assert card["new_patient"] is True
@@ -432,8 +488,8 @@ def test_inspector_card_before_the_caller_is_known(client, log_dir):
     assert card["options_on_offer"] == []
 
 
-def test_inspector_skips_a_half_written_last_line(client, log_dir):
-    src = REAL_LOGS / "20261010-184339-8e2ba6.jsonl"
+def test_inspector_skips_a_half_written_last_line(client, log_dir, real_logs):
+    src = real_logs / NEWEST_LOG
     lines = src.read_text(encoding="utf-8").splitlines()
     f = log_dir / "20261011-120000-bbbbbb.jsonl"
     f.write_text("\n".join(lines[:5]) + "\n" + lines[5][: len(lines[5]) // 2], encoding="utf-8")
@@ -444,8 +500,8 @@ def test_inspector_skips_a_half_written_last_line(client, log_dir):
     assert body["card"]["status"] == json.loads(lines[4])["card"]["status"]
 
 
-def test_inspector_uses_latest_card_not_first(client, log_dir):
-    src = REAL_LOGS / "20261010-184339-8e2ba6.jsonl"
+def test_inspector_uses_latest_card_not_first(client, log_dir, real_logs):
+    src = real_logs / NEWEST_LOG
     lines = src.read_text(encoding="utf-8").splitlines()
     f = log_dir / "20261011-130000-cccccc.jsonl"
     f.write_text("\n".join(lines[:5]) + "\n", encoding="utf-8")

@@ -17,10 +17,10 @@ from .conversation import FINISHED
 from .scenarios import CHECK_IN_SCENARIO, SCENARIOS
 
 LABELS = {
-    "naive": "1. Naive: whole catalog, no checks (gpt-4o)",
+    "naive": "1. Naive (the simple version): whole catalog, no checks (gpt-4o)",
     "naive_rules": "2. Naive + rule checks (gpt-4o)",
-    "ours": "3. Ours: stages and small slices (gpt-4o)",
-    "ours_mini": "3b. Ours on the smaller model (gpt-4o-mini)",
+    "ours": "3. Ours (my design): stages and small slices (gpt-4o)",
+    "ours_mini": "4. Ours on gpt-4o-mini (my design, on the smaller model)",
 }
 ORDER = list(LABELS)
 
@@ -60,7 +60,7 @@ def build_results(results_dir: Path, ledger: Ledger) -> Path:
            "Built by `python -m evals.run results` from the saved runs in `runs/`. How the runs work, and why: "
            "`docs/decisions.md` 16, 20, 22, 68, 84-88. Each run is a typed call: an AI (gpt-4o-mini) plays the "
            "caller from a short persona; the agent is one of the versions below; the result is checked by code "
-           "against what was saved.", "",
+           "against what was saved. solution.md calls the naive versions \"the simple version\" and ours \"my design\".", "",
            "**Reading the columns.** *Scenarios passed*: the expected outcome, checked in code. *Bad bookings*: saved "
            "bookings that break a booking rule for the real caller. *Input tokens*: what the AI read, from "
            "OpenAI's usage figures (a token is roughly 3/4 of a word); *cached* is the part OpenAI had already "

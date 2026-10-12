@@ -82,6 +82,9 @@ def test_refusal_messages_say_how_to_send_the_value(clinic):
     assert "place" in msg.lower()
 
 
+LETTERS = {"spelled_first_name": "F, A, R, H, A, N", "spelled_last_name": "J, I, D, A"}
+
+
 @pytest.mark.parametrize("args", [
     {"full_name": "Farhan Jida", "returning": "no"},
     {"full_name": "Farhan Jida", "returning": "false"},
@@ -92,10 +95,20 @@ def test_refusal_messages_say_how_to_send_the_value(clinic):
     {"full_name": "", "returning": False},
     {"full_name": "James Wilson", "returning": True, "date_of_birth": 19840312},
 ])
-def test_start_booking_refuses_bad_identity_values(clinic, args):
+@pytest.mark.parametrize("letters", [{}, LETTERS], ids=["no letters", "with letters"])
+def test_start_booking_refuses_bad_identity_values(clinic, args, letters):
+    # Decisions 77-78: a new patient without letters is now refused for that alone, so each
+    # bad value is also tried with good letters, to show the bad value itself is refused.
     s = new_call(clinic)
     before = snapshot(s)
-    out = step(s, "start_booking", args)
+    out = step(s, "start_booking", {**args, **letters})
+    if letters and args.get("returning") is False and not args.get("full_name", ""):
+        # Decision 92 (12 Oct, the owner): for a new patient whose name comes from spelled
+        # letters, full_name is not checked; a missing or empty one is accepted, because the
+        # saved name is built from the letters. (Only these two cases: no full_name, and "".)
+        assert out.result.get("ok") is True and out.next_stage == VISIT_TYPE, out.result
+        assert s.card.caller.name == "Farhan Jida" and s.card.caller.is_new_patient is True
+        return
     assert out.result.get("ok") is False and out.next_stage is None
     assert s.card.caller is None
     if "status" not in out.result:  # an identity step legitimately counts tries; a value error doesn't

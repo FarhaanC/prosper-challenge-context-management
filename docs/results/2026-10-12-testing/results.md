@@ -1,6 +1,6 @@
 # Test results: AI-played callers against three versions of the agent (and ours on a smaller model)
 
-Built by `python -m evals.run results` from the saved runs in `runs/`. How the runs work, and why: `docs/decisions.md` 16, 20, 22, 68, 84-88. Each run is a typed call: an AI (gpt-4o-mini) plays the caller from a short persona; the agent is one of the versions below; the result is checked by code against what was saved.
+Built by `python -m evals.run results` from the saved runs in `runs/`. How the runs work, and why: `docs/decisions.md` 16, 20, 22, 68, 84-88. Each run is a typed call: an AI (gpt-4o-mini) plays the caller from a short persona; the agent is one of the versions below; the result is checked by code against what was saved. solution.md calls the naive versions "the simple version" and ours "my design".
 
 **Reading the columns.** *Scenarios passed*: the expected outcome, checked in code. *Bad bookings*: saved bookings that break a booking rule for the real caller. *Input tokens*: what the AI read, from OpenAI's usage figures (a token is roughly 3/4 of a word); *cached* is the part OpenAI had already seen and charges half for. *AI passes*: each time the AI read everything and replied. *Slowest reply*: the longest time from the caller's line to the agent's whole answer, AI and tool time only (a voice call adds about 1 s of speech); worst run, and the middle run in brackets. *Agent cost*: the agent's AI only, not the AI playing the caller.
 
@@ -8,23 +8,23 @@ Built by `python -m evals.run results` from the saved runs in `runs/`. How the r
 
 | Version | Scenarios passed | Bad bookings | Input tokens per call | Input tokens per AI pass | Of which cached | AI passes per call | Slowest reply: worst (typical) | Agent cost per call |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1. Naive: whole catalog, no checks (gpt-4o) | 3 of 6 | 1 | 82,527 | 10,316 | 93% | 8.0 | 2.5 s (2.3 s) | $0.112 |
+| 1. Naive (the simple version): whole catalog, no checks (gpt-4o) | 3 of 6 | 1 | 82,527 | 10,316 | 93% | 8.0 | 2.5 s (2.3 s) | $0.112 |
 | 2. Naive + rule checks (gpt-4o) | 4 of 6 | 0 | 78,923 | 10,294 | 96% | 7.7 | 3.2 s (2.1 s) | $0.105 |
-| 3. Ours: stages and small slices (gpt-4o) | 5 of 6 | 0 | 22,671 | 2,159 | 72% | 10.5 | 3.9 s (3.1 s) | $0.039 |
-| 3b. Ours on the smaller model (gpt-4o-mini) | 5 of 6 | 0 | 27,627 | 2,181 | 87% | 12.7 | 3.9 s (3.1 s) | $0.003 |
+| 3. Ours (my design): stages and small slices (gpt-4o) | 5 of 6 | 0 | 22,671 | 2,159 | 72% | 10.5 | 3.9 s (3.1 s) | $0.039 |
+| 4. Ours on gpt-4o-mini (my design, on the smaller model) | 5 of 6 | 0 | 27,627 | 2,181 | 87% | 12.7 | 3.9 s (3.1 s) | $0.003 |
 
 ## Every version over every run (up to 3 per scenario)
 
 | Version | Scenarios passed | Bad bookings | Input tokens per call | Input tokens per AI pass | Of which cached | AI passes per call | Slowest reply: worst (typical) | Agent cost per call |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1. Naive: whole catalog, no checks (gpt-4o) | 11 of 18 | 2 | 82,629 | 10,329 | 95% | 8.0 | 2.7 s (2.2 s) | $0.110 |
+| 1. Naive (the simple version): whole catalog, no checks (gpt-4o) | 11 of 18 | 2 | 82,629 | 10,329 | 95% | 8.0 | 2.7 s (2.2 s) | $0.110 |
 | 2. Naive + rule checks (gpt-4o) | 11 of 18 | 0 | 82,238 | 10,352 | 96% | 7.9 | 3.2 s (2.1 s) | $0.109 |
-| 3. Ours: stages and small slices (gpt-4o) | 17 of 18 | 0 | 22,969 | 2,153 | 74% | 10.7 | 4.0 s (2.7 s) | $0.039 |
-| 3b. Ours on the smaller model (gpt-4o-mini) | 16 of 18 | 0 | 28,621 | 2,202 | 90% | 13.0 | 5.2 s (3.3 s) | $0.003 |
+| 3. Ours (my design): stages and small slices (gpt-4o) | 17 of 18 | 0 | 22,969 | 2,153 | 74% | 10.7 | 4.0 s (2.7 s) | $0.039 |
+| 4. Ours on gpt-4o-mini (my design, on the smaller model) | 16 of 18 | 0 | 28,621 | 2,202 | 90% | 13.0 | 5.2 s (3.3 s) | $0.003 |
 
 ## Passes by scenario (all runs)
 
-| Scenario | 1. Naive | 2. Naive + rule checks | 3. Ours | 3b. Ours on the smaller model |
+| Scenario | 1. Naive | 2. Naive + rule checks | 3. Ours | 4. Ours on gpt-4o-mini |
 | --- | --- | --- | --- | --- |
 | New patient: a skin check with Dr. Garcia (no Garcia does skin checks) | 2 of 3 | 2 of 3 | 3 of 3 | 3 of 3 |
 | New patient: a knee MRI (needs a referral; existing patients only) | 2 of 3 | 3 of 3 | 3 of 3 | 3 of 3 |
@@ -39,13 +39,13 @@ James Wilson's knee MRI, with 'Are you still there?' after the read-back: **pass
 
 ## Every failed run, and why
 
-- 1. Naive: whole catalog, no checks (gpt-4o), garcia_skin_check, run 1: A booking breaks the rules: Dermatology Consultation needs a referral to Dermatology, and there isn't one on file. Dr. Maria Garcia doesn't offer Dermatology Consultation. Booked visit type appt_026, expected one of appt_027, appt_028. Booked doctor prov_003, expected one of prov_001, prov_027, prov_035.
-- 1. Naive: whole catalog, no checks (gpt-4o), james_changes_to_mri, run 3: Booked visit type appt_064, expected one of appt_065.
-- 1. Naive: whole catalog, no checks (gpt-4o), james_knee_mri_downtown, run 3: Booked visit type appt_064, expected one of appt_065.
-- 1. Naive: whole catalog, no checks (gpt-4o), knee_mri_new_patient, run 1: Promised staff would follow up, but the call wasn't handed to staff: "A member of staff will call you back to discuss your options further."
-- 1. Naive: whole catalog, no checks (gpt-4o), maria_garcia_checkup, run 1: Booked under the name "New Patient", not "Priya Nair". Booked doctor prov_002, expected one of prov_003.
-- 1. Naive: whole catalog, no checks (gpt-4o), maria_garcia_checkup, run 2: Booked under the name "Caller", not "Priya Nair".
-- 1. Naive: whole catalog, no checks (gpt-4o), obgyn_new_then_person, run 3: A booking breaks the rules: Dr. Linda Nguyen isn't taking new patients. Expected the call to be handed to staff; it ended 'booked'. Expected no booking, found 1.
+- 1. Naive (the simple version): whole catalog, no checks (gpt-4o), garcia_skin_check, run 1: A booking breaks the rules: Dermatology Consultation needs a referral to Dermatology, and there isn't one on file. Dr. Maria Garcia doesn't offer Dermatology Consultation. Booked visit type appt_026, expected one of appt_027, appt_028. Booked doctor prov_003, expected one of prov_001, prov_027, prov_035.
+- 1. Naive (the simple version): whole catalog, no checks (gpt-4o), james_changes_to_mri, run 3: Booked visit type appt_064, expected one of appt_065.
+- 1. Naive (the simple version): whole catalog, no checks (gpt-4o), james_knee_mri_downtown, run 3: Booked visit type appt_064, expected one of appt_065.
+- 1. Naive (the simple version): whole catalog, no checks (gpt-4o), knee_mri_new_patient, run 1: Promised staff would follow up, but the call wasn't handed to staff: "A member of staff will call you back to discuss your options further."
+- 1. Naive (the simple version): whole catalog, no checks (gpt-4o), maria_garcia_checkup, run 1: Booked under the name "New Patient", not "Priya Nair". Booked doctor prov_002, expected one of prov_003.
+- 1. Naive (the simple version): whole catalog, no checks (gpt-4o), maria_garcia_checkup, run 2: Booked under the name "Caller", not "Priya Nair".
+- 1. Naive (the simple version): whole catalog, no checks (gpt-4o), obgyn_new_then_person, run 3: A booking breaks the rules: Dr. Linda Nguyen isn't taking new patients. Expected the call to be handed to staff; it ended 'booked'. Expected no booking, found 1.
 - 2. Naive + rule checks (gpt-4o), garcia_skin_check, run 1: Booked under the name "Unknown", not "Lena Park".
 - 2. Naive + rule checks (gpt-4o), james_changes_to_mri, run 3: Booked visit type appt_064, expected one of appt_065.
 - 2. Naive + rule checks (gpt-4o), james_knee_mri_downtown, run 2: Booked visit type appt_064, expected one of appt_065.
@@ -53,9 +53,9 @@ James Wilson's knee MRI, with 'Are you still there?' after the read-back: **pass
 - 2. Naive + rule checks (gpt-4o), maria_garcia_checkup, run 1: Booked under the name "New Patient", not "Priya Nair". Booked doctor prov_002, expected one of prov_003.
 - 2. Naive + rule checks (gpt-4o), maria_garcia_checkup, run 2: Booked under the name "New Patient", not "Priya Nair".
 - 2. Naive + rule checks (gpt-4o), maria_garcia_checkup, run 3: Booked visit type appt_001, expected one of appt_002, appt_003.
-- 3. Ours: stages and small slices (gpt-4o), maria_garcia_checkup, run 1: Booked visit type appt_001, expected one of appt_002, appt_003.
-- 3b. Ours on the smaller model (gpt-4o-mini), maria_garcia_checkup, run 1: Booked doctor prov_002, expected one of prov_003.
-- 3b. Ours on the smaller model (gpt-4o-mini), maria_garcia_checkup, run 3: Booked doctor prov_002, expected one of prov_003.
+- 3. Ours (my design): stages and small slices (gpt-4o), maria_garcia_checkup, run 1: Booked visit type appt_001, expected one of appt_002, appt_003.
+- 4. Ours on gpt-4o-mini (my design, on the smaller model), maria_garcia_checkup, run 1: Booked doctor prov_002, expected one of prov_003.
+- 4. Ours on gpt-4o-mini (my design, on the smaller model), maria_garcia_checkup, run 3: Booked doctor prov_002, expected one of prov_003.
 
 ## What else differs, besides what each version is given
 

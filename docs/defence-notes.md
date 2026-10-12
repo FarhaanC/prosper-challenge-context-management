@@ -220,3 +220,50 @@ For new patients the agent spells it back and the caller corrects it. In the las
 **Skin Cancer Screening and Full Body Skin Exam look identical in the data. How does the agent tell them apart?** The brief names these as deliberate look-alikes but gives no descriptions, so we added our own one-line descriptions for 9 look-alike groups, in a separate file and clearly ours (decision 79). The agent may describe a visit only with that line, so it never invents a medical difference; if the caller doesn't mind, it books the group's usual choice and says so.
 
 **Did the agent ever go silent on a call? Why?** Once, for 25 s. The caller said "Yes, that is it."; the agent's answer started; 20 ms later speech-to-text sent a late rough draft, and Pipecat's default rule treats any text, even a draft, as the caller starting to speak, so it cancelled the answer. The draft never became words, so nothing asked the AI again until our silence check-in said "Are you still there?". We found it by reading the console log line by line. Two fixes (decision 81): only final text can start a caller's turn (the voice detector still catches normal speech instantly), and if a turn ends with no words while the caller's last words are unanswered, the code asks the AI to answer them. The silence check-in is what kept the call alive: the safety net we built for pocket dials also caught a bug we didn't know about.
+
+## Part 6 (version 0.4.0): the testing, and likely questions about the results
+
+**How did you test it?** An AI (gpt-4o-mini) plays the caller from a short script, over text, and rings four versions of the agent:
+- the simple version, with the whole catalog pasted in and no checks;
+- the simple version with my rule checks;
+- my design on gpt-4o;
+- my design on gpt-4o-mini.
+
+There are six callers, each built around one trap in the catalog, and each rings every version three times. Code scores each call against what was saved, for the scenario's real caller: the right visit, the right doctor, the right name, no broken rule, and no promise of a staff call-back without a hand-off. What the agent *said* doesn't count. Everything is in `docs/results/2026-10-12-testing/`, with every call word for word.
+
+**What were the results?**
+
+| Version | Passed (of 18) | Cost per call |
+| --- | --- | --- |
+| Simple version | 11 | $0.110 |
+| Simple version + rule checks | 11 | $0.109 |
+| My design (gpt-4o) | 17 | $0.039 |
+| My design (gpt-4o-mini) | 16 | $0.003 |
+
+My design read about 3.6 times less text per call.
+
+**Isn't your design just rule checking?** That's why version 2 exists. Adding my rule checks to the simple version stopped its two rule-breaking bookings, but its pass count didn't move (11 of 18), because most of its mistakes broke no rule. It booked a spine MRI for a knee MRI and said "confirmed". It said "You're confirmed" without ever saving a booking. It saved bookings under "Unknown" and "New Patient". The step-by-step design and the read-back built by code are what stop those.
+
+**Was the comparison fair?**
+- All versions got the same tools for finding patients and free times. After the review, the simple versions could also search every doctor for a visit at once (decision 89).
+- Every version had the same AI caller, the same fixed date and time, and the same timing and cost code.
+- One difference works against my design: it spells new patients' names back, which makes its calls longer.
+- The test runner itself was checked by a fresh agent before anything was paid for (`docs/reviews/2026-10-12-test-runner/`).
+
+**What did your design get wrong?** All three of its failures were the two Dr. Maria Garcias. Once, gpt-4o offered only first visits for "a yearly check-up". Twice, gpt-4o-mini offered "MD or NP" without saying one is a children's doctor, and the caller chose wrong. The code stops every booking that breaks a rule, but choosing the right *valid* option still depends on the AI. The fix I'd try is having the code write the "which one?" question, as it already writes the read-back.
+
+**Why is the price gap (2.8 times) smaller than the size gap (3.6 times)?** OpenAI charges half price for text it has already seen in recent requests. The simple version sends the same catalog every time, so most of what it reads is charged at half price.
+
+**Your design is slower at its worst. Why?** The slow turns are the ones where the call moves to the next step. The AI calls a tool, the code searches, and then the next step answers, which is two rounds of the AI thinking. The typical slowest reply was 2.7 s for mine against 2.2 s for the simple version, and the worst run was 4.0 s against 2.7 s. On real voice calls the wait was 1.2–2.7 s.
+
+**Would you switch to gpt-4o-mini?** Not yet. It passed 16 of 18 for about a thirteenth of the cost, but both of its failures were the "which Dr. Maria Garcia" problem. Once the code writes that question itself, I'd rerun the tests, and switch if it holds up.
+
+**How do you know the scale numbers are real?** The 235,181 tokens is OpenAI's own count: it came back in the error when gpt-4o refused the simple version's instructions for 500 locations and 2,000 doctors. Its limit is 128,000. My design was run on the same big catalog, passed both calls, and read about 2,000 tokens per AI reply, the same as on the real catalog.
+
+**The search got slower at scale (up to 0.3 s). Is that a problem?** Not on a call: it's well under the AI's own thinking time. It's simple code that goes through every doctor for a visit. A real system would index it, for example by keeping a ready-made list of which doctors offer each visit at each place.
+
+**Why typed tests and not voice?** Seventy-odd calls by voice would take hours and can't be repeated exactly. Typed calls test the decisions; my real voice calls tested the sound, and found things typed tests can't, like the 25-second silence. Running the scenarios through synthetic speech is next on the list.
+
+**Isn't an AI caller unreliable?** A bit. Twice the AI caller made a choice a person might not have made. That's why every call is saved word for word, so anyone can check a fail. The caller runs on the cheaper model to save money, and it's the same caller for every version, so it doesn't favour one.
+
+**What did testing cost?** $4.85 of OpenAI credit, against a $7 stop built into the runner. The first estimate was five times too high. A smoke run of four calls showed the real cost, and that's why every version got three runs instead of one (decision 91).

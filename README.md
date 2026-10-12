@@ -1,5 +1,7 @@
 # Prosper Challenge — Context Management
 
+**Start with [`solution.md`](solution.md):** the approach, the results and the trade-offs, in about ten minutes of reading.
+
 Voice AI for healthcare scheduling. An agent is a **graph of nodes** (Pipecat Flows), defined declaratively as JSON and compiled into a runnable voice pipeline.
 
 - **Phase 1** — a UI to edit the node graph and place a test call.
@@ -63,6 +65,8 @@ backend\.venv\Scripts\python.exe backend\bot.py
 | `backend/example_flow.json` | The starter example agent, kept as it was. |
 | `backend/data/catalog.json` | A deliberately large, deliberately messy clinic catalog (locations, providers, appointment types, booking rules). See [`backend/data/README.md`](backend/data/README.md). |
 | `backend/bookings.jsonl`, `backend/call_logs/` | Created when the agent runs (not committed): one line per saved booking, reloaded at start-up; one log file per call, a line per stage move and tool call. |
+| `backend/evals/` | The test runs: an AI plays the caller in six tricky scenarios, against the simple version (whole catalog pasted in), the simple version with rule checks, and this design. Each call is scored by code against what was saved. `python -m evals.run plan` from `backend/` explains the commands; it needs an OpenAI key and stops itself at $7. `python -m evals.scale` is the scale test. |
+| `docs/results/2026-10-12-testing/` | The results tables, the scale test, and every test call word for word. |
 | `backend/tests/`, `backend/tests_independent/` | The builder's tests, and tests written by independent agents that never saw the build. Run both from `backend/` with `python -m pytest`. |
 | `INTERFACE.md` | The tool interface sheet given to the independent tester (names, fields, exactly what the AI is shown). |
 | `docs/` | How the work was done: `process.md`, `decisions.md`, `build-log.md`, `reviews/`, `defence-notes.md`. |

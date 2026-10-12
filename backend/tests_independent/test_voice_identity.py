@@ -18,6 +18,8 @@ from voice_reference import (AGENT_FILE, END, IDENTIFY, JAMES, NEW, PATIENT, PAT
 
 DOB = PATIENT["James Wilson"]["date_of_birth"]
 WRONG_DOB = "1984-03-13"
+# Decisions 77-78: a new patient's start_booking carries the letters the caller confirmed.
+WILSON_LETTERS = {"spelled_first_name": "J, A, M, E, S", "spelled_last_name": "W, I, L, S, O, N"}
 
 
 @pytest.fixture
@@ -108,7 +110,9 @@ def test_register_as_new_after_the_offer(clinic):
     s = new_call(clinic)
     statuses(s, [{"date_of_birth": WRONG_DOB}, {"date_of_birth": WRONG_DOB},
                  {"date_of_birth": WRONG_DOB, "spelled_last_name": "WILSON"}])
-    out = step(s, "start_booking", {"full_name": "James Wilson", "returning": False, "visit_description": "knee MRI"})
+    # Decisions 77-78: registering as new means spelling both names back first.
+    out = step(s, "start_booking", {"full_name": "James Wilson", "returning": False, "visit_description": "knee MRI",
+                                    **WILSON_LETTERS})
     assert out.result["ok"] is True and out.next_stage == VISIT_TYPE
     c = s.card.caller
     assert c.is_new_patient is True and c.patient_id is None
@@ -156,17 +160,26 @@ def test_new_patient_needs_no_date_of_birth(clinic):
     assert s.card.caller.is_new_patient is True and s.card.caller.referrals_on_file == []
 
 
-def test_new_patient_with_one_word_name_is_asked_for_full_name(clinic):
+@pytest.mark.parametrize("extra", [
+    {},
+    # Decisions 77-78: since the name is now built from letters, the old check (only one
+    # name given) is kept in its new forms: only the first name spelled, and a name taken
+    # as heard (name_not_confirmed), which INTERFACE.md says "then needs first and last".
+    {"spelled_first_name": "F, A, R, H, A, N"},
+    {"name_not_confirmed": True},
+])
+def test_new_patient_with_one_word_name_is_asked_for_full_name(clinic, extra):
     s = new_call(clinic)
     before = snapshot(s)
-    out = step(s, "start_booking", {"full_name": "Farhan", "returning": False})
+    out = step(s, "start_booking", {"full_name": "Farhan", "returning": False, **extra})
     assert out.result["ok"] is False and out.next_stage is None
     assert snapshot(s) == before
 
 
 def test_new_patient_who_shares_a_patients_name_gets_no_record(clinic):
     s = new_call(clinic)
-    step(s, "start_booking", {"full_name": "James Wilson", "returning": False})
+    out = step(s, "start_booking", {"full_name": "James Wilson", "returning": False, **WILSON_LETTERS})  # decisions 77-78
+    assert out.result["ok"] is True
     assert s.card.caller.patient_id is None and s.card.caller.referrals_on_file == []
 
 

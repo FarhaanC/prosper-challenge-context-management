@@ -58,7 +58,8 @@ def twins_handed_off(catalog, directory):
 
 # ================================================================== a finished call
 AFTER_END = [
-    ("start_booking", {"full_name": "Someone Else", "returning": False}),
+    ("start_booking", {"full_name": "Someone Else", "returning": False,  # letters: decisions 77-78
+                       "spelled_first_name": "S, O, M, E, O, N, E", "spelled_last_name": "E, L, S, E"}),
     ("list_visit_types", {"specialty": "Dermatology"}),
     ("choose_visit_type", {"visit_type_id": SKIN_CHECK}),
     ("choose_option", {"option_id": "1"}),
